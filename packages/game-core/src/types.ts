@@ -59,6 +59,7 @@ export interface Ability {
   id: string;
   type: AbilityType;
   name: string;
+  shortName: string; // Short text for UI display (max 8 chars)
   description: string;
   cost: number;
   duration?: number; // in milliseconds, undefined for instant

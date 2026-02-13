@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useUser, SignedIn, SignedOut, SignInButton, UserButton } from '@clerk/clerk-react';
+import { useUser, SignedIn, SignedOut, SignInButton } from '@clerk/clerk-react';
 import { UsernameSetup } from './UsernameSetup';
 import { progressionService } from '../lib/supabase';
 import type { UserProfile } from '@tetris-battle/game-core';
@@ -116,16 +116,6 @@ export function AuthWrapper({ children }: AuthWrapperProps) {
           <UsernameSetup userId={user.id} onComplete={handleUsernameComplete} />
         ) : profile ? (
           <>
-            {/* User button in top-right */}
-            <div style={{
-              position: 'fixed',
-              top: '20px',
-              right: '20px',
-              zIndex: 100,
-            }}>
-              <UserButton />
-            </div>
-
             {/* Render children with profile */}
             {children(profile)}
           </>

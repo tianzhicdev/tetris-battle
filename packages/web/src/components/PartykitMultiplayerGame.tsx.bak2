@@ -20,8 +20,27 @@ import {
 import type { Ability } from '@tetris-battle/game-core';
 import type { Theme } from '../themes';
 import { audioManager } from '../services/audioManager';
+import * as IoIcons from 'react-icons/io5';
 import { haptics } from '../utils/haptics';
 import { buttonVariants, springs, scoreVariants } from '../utils/animations';
+
+// Icon component mapping
+const iconMap: Record<string, React.ComponentType<{ style?: React.CSSProperties; className?: string }>> = {
+  IoAdd: IoIcons.IoAdd,
+  IoRadioButtonOn: IoIcons.IoRadioButtonOn,
+  IoRemove: IoIcons.IoRemove,
+  IoStar: IoIcons.IoStar,
+  IoEllipsisVertical: IoIcons.IoEllipsisVertical,
+  IoSpeedometerOutline: IoIcons.IoSpeedometerOutline,
+  IoEllipse: IoIcons.IoEllipse,
+  IoDotChart: IoIcons.IoChatboxEllipses, // IoIcons doesn't have IoDotChart, using alternative
+  IoLockClosed: IoIcons.IoLockClosed,
+  IoEyeOff: IoIcons.IoEyeOff,
+  IoSwapHorizontal: IoIcons.IoSwapHorizontal,
+  IoTrendingDown: IoIcons.IoTrendingDown,
+  IoPhonePortraitOutline: IoIcons.IoPhonePortraitOutline,
+  IoArrowDown: IoIcons.IoArrowDown,
+};
 
 interface MultiplayerGameProps {
   roomId: string;
@@ -909,7 +928,7 @@ export function MultiplayerGame({ roomId, playerId, opponentId, theme, onExit }:
             touchAction: 'manipulation',
             minWidth: 0,
             boxShadow: '0 0 20px rgba(255, 0, 110, 0.5), inset 0 0 10px rgba(255, 0, 110, 0.2)',
-            backdropFilter: 'blur(20px)',
+            backdropFilter: 'blur(8px)',
           }}
         >
           <svg width="clamp(20px, 5vw, 32px)" height="clamp(20px, 5vw, 32px)" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
@@ -942,7 +961,7 @@ export function MultiplayerGame({ roomId, playerId, opponentId, theme, onExit }:
             touchAction: 'manipulation',
             minWidth: 0,
             boxShadow: '0 0 20px rgba(201, 66, 255, 0.5), inset 0 0 10px rgba(201, 66, 255, 0.2)',
-            backdropFilter: 'blur(20px)',
+            backdropFilter: 'blur(8px)',
           }}
         >
           <svg width="clamp(20px, 5vw, 32px)" height="clamp(20px, 5vw, 32px)" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
@@ -976,7 +995,7 @@ export function MultiplayerGame({ roomId, playerId, opponentId, theme, onExit }:
             touchAction: 'manipulation',
             minWidth: 0,
             boxShadow: '0 0 20px rgba(0, 255, 136, 0.5), inset 0 0 10px rgba(0, 255, 136, 0.2)',
-            backdropFilter: 'blur(20px)',
+            backdropFilter: 'blur(8px)',
           }}
         >
           <svg width="clamp(20px, 5vw, 32px)" height="clamp(20px, 5vw, 32px)" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
@@ -1009,7 +1028,7 @@ export function MultiplayerGame({ roomId, playerId, opponentId, theme, onExit }:
             touchAction: 'manipulation',
             minWidth: 0,
             boxShadow: '0 0 20px rgba(255, 165, 0, 0.5), inset 0 0 10px rgba(255, 165, 0, 0.2)',
-            backdropFilter: 'blur(20px)',
+            backdropFilter: 'blur(8px)',
           }}
         >
           <svg width="clamp(20px, 5vw, 32px)" height="clamp(20px, 5vw, 32px)" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
@@ -1095,13 +1114,6 @@ export function MultiplayerGame({ roomId, playerId, opponentId, theme, onExit }:
           onComplete={() => setParticles(null)}
         />
       )}
-
-      {/* Ability activation notification */}
-      <AbilityNotification
-        abilityName={abilityNotification?.name || null}
-        description={abilityNotification?.description || null}
-        category={abilityNotification?.category || null}
-      />
     </div>
   );
 }
