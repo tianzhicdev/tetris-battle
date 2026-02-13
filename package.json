@@ -11,13 +11,15 @@
     "preview": "pnpm --filter web preview",
     "dev:core": "pnpm --filter game-core dev",
     "build:all": "pnpm -r build",
-    "type-check": "pnpm -r type-check"
+    "type-check": "pnpm -r type-check",
+    "generate-icons": "node scripts/generate-ability-icons.js"
   },
   "engines": {
     "node": ">=18.0.0",
     "pnpm": ">=8.0.0"
   },
   "devDependencies": {
+    "replicate": "^1.4.0",
     "typescript": "^5.3.3"
   }
 }

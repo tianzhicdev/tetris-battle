@@ -6,6 +6,7 @@ import { LoadoutManager } from './LoadoutManager';
 import { ProfilePage } from './ProfilePage';
 import { AbilityInfo } from './AbilityInfo';
 import { audioManager } from '../services/audioManager';
+import { glassSuccess, glassGold, glassBlue, glassPurple, mergeGlass } from '../styles/glassUtils';
 
 interface MainMenuProps {
   onSelectMode: (mode: 'solo' | 'multiplayer') => void;
@@ -57,29 +58,25 @@ export function MainMenu({ onSelectMode, theme, profile, onProfileUpdate }: Main
         gap: '8px',
         flexWrap: 'wrap',
       }}>
-        <div style={{
-          background: 'rgba(0, 0, 0, 0.7)',
+        <div style={mergeGlass(glassSuccess(), {
           padding: '8px 12px',
-          borderRadius: '6px',
-          border: '2px solid #00ff00',
+          borderRadius: '8px',
           minWidth: 'fit-content',
-        }}>
+        })}>
           <div style={{ fontSize: '11px', color: '#aaa', marginBottom: '2px' }}>
             {stage.toUpperCase()}
           </div>
-          <div style={{ fontSize: '16px', color: '#00ff00', fontWeight: 'bold' }}>
+          <div style={{ fontSize: '16px', color: '#00ff9d', fontWeight: 'bold', textShadow: '0 0 10px rgba(0, 255, 157, 0.5)' }}>
             Lv {profile.level}
           </div>
         </div>
 
-        <div style={{
-          background: 'rgba(0, 0, 0, 0.7)',
+        <div style={mergeGlass(glassGold(), {
           padding: '8px 12px',
-          borderRadius: '6px',
-          border: '2px solid #ffaa00',
+          borderRadius: '8px',
           minWidth: 'fit-content',
-        }}>
-          <div style={{ fontSize: '18px', color: '#ffaa00', fontWeight: 'bold' }}>
+        })}>
+          <div style={{ fontSize: '18px', color: '#ffd700', fontWeight: 'bold', textShadow: '0 0 10px rgba(255, 215, 0, 0.5)' }}>
             🪙 {profile.coins}
           </div>
         </div>
@@ -104,21 +101,20 @@ export function MainMenu({ onSelectMode, theme, profile, onProfileUpdate }: Main
             audioManager.playSfx('button_click');
             onSelectMode('solo');
           }}
-          style={{
+          className="glass-button"
+          style={mergeGlass(glassBlue(), {
             padding: '16px 40px',
             fontSize: 'clamp(18px, 5vw, 24px)',
-            backgroundColor: theme.colors.T,
             color: '#ffffff',
-            border: 'none',
-            borderRadius: '8px',
             cursor: 'pointer',
             fontFamily: 'monospace',
             fontWeight: 'bold',
-            boxShadow: '0 4px 8px rgba(0,0,0,0.3)',
-            transition: 'transform 0.1s',
+            transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
             width: '100%',
             minHeight: '60px',
-          }}
+            borderRadius: '12px',
+            textShadow: '0 0 15px rgba(0, 212, 255, 0.8)',
+          })}
           onMouseDown={(e) => e.currentTarget.style.transform = 'scale(0.95)'}
           onMouseUp={(e) => e.currentTarget.style.transform = 'scale(1)'}
           onMouseLeave={(e) => e.currentTarget.style.transform = 'scale(1)'}
@@ -133,21 +129,20 @@ export function MainMenu({ onSelectMode, theme, profile, onProfileUpdate }: Main
             audioManager.playSfx('button_click');
             onSelectMode('multiplayer');
           }}
-          style={{
+          className="glass-button"
+          style={mergeGlass(glassPurple(), {
             padding: '16px 40px',
             fontSize: 'clamp(18px, 5vw, 24px)',
-            backgroundColor: theme.colors.L,
             color: '#ffffff',
-            border: 'none',
-            borderRadius: '8px',
             cursor: 'pointer',
             fontFamily: 'monospace',
             fontWeight: 'bold',
-            boxShadow: '0 4px 8px rgba(0,0,0,0.3)',
-            transition: 'transform 0.1s',
+            transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
             width: '100%',
             minHeight: '60px',
-          }}
+            borderRadius: '12px',
+            textShadow: '0 0 15px rgba(201, 66, 255, 0.8)',
+          })}
           onMouseDown={(e) => e.currentTarget.style.transform = 'scale(0.95)'}
           onMouseUp={(e) => e.currentTarget.style.transform = 'scale(1)'}
           onMouseLeave={(e) => e.currentTarget.style.transform = 'scale(1)'}

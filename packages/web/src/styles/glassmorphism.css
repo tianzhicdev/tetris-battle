@@ -1,0 +1,269 @@
+/**
+ * Glassmorphism UI Utilities
+ * Modern frosted glass effects for premium visual quality
+ *
+ * Performance Notes:
+ * - Desktop: blur 8-15px recommended
+ * - Mobile: blur 6-8px for better performance
+ * - Limit to 2-3 glassmorphic elements per viewport on mobile
+ */
+
+/* Base Glass Effect - Light */
+.glass {
+  background: rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(10px) saturate(180%);
+  -webkit-backdrop-filter: blur(10px) saturate(180%);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+}
+
+/* Base Glass Effect - Dark */
+.glass-dark {
+  background: rgba(10, 10, 25, 0.6);
+  backdrop-filter: blur(12px) saturate(180%);
+  -webkit-backdrop-filter: blur(12px) saturate(180%);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+}
+
+/* Frosted Glass - Heavy blur */
+.glass-frosted {
+  background: rgba(255, 255, 255, 0.08);
+  backdrop-filter: blur(20px) saturate(200%);
+  -webkit-backdrop-filter: blur(20px) saturate(200%);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  box-shadow:
+    0 8px 32px rgba(0, 0, 0, 0.2),
+    inset 0 1px 0 rgba(255, 255, 255, 0.1);
+}
+
+/* Subtle Glass - Minimal blur for performance */
+.glass-subtle {
+  background: rgba(255, 255, 255, 0.05);
+  backdrop-filter: blur(6px) saturate(150%);
+  -webkit-backdrop-filter: blur(6px) saturate(150%);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
+}
+
+/* Mobile-optimized Glass */
+.glass-mobile {
+  background: rgba(10, 10, 25, 0.7);
+  backdrop-filter: blur(6px) saturate(150%);
+  -webkit-backdrop-filter: blur(6px) saturate(150%);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
+}
+
+/* Themed Glass Effects */
+
+/* Blue Glow Glass (for buff abilities) */
+.glass-blue {
+  background: rgba(0, 212, 255, 0.1);
+  backdrop-filter: blur(10px) saturate(180%);
+  -webkit-backdrop-filter: blur(10px) saturate(180%);
+  border: 1px solid rgba(0, 212, 255, 0.3);
+  box-shadow:
+    0 0 20px rgba(0, 212, 255, 0.2),
+    0 8px 32px rgba(0, 0, 0, 0.2),
+    inset 0 0 15px rgba(0, 212, 255, 0.05);
+}
+
+/* Purple/Pink Glow Glass (for debuff abilities) */
+.glass-purple {
+  background: rgba(201, 66, 255, 0.1);
+  backdrop-filter: blur(10px) saturate(180%);
+  -webkit-backdrop-filter: blur(10px) saturate(180%);
+  border: 1px solid rgba(201, 66, 255, 0.3);
+  box-shadow:
+    0 0 20px rgba(201, 66, 255, 0.2),
+    0 8px 32px rgba(0, 0, 0, 0.2),
+    inset 0 0 15px rgba(201, 66, 255, 0.05);
+}
+
+/* Gold Glass (for score/stars) */
+.glass-gold {
+  background: rgba(255, 215, 0, 0.08);
+  backdrop-filter: blur(10px) saturate(180%);
+  -webkit-backdrop-filter: blur(10px) saturate(180%);
+  border: 1px solid rgba(255, 215, 0, 0.3);
+  box-shadow:
+    0 0 20px rgba(255, 215, 0, 0.15),
+    0 8px 32px rgba(0, 0, 0, 0.2),
+    inset 0 0 15px rgba(255, 215, 0, 0.05);
+}
+
+/* Danger/Red Glass (for warnings) */
+.glass-danger {
+  background: rgba(255, 0, 110, 0.1);
+  backdrop-filter: blur(10px) saturate(180%);
+  -webkit-backdrop-filter: blur(10px) saturate(180%);
+  border: 1px solid rgba(255, 0, 110, 0.3);
+  box-shadow:
+    0 0 20px rgba(255, 0, 110, 0.2),
+    0 8px 32px rgba(0, 0, 0, 0.2),
+    inset 0 0 15px rgba(255, 0, 110, 0.05);
+}
+
+/* Success/Green Glass */
+.glass-success {
+  background: rgba(0, 255, 157, 0.08);
+  backdrop-filter: blur(10px) saturate(180%);
+  -webkit-backdrop-filter: blur(10px) saturate(180%);
+  border: 1px solid rgba(0, 255, 157, 0.3);
+  box-shadow:
+    0 0 20px rgba(0, 255, 157, 0.15),
+    0 8px 32px rgba(0, 0, 0, 0.2),
+    inset 0 0 15px rgba(0, 255, 157, 0.05);
+}
+
+/* Component-Specific Classes */
+
+/* Game Panel - Main game board container */
+.glass-panel {
+  background: rgba(5, 5, 15, 0.7);
+  backdrop-filter: blur(15px) saturate(180%);
+  -webkit-backdrop-filter: blur(15px) saturate(180%);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow:
+    0 8px 32px rgba(0, 0, 0, 0.4),
+    inset 0 1px 0 rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+}
+
+/* Sidebar Panel - For score, next piece, etc. */
+.glass-sidebar {
+  background: rgba(10, 10, 25, 0.6);
+  backdrop-filter: blur(12px) saturate(180%);
+  -webkit-backdrop-filter: blur(12px) saturate(180%);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.3);
+  border-radius: 10px;
+}
+
+/* Modal/Dialog overlay */
+.glass-modal {
+  background: rgba(5, 5, 15, 0.85);
+  backdrop-filter: blur(20px) saturate(200%);
+  -webkit-backdrop-filter: blur(20px) saturate(200%);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  box-shadow:
+    0 20px 60px rgba(0, 0, 0, 0.5),
+    inset 0 1px 0 rgba(255, 255, 255, 0.15);
+  border-radius: 16px;
+}
+
+/* Button with glass effect */
+.glass-button {
+  background: rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(8px) saturate(180%);
+  -webkit-backdrop-filter: blur(8px) saturate(180%);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.glass-button:hover {
+  background: rgba(255, 255, 255, 0.15);
+  border-color: rgba(255, 255, 255, 0.3);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3);
+  transform: translateY(-2px);
+}
+
+.glass-button:active {
+  transform: translateY(0);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+}
+
+/* Card component */
+.glass-card {
+  background: rgba(255, 255, 255, 0.08);
+  backdrop-filter: blur(12px) saturate(180%);
+  -webkit-backdrop-filter: blur(12px) saturate(180%);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.25);
+  border-radius: 12px;
+  transition: all 0.3s ease;
+}
+
+.glass-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.35);
+  border-color: rgba(255, 255, 255, 0.2);
+}
+
+/* Ability Button Glass */
+.glass-ability {
+  background: rgba(10, 10, 30, 0.5);
+  backdrop-filter: blur(8px) saturate(180%);
+  -webkit-backdrop-filter: blur(8px) saturate(180%);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  box-shadow:
+    0 4px 16px rgba(0, 0, 0, 0.3),
+    inset 0 0 10px rgba(255, 255, 255, 0.05);
+  transition: all 0.2s ease;
+}
+
+.glass-ability:hover:not(:disabled) {
+  background: rgba(10, 10, 30, 0.7);
+  border-color: rgba(255, 255, 255, 0.25);
+  box-shadow:
+    0 6px 20px rgba(0, 0, 0, 0.4),
+    inset 0 0 15px rgba(255, 255, 255, 0.08);
+  transform: scale(1.05);
+}
+
+/* Utility Classes */
+
+/* Remove glassmorphism on low-performance devices */
+@media (prefers-reduced-motion: reduce) {
+  .glass, .glass-dark, .glass-frosted, .glass-panel,
+  .glass-sidebar, .glass-modal, .glass-button, .glass-card {
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+    background: rgba(10, 10, 25, 0.95);
+  }
+}
+
+/* Mobile optimizations */
+@media (max-width: 768px) {
+  .glass-panel, .glass-modal {
+    backdrop-filter: blur(8px) saturate(150%);
+    -webkit-backdrop-filter: blur(8px) saturate(150%);
+  }
+
+  .glass-sidebar, .glass-button, .glass-card {
+    backdrop-filter: blur(6px) saturate(150%);
+    -webkit-backdrop-filter: blur(6px) saturate(150%);
+  }
+}
+
+/* Performance mode - disable for low-end devices */
+@supports not (backdrop-filter: blur(10px)) {
+  .glass, .glass-dark, .glass-frosted, .glass-panel,
+  .glass-sidebar, .glass-modal, .glass-button, .glass-card {
+    background: rgba(10, 10, 25, 0.95);
+  }
+}
+
+/* Glow effects for interactive elements */
+.glass-glow-blue {
+  box-shadow:
+    0 0 20px rgba(0, 212, 255, 0.4),
+    0 8px 32px rgba(0, 0, 0, 0.3),
+    inset 0 0 15px rgba(0, 212, 255, 0.1);
+}
+
+.glass-glow-purple {
+  box-shadow:
+    0 0 20px rgba(201, 66, 255, 0.4),
+    0 8px 32px rgba(0, 0, 0, 0.3),
+    inset 0 0 15px rgba(201, 66, 255, 0.1);
+}
+
+.glass-glow-gold {
+  box-shadow:
+    0 0 20px rgba(255, 215, 0, 0.3),
+    0 8px 32px rgba(0, 0, 0, 0.3),
+    inset 0 0 15px rgba(255, 215, 0, 0.1);
+}
