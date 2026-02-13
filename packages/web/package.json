@@ -10,6 +10,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@clerk/clerk-react": "^5.60.0",
     "@supabase/supabase-js": "^2.95.3",
     "@tetris-battle/game-core": "workspace:*",
     "partysocket": "^1.1.13",

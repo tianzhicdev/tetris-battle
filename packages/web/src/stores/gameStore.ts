@@ -17,6 +17,7 @@ import {
   createMiniBlock,
   applyWeirdShapes,
 } from '@tetris-battle/game-core';
+import { audioManager } from '../services/audioManager';
 
 interface GameStore {
   gameState: GameState;
@@ -213,11 +214,29 @@ export const useGameStore = create<GameStore>((set, get) => ({
 
       const { board: clearedBoard, linesCleared } = clearLines(boardAfterLock);
 
+      // Play line clear sound based on number of lines
+      if (linesCleared > 0) {
+        if (linesCleared === 1) {
+          audioManager.playSfx('line_clear_single');
+        } else if (linesCleared === 2) {
+          audioManager.playSfx('line_clear_double');
+        } else if (linesCleared === 3) {
+          audioManager.playSfx('line_clear_triple');
+        } else if (linesCleared >= 4) {
+          audioManager.playSfx('line_clear_tetris');
+        }
+      }
+
       // Calculate stars and check combo
       const now = Date.now();
       const isCombo = now - gameState.lastClearTime < STAR_VALUES.comboWindow;
       const comboCount = linesCleared > 0 && isCombo ? gameState.comboCount + 1 : 0;
       let starsEarned = calculateStars(linesCleared, comboCount);
+
+      // Play combo sound
+      if (comboCount > 0) {
+        audioManager.playSfx('combo');
+      }
 
       // Apply cascade multiplier (doubles stars earned)
       if (get().isCascadeMultiplierActive) {

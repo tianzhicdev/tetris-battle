@@ -38,14 +38,13 @@ export interface GameState {
 
 // Abilities
 export type AbilityType =
-  // Buffs (6)
+  // Buffs (5)
   | 'cross_firebomb'
   | 'circle_bomb'
   | 'clear_rows'
   | 'cascade_multiplier'
-  | 'piece_preview_plus'
   | 'mini_blocks'
-  // Debuffs (10)
+  // Debuffs (8)
   | 'speed_up_opponent'
   | 'weird_shapes'
   | 'random_spawner'
@@ -53,16 +52,8 @@ export type AbilityType =
   | 'blind_spot'
   | 'reverse_controls'
   | 'earthquake'
-  | 'column_bomb'
   | 'screen_shake'
-  | 'shrink_ceiling'
-  | 'mirror_blocks'
-  // Defense (1)
-  | 'deflect_shield'
-  // Ultra (3)
-  | 'board_swap'
-  | 'gravity_invert'
-  | 'mirror_match';
+  | 'shrink_ceiling';
 
 export interface Ability {
   id: string;

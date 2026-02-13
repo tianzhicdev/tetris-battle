@@ -16,7 +16,7 @@ export class GameSyncService {
    * Initialize game state for this player
    */
   async initializeGameState(board: Board, stars: number): Promise<void> {
-    const { error } = await supabase.from('game_states').insert({
+    const { error } = await supabase!.from('game_states').insert({
       room_id: this.roomId,
       player_id: this.playerId,
       board: board.grid,
@@ -65,7 +65,7 @@ export class GameSyncService {
     eventType: GameEvent['event_type'],
     eventData?: any
   ): Promise<void> {
-    const { error } = await supabase.from('game_events').insert({
+    const { error } = await supabase!.from('game_events').insert({
       room_id: this.roomId,
       player_id: this.playerId,
       event_type: eventType,
@@ -79,7 +79,7 @@ export class GameSyncService {
    * Activate an ability on opponent
    */
   async activateAbility(abilityType: string, targetPlayerId: string): Promise<void> {
-    const { error } = await supabase.from('ability_activations').insert({
+    const { error } = await supabase!.from('ability_activations').insert({
       room_id: this.roomId,
       player_id: this.playerId,
       target_player_id: targetPlayerId,

@@ -1,9 +1,12 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { MainMenu } from './components/MainMenu';
 import { TetrisGame } from './components/TetrisGame';
 import { Matchmaking } from './components/PartykitMatchmaking';
 import { MultiplayerGame } from './components/PartykitMultiplayerGame';
+import { AuthWrapper } from './components/AuthWrapper';
 import { THEMES } from './themes';
+import { progressionService } from './lib/supabase';
+import type { UserProfile } from '@tetris-battle/game-core';
 
 type GameMode = 'menu' | 'solo' | 'matchmaking' | 'multiplayer';
 
@@ -13,13 +16,28 @@ interface GameMatch {
   player2Id: string;
 }
 
-function App() {
+function GameApp({ profile: initialProfile }: { profile: UserProfile }) {
   const [mode, setMode] = useState<GameMode>('menu');
   const [currentTheme, setCurrentTheme] = useState(THEMES[1]); // Default to Retro
   const [gameMatch, setGameMatch] = useState<GameMatch | null>(null);
+  const [profile, setProfile] = useState<UserProfile>(initialProfile);
 
-  // Generate a simple player ID (in production, use proper auth)
-  const [playerId] = useState(() => `player_${Math.random().toString(36).substr(2, 9)}`);
+  // Use Clerk user ID as player ID
+  const playerId = profile.userId;
+
+  // Reload profile when returning to menu
+  useEffect(() => {
+    if (mode === 'menu') {
+      reloadProfile();
+    }
+  }, [mode]);
+
+  const reloadProfile = async () => {
+    const updated = await progressionService.getUserProfile(profile.userId);
+    if (updated) {
+      setProfile(updated);
+    }
+  };
 
   const handleSelectMode = (selectedMode: 'solo' | 'multiplayer') => {
     if (selectedMode === 'solo') {
@@ -44,7 +62,14 @@ function App() {
   };
 
   if (mode === 'menu') {
-    return <MainMenu onSelectMode={handleSelectMode} theme={currentTheme} />;
+    return (
+      <MainMenu
+        onSelectMode={handleSelectMode}
+        theme={currentTheme}
+        profile={profile}
+        onProfileUpdate={setProfile}
+      />
+    );
   }
 
   if (mode === 'solo') {
@@ -77,6 +102,14 @@ function App() {
   }
 
   return null;
+}
+
+function App() {
+  return (
+    <AuthWrapper>
+      {(profile) => <GameApp profile={profile} />}
+    </AuthWrapper>
+  );
 }
 
 export default App;

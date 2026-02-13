@@ -56,32 +56,18 @@ export class TetrisRenderer {
     }
   }
 
-  drawBoard(board: Board, blindSpotRows: number = 0): void {
+  drawBoard(board: Board): void {
     for (let y = 0; y < board.height; y++) {
       for (let x = 0; x < board.width; x++) {
         const cell = board.grid[y][x];
         if (cell) {
-          // Check if this row should be hidden (blind spot effect)
-          const isBlindSpot = blindSpotRows > 0 && y >= board.height - blindSpotRows;
-
-          if (isBlindSpot) {
-            // Draw fog/darkness for blind spot
-            this.ctx.fillStyle = 'rgba(0, 0, 0, 0.9)';
-            this.ctx.fillRect(
-              x * this.blockSize,
-              y * this.blockSize,
-              this.blockSize,
-              this.blockSize
-            );
-          } else {
-            this.theme.renderBlock(
-              this.ctx,
-              x * this.blockSize,
-              y * this.blockSize,
-              this.blockSize,
-              cell
-            );
-          }
+          this.theme.renderBlock(
+            this.ctx,
+            x * this.blockSize,
+            y * this.blockSize,
+            this.blockSize,
+            cell
+          );
         }
       }
     }
@@ -215,6 +201,31 @@ export class TetrisRenderer {
     }
   }
 
+  drawBlindSpot(board: Board, blindSpotRows: number): void {
+    // Draw cloud/fog overlay over bottom rows
+    const startY = (board.height - blindSpotRows) * this.blockSize;
+    const height = blindSpotRows * this.blockSize;
+
+    // Create gradient fog effect
+    const gradient = this.ctx.createLinearGradient(0, startY, 0, startY + height);
+    gradient.addColorStop(0, 'rgba(40, 40, 60, 0.7)');
+    gradient.addColorStop(0.5, 'rgba(30, 30, 50, 0.9)');
+    gradient.addColorStop(1, 'rgba(20, 20, 40, 0.95)');
+
+    this.ctx.fillStyle = gradient;
+    this.ctx.fillRect(0, startY, board.width * this.blockSize, height);
+
+    // Add some cloud texture with circles
+    this.ctx.fillStyle = 'rgba(60, 60, 80, 0.3)';
+    for (let i = 0; i < 8; i++) {
+      const x = (i * 50 + Math.sin(Date.now() / 1000 + i) * 20) % (board.width * this.blockSize);
+      const y = startY + (i % 3) * (height / 3) + Math.cos(Date.now() / 1000 + i) * 15;
+      this.ctx.beginPath();
+      this.ctx.arc(x, y, 30, 0, Math.PI * 2);
+      this.ctx.fill();
+    }
+  }
+
   render(
     board: Board,
     currentPiece: Tetromino | null,
@@ -232,7 +243,7 @@ export class TetrisRenderer {
     }
 
     // Draw locked blocks
-    this.drawBoard(board, blindSpotRows);
+    this.drawBoard(board);
 
     // Draw ghost piece (preview of where piece will land)
     if (showGhost && ghostPiece) {
@@ -242,6 +253,11 @@ export class TetrisRenderer {
     // Draw current piece
     if (currentPiece) {
       this.drawPiece(currentPiece, false, isBomb);
+    }
+
+    // Draw blind spot overlay (after pieces so fog is on top)
+    if (blindSpotRows > 0) {
+      this.drawBlindSpot(board, blindSpotRows);
     }
   }
 }

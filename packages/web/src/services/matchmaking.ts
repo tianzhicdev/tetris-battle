@@ -31,7 +31,7 @@ export class MatchmakingService {
    */
   static async checkForMatch(playerId: string): Promise<GameRoom | null> {
     // Call the match_players function
-    const { data, error } = await supabase.rpc('match_players');
+    const { data, error } = await supabase!.rpc('match_players');
 
     if (error) {
       console.error('Match check error:', error);

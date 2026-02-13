@@ -3,19 +3,17 @@ import { useGameStore } from '../stores/gameStore';
 import { useAbilityStore } from '../stores/abilityStore';
 import { TetrisRenderer } from '../renderer/TetrisRenderer';
 import { PartykitGameSync } from '../services/partykit/gameSync';
-import { AbilityCarousel } from './AbilityCarousel';
 import { AbilityEffects } from './AbilityEffects';
-import { TouchControls } from './TouchControls';
 import {
   AbilityEffectManager,
   ABILITIES,
   applyClearRows,
   applyRandomSpawner,
   applyEarthquake,
-  applyColumnBomb,
 } from '@tetris-battle/game-core';
 import type { Ability } from '@tetris-battle/game-core';
 import type { Theme } from '../themes';
+import { audioManager } from '../services/audioManager';
 
 interface MultiplayerGameProps {
   roomId: string;
@@ -46,7 +44,7 @@ export function MultiplayerGame({ roomId, playerId, opponentId, theme, onExit }:
   const {
     gameState,
     ghostPiece,
-    hasDeflectShield,
+    isPaused,
     initGame,
     movePieceLeft,
     movePieceRight,
@@ -62,8 +60,6 @@ export function MultiplayerGame({ roomId, playerId, opponentId, theme, onExit }:
     setMiniBlocksRemaining,
     setWeirdShapesRemaining,
     setShrinkCeilingRows,
-    setPiecePreviewCount,
-    setHasDeflectShield,
     setOnBombExplode,
   } = useGameStore();
 
@@ -98,8 +94,12 @@ export function MultiplayerGame({ roomId, playerId, opponentId, theme, onExit }:
     setIsConnected(true);
     initGame();
 
+    // Start gameplay music
+    audioManager.playMusic('gameplay_normal', true);
+
     return () => {
       sync.disconnect();
+      audioManager.stopMusic(true);
     };
   }, [roomId, playerId, onExit, initGame]);
 
@@ -128,8 +128,8 @@ export function MultiplayerGame({ roomId, playerId, opponentId, theme, onExit }:
       rendererRef.current = new TetrisRenderer(canvasRef.current, 25, theme);
     }
     if (opponentCanvasRef.current) {
-      // Opponent canvas is smaller (100x200), so cellSize = 10
-      opponentRendererRef.current = new TetrisRenderer(opponentCanvasRef.current, 10, theme);
+      // Opponent canvas is smaller (80x160), so cellSize = 8
+      opponentRendererRef.current = new TetrisRenderer(opponentCanvasRef.current, 8, theme);
     }
   }, [theme]);
 
@@ -222,6 +222,13 @@ export function MultiplayerGame({ roomId, playerId, opponentId, theme, onExit }:
     // Deduct stars first
     deductStars(ability.cost);
 
+    // Play sound based on ability category
+    if (ability.category === 'buff') {
+      audioManager.playSfx('ability_buff_activate');
+    } else if (ability.category === 'debuff') {
+      audioManager.playSfx('ability_debuff_activate');
+    }
+
     if (ability.category === 'buff' || ability.category === 'defense' || ability.category === 'ultra') {
       // Apply buff/defense/ultra to self (or handle ultra effects)
       if (ability.duration) {
@@ -259,23 +266,8 @@ export function MultiplayerGame({ roomId, playerId, opponentId, theme, onExit }:
           break;
         }
 
-        case 'deflect_shield': {
-          // Activate shield - stays active until triggered
-          setHasDeflectShield(true);
-          console.log('Deflect Shield activated - will block next debuff');
-          break;
-        }
-
-        case 'piece_preview_plus':
         case 'cascade_multiplier':
           // Duration-based effects handled by AbilityEffectManager
-          break;
-
-        case 'board_swap':
-        case 'gravity_invert':
-        case 'mirror_match':
-          // Ultra abilities - send to opponent for special handling
-          gameSyncRef.current?.activateAbility(ability.type, opponentId);
           break;
       }
     } else {
@@ -294,12 +286,8 @@ export function MultiplayerGame({ roomId, playerId, opponentId, theme, onExit }:
 
     if (!ability) return;
 
-    // Check if this is a debuff and deflect shield is active
-    if (ability.category === 'debuff' && hasDeflectShield) {
-      console.log(`Deflect Shield blocked ${abilityType}!`);
-      setHasDeflectShield(false); // Consume the shield
-      return; // Don't apply the debuff
-    }
+    // Play debuff sound (we're receiving a debuff from opponent)
+    audioManager.playSfx('ability_debuff_activate');
 
     // Track the effect
     if (ability.duration) {
@@ -309,23 +297,9 @@ export function MultiplayerGame({ roomId, playerId, opponentId, theme, onExit }:
 
     // Apply instant debuff effects
     switch (abilityType) {
-      case 'random_spawner': {
-        // Add random junk blocks to board
-        const newBoard = applyRandomSpawner(gameState.board);
-        updateBoard(newBoard);
-        break;
-      }
-
       case 'earthquake': {
         // Shift all rows randomly
         const newBoard = applyEarthquake(gameState.board);
-        updateBoard(newBoard);
-        break;
-      }
-
-      case 'column_bomb': {
-        // Drop 8 garbage blocks into random column
-        const newBoard = applyColumnBomb(gameState.board);
         updateBoard(newBoard);
         break;
       }
@@ -343,7 +317,7 @@ export function MultiplayerGame({ roomId, playerId, opponentId, theme, onExit }:
       case 'reverse_controls':
       case 'screen_shake':
       case 'shrink_ceiling':
-      case 'mirror_blocks':
+      case 'random_spawner':
         // Duration-based effects handled by AbilityEffectManager
         // These will be checked during game loop or rendering
         break;
@@ -379,14 +353,17 @@ export function MultiplayerGame({ roomId, playerId, opponentId, theme, onExit }:
     return () => clearInterval(interval);
   }, [setShrinkCeilingRows]);
 
-  // Sync piece preview+ with effect manager
+  // Periodic random spawner effect - spawn blocks every 2 seconds while active
   useEffect(() => {
     const interval = setInterval(() => {
-      const isActive = effectManager.isEffectActive('piece_preview_plus');
-      setPiecePreviewCount(isActive ? 5 : 1);
-    }, 100);
+      const isActive = effectManager.isEffectActive('random_spawner');
+      if (isActive) {
+        const newBoard = applyRandomSpawner(gameState.board);
+        updateBoard(newBoard);
+      }
+    }, 2000); // Every 2 seconds
     return () => clearInterval(interval);
-  }, [setPiecePreviewCount]);
+  }, [gameState.board]);
 
   // Keyboard controls
   useEffect(() => {
@@ -399,6 +376,7 @@ export function MultiplayerGame({ roomId, playerId, opponentId, theme, onExit }:
       switch (e.key) {
         case 'ArrowLeft':
           e.preventDefault();
+          audioManager.playSfx('piece_move', 0.3);
           if (isReversed) {
             movePieceRight(); // Reversed!
           } else {
@@ -407,6 +385,7 @@ export function MultiplayerGame({ roomId, playerId, opponentId, theme, onExit }:
           break;
         case 'ArrowRight':
           e.preventDefault();
+          audioManager.playSfx('piece_move', 0.3);
           if (isReversed) {
             movePieceLeft(); // Reversed!
           } else {
@@ -415,6 +394,7 @@ export function MultiplayerGame({ roomId, playerId, opponentId, theme, onExit }:
           break;
         case 'ArrowDown':
           e.preventDefault();
+          audioManager.playSfx('soft_drop', 0.4);
           movePieceDown();
           break;
         case 'ArrowUp':
@@ -423,16 +403,19 @@ export function MultiplayerGame({ roomId, playerId, opponentId, theme, onExit }:
           e.preventDefault();
           // Check if rotation is locked by debuff
           if (!effectManager.isEffectActive('rotation_lock')) {
+            audioManager.playSfx('piece_rotate', 0.5);
             rotatePieceClockwise();
           }
           break;
         case ' ':
           e.preventDefault();
+          audioManager.playSfx('hard_drop');
           hardDrop();
           break;
         case 'p':
         case 'P':
           e.preventDefault();
+          audioManager.playSfx(isPaused ? 'resume' : 'pause');
           togglePause();
           break;
         case '1':
@@ -468,21 +451,29 @@ export function MultiplayerGame({ roomId, playerId, opponentId, theme, onExit }:
       style={{
         display: 'flex',
         flexDirection: 'column',
-        alignItems: 'center',
-        padding: '10px 10px 180px 10px', // Extra bottom padding for fixed controls
+        height: '100vh',
+        width: '100vw',
+        overflow: 'hidden',
         backgroundColor: theme.backgroundColor,
-        minHeight: '100vh',
         color: theme.textColor,
         fontFamily: 'monospace',
-        gap: '15px',
+        position: 'fixed',
+        top: 0,
+        left: 0,
       }}
     >
-      {/* Main Game Area */}
-      <div style={{ display: 'flex', gap: '15px', flexWrap: 'wrap', justifyContent: 'center' }}>
-        {/* Your Board */}
-        <div style={{ position: 'relative' }}>
-          <h3 style={{ textAlign: 'center', marginBottom: '5px', fontSize: '14px' }}>YOU</h3>
+      {/* Main Game Area - Top Section */}
+      <div style={{ display: 'flex', flex: 1, overflow: 'hidden', padding: '8px', gap: '8px' }}>
+        {/* Left: Your Board */}
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0 }}>
+          <h3 style={{ textAlign: 'center', margin: '0 0 4px 0', fontSize: '12px' }}>YOU</h3>
           <div style={{
+            flex: 1,
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+            position: 'relative',
             transform: effectManager.isEffectActive('screen_shake')
               ? `translate(${Math.sin(Date.now() / 50) * 5}px, ${Math.cos(Date.now() / 70) * 5}px) rotate(${Math.sin(Date.now() / 100) * 2}deg)`
               : 'none',
@@ -495,112 +486,289 @@ export function MultiplayerGame({ roomId, playerId, opponentId, theme, onExit }:
               style={{
                 border: `2px solid ${theme.textColor}`,
                 backgroundColor: theme.backgroundColor,
+                maxHeight: 'calc(100vh - 140px)', // Account for header and bottom controls
                 maxWidth: '100%',
+                objectFit: 'contain',
               }}
             />
           </div>
           <AbilityEffects activeEffects={activeEffects} theme={theme} />
           <div
             style={{
-              marginTop: '5px',
-              padding: '8px',
+              marginTop: '4px',
+              padding: '6px',
               backgroundColor: theme.uiBackgroundColor,
-              borderRadius: '5px',
-              fontSize: '12px',
+              borderRadius: '4px',
+              fontSize: '10px',
+              textAlign: 'center',
             }}
           >
-            <p style={{ margin: '2px 0' }}>Score: {gameState.score}</p>
-            <p style={{ margin: '2px 0' }}>Stars: {gameState.stars} ⭐</p>
-            <p style={{ margin: '2px 0' }}>Lines: {gameState.linesCleared}</p>
+            <span style={{ marginRight: '8px' }}>Score: {gameState.score}</span>
+            <span style={{ marginRight: '8px' }}>⭐ {gameState.stars}</span>
+            <span>Lines: {gameState.linesCleared}</span>
           </div>
         </div>
 
-        {/* Opponent's Board - Much Smaller */}
-        <div>
-          <h3 style={{ textAlign: 'center', marginBottom: '5px', fontSize: '12px' }}>OPPONENT</h3>
-          <canvas
-            ref={opponentCanvasRef}
-            width={100}
-            height={200}
-            style={{
-              border: `2px solid ${theme.colors.Z}`,
-              backgroundColor: theme.backgroundColor,
+        {/* Right: Vertical Panel */}
+        <div style={{
+          width: '100px',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: '8px',
+          overflow: 'hidden'
+        }}>
+          {/* Settings Button */}
+          <button
+            onClick={() => {
+              if (confirm('Leave game?')) onExit();
             }}
-          />
-          {opponentState && (
-            <div
+            style={{
+              padding: '8px',
+              backgroundColor: theme.uiBackgroundColor,
+              border: `1px solid ${theme.textColor}`,
+              borderRadius: '50%',
+              color: theme.textColor,
+              fontSize: '20px',
+              cursor: 'pointer',
+              width: '40px',
+              height: '40px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              alignSelf: 'center',
+            }}
+          >
+            ⚙
+          </button>
+
+          {/* Opponent's Board */}
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+            <h3 style={{ margin: '0 0 4px 0', fontSize: '9px' }}>OPPONENT</h3>
+            <canvas
+              ref={opponentCanvasRef}
+              width={80}
+              height={160}
               style={{
-                marginTop: '5px',
-                padding: '5px',
-                backgroundColor: theme.uiBackgroundColor,
-                borderRadius: '3px',
-                fontSize: '10px',
+                border: `2px solid ${theme.colors.Z}`,
+                backgroundColor: theme.backgroundColor,
+                width: '80px',
+                height: '160px',
               }}
-            >
-              <p style={{ margin: '2px 0' }}>S: {opponentState.score}</p>
-              <p style={{ margin: '2px 0' }}>⭐: {opponentState.stars}</p>
-              <p style={{ margin: '2px 0' }}>L: {opponentState.linesCleared}</p>
-            </div>
-          )}
+            />
+            {opponentState && (
+              <div
+                style={{
+                  marginTop: '4px',
+                  padding: '3px',
+                  backgroundColor: theme.uiBackgroundColor,
+                  borderRadius: '3px',
+                  fontSize: '8px',
+                  textAlign: 'center',
+                }}
+              >
+                <div>S: {opponentState.score}</div>
+                <div>⭐: {opponentState.stars}</div>
+              </div>
+            )}
+          </div>
+
+          {/* Abilities Grid - 4 rows x 2 columns */}
+          <div style={{
+            flex: 1,
+            display: 'grid',
+            gridTemplateColumns: '1fr 1fr',
+            gridTemplateRows: 'repeat(4, 1fr)',
+            gap: '4px',
+            overflow: 'hidden'
+          }}>
+            {availableAbilities.slice(0, 8).map((ability, index) => {
+              // Simple icon mapping based on category
+              const icon = ability.category === 'buff' ? '💪' :
+                          ability.category === 'debuff' ? '⚡' :
+                          ability.category === 'defense' ? '🛡️' : '✨';
+
+              return (
+                <button
+                  key={index}
+                  onClick={() => {
+                    if (gameState.stars >= ability.cost) {
+                      handleAbilityActivate(ability);
+                    }
+                  }}
+                  disabled={gameState.stars < ability.cost}
+                  style={{
+                    padding: '4px',
+                    backgroundColor: gameState.stars >= ability.cost
+                      ? (ability.category === 'buff' ? theme.colors.T : theme.colors.Z)
+                      : theme.uiBackgroundColor,
+                    border: `1px solid ${theme.textColor}`,
+                    borderRadius: '50%',
+                    color: theme.textColor,
+                    fontSize: '14px',
+                    cursor: gameState.stars >= ability.cost ? 'pointer' : 'not-allowed',
+                    opacity: gameState.stars >= ability.cost ? 1 : 0.4,
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    minHeight: 0,
+                  }}
+                  title={`${ability.name} (${ability.cost}⭐)`}
+                >
+                  <div style={{ fontSize: '16px' }}>{icon}</div>
+                  <div style={{ fontSize: '7px', marginTop: '2px' }}>{ability.cost}⭐</div>
+                </button>
+              );
+            })}
+          </div>
         </div>
       </div>
 
-      {/* Abilities - Smaller */}
-      <div style={{ width: '100%', maxWidth: '500px' }}>
-        <AbilityCarousel
-          currentStars={gameState.stars}
-          onActivate={handleAbilityActivate}
-          theme={theme}
-        />
-      </div>
-
-      {/* Touch Controls for Mobile */}
-      <TouchControls
-        onMoveLeft={effectManager.isEffectActive('reverse_controls') ? movePieceRight : movePieceLeft}
-        onMoveRight={effectManager.isEffectActive('reverse_controls') ? movePieceLeft : movePieceRight}
-        onRotate={rotatePieceClockwise}
-        onSoftDrop={movePieceDown}
-        onHardDrop={hardDrop}
-        theme={theme}
-      />
-
-      {/* Compact Controls */}
-      <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', justifyContent: 'center', width: '100%', maxWidth: '500px' }}>
-        <div
-          style={{
-            backgroundColor: theme.uiBackgroundColor,
-            padding: '10px',
-            borderRadius: '5px',
-            fontSize: '11px',
-            flex: '1',
-            minWidth: '150px',
-          }}
-        >
-          <h4 style={{ marginTop: 0, marginBottom: '5px', fontSize: '12px' }}>Controls</h4>
-          <p style={{ margin: '2px 0' }}>← → Move</p>
-          <p style={{ margin: '2px 0' }}>↑ Rotate</p>
-          <p style={{ margin: '2px 0' }}>SPACE Drop</p>
-        </div>
-
+      {/* Bottom: Touch Controls - Single Row */}
+      <div
+        style={{
+          height: '70px',
+          display: 'flex',
+          gap: '6px',
+          padding: '8px',
+          backgroundColor: theme.uiBackgroundColor,
+          borderTop: `2px solid ${theme.textColor}`,
+        }}
+      >
         <button
-          onClick={onExit}
+          onTouchStart={(e) => {
+            e.preventDefault();
+            audioManager.playSfx('piece_move', 0.3);
+            effectManager.isEffectActive('reverse_controls') ? movePieceRight() : movePieceLeft();
+          }}
+          onClick={() => {
+            audioManager.playSfx('piece_move', 0.3);
+            effectManager.isEffectActive('reverse_controls') ? movePieceRight() : movePieceLeft();
+          }}
           style={{
-            padding: '12px 20px',
-            fontSize: '14px',
-            backgroundColor: theme.colors.Z,
+            flex: 1,
+            fontSize: '24px',
+            backgroundColor: theme.colors.T,
             color: '#ffffff',
             border: 'none',
-            borderRadius: '5px',
+            borderRadius: '8px',
             cursor: 'pointer',
-            alignSelf: 'center',
+            touchAction: 'manipulation',
           }}
         >
-          Leave Game
+          ←
+        </button>
+        <button
+          onTouchStart={(e) => {
+            e.preventDefault();
+            audioManager.playSfx('soft_drop', 0.4);
+            movePieceDown();
+          }}
+          onClick={() => {
+            audioManager.playSfx('soft_drop', 0.4);
+            movePieceDown();
+          }}
+          style={{
+            flex: 1,
+            fontSize: '24px',
+            backgroundColor: theme.colors.S,
+            color: '#ffffff',
+            border: 'none',
+            borderRadius: '8px',
+            cursor: 'pointer',
+            touchAction: 'manipulation',
+          }}
+        >
+          ↓
+        </button>
+        <button
+          onTouchStart={(e) => {
+            e.preventDefault();
+            audioManager.playSfx('piece_rotate', 0.5);
+            if (!effectManager.isEffectActive('rotation_lock')) {
+              rotatePieceClockwise();
+            }
+          }}
+          onClick={() => {
+            audioManager.playSfx('piece_rotate', 0.5);
+            if (!effectManager.isEffectActive('rotation_lock')) {
+              rotatePieceClockwise();
+            }
+          }}
+          style={{
+            flex: 1,
+            fontSize: '24px',
+            backgroundColor: theme.colors.I,
+            color: '#ffffff',
+            border: 'none',
+            borderRadius: '8px',
+            cursor: 'pointer',
+            touchAction: 'manipulation',
+          }}
+        >
+          ↻
+        </button>
+        <button
+          onTouchStart={(e) => {
+            e.preventDefault();
+            audioManager.playSfx('hard_drop');
+            hardDrop();
+          }}
+          onClick={() => {
+            audioManager.playSfx('hard_drop');
+            hardDrop();
+          }}
+          style={{
+            flex: 1,
+            fontSize: '24px',
+            backgroundColor: theme.colors.O,
+            color: '#ffffff',
+            border: 'none',
+            borderRadius: '8px',
+            cursor: 'pointer',
+            touchAction: 'manipulation',
+          }}
+        >
+          ⬇⬇
+        </button>
+        <button
+          onTouchStart={(e) => {
+            e.preventDefault();
+            audioManager.playSfx(isPaused ? 'resume' : 'pause');
+            togglePause();
+          }}
+          onClick={() => {
+            audioManager.playSfx(isPaused ? 'resume' : 'pause');
+            togglePause();
+          }}
+          style={{
+            flex: 1,
+            fontSize: '24px',
+            backgroundColor: theme.colors.L,
+            color: '#ffffff',
+            border: 'none',
+            borderRadius: '8px',
+            cursor: 'pointer',
+            touchAction: 'manipulation',
+          }}
+        >
+          {isPaused ? '▶' : '⏸'}
         </button>
       </div>
 
       {!isConnected && (
-        <p style={{ fontSize: '12px', color: theme.colors.L }}>Connecting...</p>
+        <div style={{
+          position: 'absolute',
+          top: '50%',
+          left: '50%',
+          transform: 'translate(-50%, -50%)',
+          fontSize: '12px',
+          backgroundColor: theme.uiBackgroundColor,
+          padding: '10px',
+          borderRadius: '5px',
+        }}>
+          Connecting...
+        </div>
       )}
 
       {gameFinished && (

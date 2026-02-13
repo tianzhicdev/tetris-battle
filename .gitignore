@@ -53,3 +53,4 @@ __pycache__/
 *.pyo
 packages/web/public/audio/
 packages/web/public/audio_v*/
+.env.secrets
