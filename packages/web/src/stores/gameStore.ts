@@ -27,6 +27,8 @@ interface GameStore {
   miniBlocksRemaining: number; // Track how many mini block pieces to spawn
   weirdShapesRemaining: number; // Track how many weird shape pieces to spawn
   shrinkCeilingRows: number; // Track number of rows blocked from top
+  piecePreviewCount: number; // 1 = normal, 5 = piece preview+ active
+  hasDeflectShield: boolean; // Active deflect shield that blocks next debuff
   onBombExplode: ((x: number, y: number, type: 'cross' | 'circle') => void) | null;
 
   // Actions
@@ -48,6 +50,8 @@ interface GameStore {
   setMiniBlocksRemaining: (count: number) => void;
   setWeirdShapesRemaining: (count: number) => void;
   setShrinkCeilingRows: (rows: number) => void;
+  setPiecePreviewCount: (count: number) => void;
+  setHasDeflectShield: (active: boolean) => void;
   setOnBombExplode: (callback: (x: number, y: number, type: 'cross' | 'circle') => void) => void;
 }
 
@@ -60,12 +64,13 @@ export const useGameStore = create<GameStore>((set, get) => ({
   miniBlocksRemaining: 0,
   weirdShapesRemaining: 0,
   shrinkCeilingRows: 0,
+  piecePreviewCount: 1,
+  hasDeflectShield: false,
   onBombExplode: null,
 
   initGame: () => {
     const initialState = createInitialGameState();
-    const firstPiece = getRandomTetromino();
-    const nextPiece = getRandomTetromino();
+    const firstPiece = initialState.nextPieces[0];
 
     // Check for test mode (URL parameter ?testMode=true)
     const urlParams = new URLSearchParams(window.location.search);
@@ -76,7 +81,6 @@ export const useGameStore = create<GameStore>((set, get) => ({
       gameState: {
         ...initialState,
         currentPiece: createTetromino(firstPiece, initialState.board.width),
-        nextPiece,
         stars: startingStars,
       },
       activeAbilities: [],
@@ -90,6 +94,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
     const { gameState, miniBlocksRemaining, weirdShapesRemaining, shrinkCeilingRows } = get();
 
     let newPiece: Tetromino;
+    const nextType = gameState.nextPieces[0];
 
     // Check if we should spawn a mini block
     if (miniBlocksRemaining > 0) {
@@ -98,12 +103,12 @@ export const useGameStore = create<GameStore>((set, get) => ({
     }
     // Check if we should spawn a weird shape
     else if (weirdShapesRemaining > 0) {
-      const basePiece = createTetromino(gameState.nextPiece, gameState.board.width);
+      const basePiece = createTetromino(nextType, gameState.board.width);
       newPiece = applyWeirdShapes(basePiece);
       set({ weirdShapesRemaining: weirdShapesRemaining - 1 });
     }
     else {
-      newPiece = createTetromino(gameState.nextPiece, gameState.board.width);
+      newPiece = createTetromino(nextType, gameState.board.width);
     }
 
     // Offset spawn position if ceiling is shrunk
@@ -114,7 +119,8 @@ export const useGameStore = create<GameStore>((set, get) => ({
       };
     }
 
-    const nextPiece = getRandomTetromino();
+    // Shift queue and add new piece to end
+    const newNextPieces = [...gameState.nextPieces.slice(1), getRandomTetromino()];
 
     // Check game over
     if (!isValidPosition(gameState.board, newPiece)) {
@@ -131,7 +137,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
       gameState: {
         ...gameState,
         currentPiece: newPiece,
-        nextPiece,
+        nextPieces: newNextPieces,
       },
     });
 
@@ -360,6 +366,14 @@ export const useGameStore = create<GameStore>((set, get) => ({
 
   setShrinkCeilingRows: (rows: number) => {
     set({ shrinkCeilingRows: rows });
+  },
+
+  setPiecePreviewCount: (count: number) => {
+    set({ piecePreviewCount: count });
+  },
+
+  setHasDeflectShield: (active: boolean) => {
+    set({ hasDeflectShield: active });
   },
 
   setOnBombExplode: (callback: (x: number, y: number, type: 'cross' | 'circle') => void) => {

@@ -25,7 +25,7 @@ export interface Board {
 export interface GameState {
   board: Board;
   currentPiece: Tetromino | null;
-  nextPiece: TetrominoType;
+  nextPieces: TetrominoType[]; // Queue of upcoming pieces (minimum 5)
   score: number;
   stars: number;
   level: number;

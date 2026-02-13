@@ -46,6 +46,7 @@ export function MultiplayerGame({ roomId, playerId, opponentId, theme, onExit }:
   const {
     gameState,
     ghostPiece,
+    hasDeflectShield,
     initGame,
     movePieceLeft,
     movePieceRight,
@@ -61,6 +62,8 @@ export function MultiplayerGame({ roomId, playerId, opponentId, theme, onExit }:
     setMiniBlocksRemaining,
     setWeirdShapesRemaining,
     setShrinkCeilingRows,
+    setPiecePreviewCount,
+    setHasDeflectShield,
     setOnBombExplode,
   } = useGameStore();
 
@@ -256,9 +259,15 @@ export function MultiplayerGame({ roomId, playerId, opponentId, theme, onExit }:
           break;
         }
 
+        case 'deflect_shield': {
+          // Activate shield - stays active until triggered
+          setHasDeflectShield(true);
+          console.log('Deflect Shield activated - will block next debuff');
+          break;
+        }
+
         case 'piece_preview_plus':
         case 'cascade_multiplier':
-        case 'deflect_shield':
           // Duration-based effects handled by AbilityEffectManager
           break;
 
@@ -284,6 +293,13 @@ export function MultiplayerGame({ roomId, playerId, opponentId, theme, onExit }:
     const ability = abilities.find((a: any) => a.type === abilityType);
 
     if (!ability) return;
+
+    // Check if this is a debuff and deflect shield is active
+    if (ability.category === 'debuff' && hasDeflectShield) {
+      console.log(`Deflect Shield blocked ${abilityType}!`);
+      setHasDeflectShield(false); // Consume the shield
+      return; // Don't apply the debuff
+    }
 
     // Track the effect
     if (ability.duration) {
@@ -362,6 +378,15 @@ export function MultiplayerGame({ roomId, playerId, opponentId, theme, onExit }:
     }, 100);
     return () => clearInterval(interval);
   }, [setShrinkCeilingRows]);
+
+  // Sync piece preview+ with effect manager
+  useEffect(() => {
+    const interval = setInterval(() => {
+      const isActive = effectManager.isEffectActive('piece_preview_plus');
+      setPiecePreviewCount(isActive ? 5 : 1);
+    }, 100);
+    return () => clearInterval(interval);
+  }, [setPiecePreviewCount]);
 
   // Keyboard controls
   useEffect(() => {

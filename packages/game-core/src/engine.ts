@@ -1,5 +1,5 @@
 import type { Board, Tetromino, GameState, CellValue, Position } from './types';
-import { TETROMINO_SHAPES } from './tetrominos';
+import { TETROMINO_SHAPES, getRandomTetromino } from './tetrominos';
 import { STAR_VALUES } from './types';
 
 export function createBoard(width: number = 10, height: number = 20): Board {
@@ -14,7 +14,13 @@ export function createInitialGameState(): GameState {
   return {
     board: createBoard(),
     currentPiece: null,
-    nextPiece: 'I',
+    nextPieces: [
+      getRandomTetromino(),
+      getRandomTetromino(),
+      getRandomTetromino(),
+      getRandomTetromino(),
+      getRandomTetromino(),
+    ],
     score: 0,
     stars: STAR_VALUES.startingPool,
     level: 1,
