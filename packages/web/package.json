@@ -13,9 +13,12 @@
     "@clerk/clerk-react": "^5.60.0",
     "@supabase/supabase-js": "^2.95.3",
     "@tetris-battle/game-core": "workspace:*",
+    "@types/howler": "^2.2.12",
+    "howler": "^2.2.4",
     "partysocket": "^1.1.13",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
+    "use-sound": "^5.0.0",
     "zustand": "^5.0.11"
   },
   "devDependencies": {

@@ -1,4 +1,7 @@
 // Audio Manager - Handles all game sounds and music
+// Uses Howler.js for low-latency Web Audio API with HTML5 Audio fallback
+
+import { Howl } from 'howler';
 
 export type SoundEffect =
   | 'piece_move'
@@ -35,9 +38,9 @@ export type MusicTrack =
   | 'defeat_theme';
 
 class AudioManager {
-  private soundEffects: Map<SoundEffect, HTMLAudioElement> = new Map();
-  private musicTracks: Map<MusicTrack, HTMLAudioElement> = new Map();
-  private currentMusic: HTMLAudioElement | null = null;
+  private soundEffects: Map<SoundEffect, Howl> = new Map();
+  private musicTracks: Map<MusicTrack, Howl> = new Map();
+  private currentMusic: Howl | null = null;
   private currentMusicTrack: MusicTrack | null = null;
 
   private masterVolume: number = 0.7;
@@ -81,10 +84,13 @@ class AudioManager {
     ];
 
     sfxList.forEach(sfx => {
-      const audio = new Audio(`/audio/${sfx}.wav`);
-      audio.volume = this.sfxVolume * this.masterVolume;
-      audio.preload = 'auto';
-      this.soundEffects.set(sfx, audio);
+      const howl = new Howl({
+        src: [`/audio/${sfx}.wav`],
+        volume: this.sfxVolume * this.masterVolume,
+        preload: true,
+        html5: false, // Use Web Audio API for low latency
+      });
+      this.soundEffects.set(sfx, howl);
     });
 
     // Preload music tracks
@@ -98,11 +104,14 @@ class AudioManager {
     ];
 
     musicList.forEach(track => {
-      const audio = new Audio(`/audio/${track}.wav`);
-      audio.volume = this.musicVolume * this.masterVolume;
-      audio.loop = true;
-      audio.preload = 'auto';
-      this.musicTracks.set(track, audio);
+      const howl = new Howl({
+        src: [`/audio/${track}.wav`],
+        volume: this.musicVolume * this.masterVolume,
+        loop: true,
+        preload: true,
+        html5: true, // Use HTML5 Audio for streaming large files
+      });
+      this.musicTracks.set(track, howl);
     });
   }
 
@@ -110,19 +119,15 @@ class AudioManager {
   playSfx(effect: SoundEffect, volume: number = 1.0) {
     if (!this.isSfxEnabled || this.isMuted) return;
 
-    const audio = this.soundEffects.get(effect);
-    if (!audio) {
+    const howl = this.soundEffects.get(effect);
+    if (!howl) {
       console.warn(`Sound effect not found: ${effect}`);
       return;
     }
 
-    // Clone the audio to allow multiple instances
-    const clone = audio.cloneNode() as HTMLAudioElement;
-    clone.volume = this.sfxVolume * this.masterVolume * volume;
-
-    clone.play().catch(err => {
-      console.warn(`Failed to play sound: ${effect}`, err);
-    });
+    // Howler automatically manages multiple instances
+    howl.volume(this.sfxVolume * this.masterVolume * volume);
+    howl.play();
   }
 
   // Play or switch music track
@@ -130,7 +135,7 @@ class AudioManager {
     if (!this.isMusicEnabled || this.isMuted) return;
 
     // Don't restart if already playing
-    if (this.currentMusicTrack === track && this.currentMusic && !this.currentMusic.paused) {
+    if (this.currentMusicTrack === track && this.currentMusic && this.currentMusic.playing()) {
       return;
     }
 
@@ -139,36 +144,23 @@ class AudioManager {
       this.stopMusic(fadeIn);
     }
 
-    const audio = this.musicTracks.get(track);
-    if (!audio) {
+    const howl = this.musicTracks.get(track);
+    if (!howl) {
       console.warn(`Music track not found: ${track}`);
       return;
     }
 
-    this.currentMusic = audio;
+    this.currentMusic = howl;
     this.currentMusicTrack = track;
 
     if (fadeIn) {
-      audio.volume = 0;
-      audio.play().catch(err => {
-        console.warn(`Failed to play music: ${track}`, err);
-      });
-
-      // Fade in over 1 second
-      const targetVolume = this.musicVolume * this.masterVolume;
-      const fadeStep = targetVolume / 20;
-      const fadeInterval = setInterval(() => {
-        if (audio.volume < targetVolume) {
-          audio.volume = Math.min(audio.volume + fadeStep, targetVolume);
-        } else {
-          clearInterval(fadeInterval);
-        }
-      }, 50);
+      // Howler has built-in fade support
+      howl.volume(0);
+      howl.play();
+      howl.fade(0, this.musicVolume * this.masterVolume, 1000); // Fade in over 1 second
     } else {
-      audio.volume = this.musicVolume * this.masterVolume;
-      audio.play().catch(err => {
-        console.warn(`Failed to play music: ${track}`, err);
-      });
+      howl.volume(this.musicVolume * this.masterVolume);
+      howl.play();
     }
   }
 
@@ -177,21 +169,15 @@ class AudioManager {
     if (!this.currentMusic) return;
 
     if (fadeOut) {
-      const fadeStep = this.currentMusic.volume / 20;
-      const fadeInterval = setInterval(() => {
-        if (this.currentMusic && this.currentMusic.volume > fadeStep) {
-          this.currentMusic.volume -= fadeStep;
-        } else {
-          if (this.currentMusic) {
-            this.currentMusic.pause();
-            this.currentMusic.currentTime = 0;
-          }
-          clearInterval(fadeInterval);
+      // Fade out over 1 second, then stop
+      this.currentMusic.fade(this.currentMusic.volume(), 0, 1000);
+      setTimeout(() => {
+        if (this.currentMusic) {
+          this.currentMusic.stop();
         }
-      }, 50);
+      }, 1000);
     } else {
-      this.currentMusic.pause();
-      this.currentMusic.currentTime = 0;
+      this.currentMusic.stop();
     }
 
     this.currentMusic = null;
@@ -200,16 +186,14 @@ class AudioManager {
 
   // Pause/Resume music
   pauseMusic() {
-    if (this.currentMusic && !this.currentMusic.paused) {
+    if (this.currentMusic && this.currentMusic.playing()) {
       this.currentMusic.pause();
     }
   }
 
   resumeMusic() {
-    if (this.currentMusic && this.currentMusic.paused && this.isMusicEnabled && !this.isMuted) {
-      this.currentMusic.play().catch(err => {
-        console.warn('Failed to resume music', err);
-      });
+    if (this.currentMusic && !this.currentMusic.playing() && this.isMusicEnabled && !this.isMuted) {
+      this.currentMusic.play();
     }
   }
 
@@ -231,18 +215,18 @@ class AudioManager {
 
   private updateAllVolumes() {
     // Update sound effects
-    this.soundEffects.forEach(audio => {
-      audio.volume = this.sfxVolume * this.masterVolume;
+    this.soundEffects.forEach(howl => {
+      howl.volume(this.sfxVolume * this.masterVolume);
     });
 
     // Update music tracks
-    this.musicTracks.forEach(audio => {
-      audio.volume = this.musicVolume * this.masterVolume;
+    this.musicTracks.forEach(howl => {
+      howl.volume(this.musicVolume * this.masterVolume);
     });
 
     // Update current music if playing
     if (this.currentMusic) {
-      this.currentMusic.volume = this.musicVolume * this.masterVolume;
+      this.currentMusic.volume(this.musicVolume * this.masterVolume);
     }
   }
 
