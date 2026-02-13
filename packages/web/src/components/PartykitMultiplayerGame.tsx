@@ -6,6 +6,8 @@ import { TetrisRenderer } from '../renderer/TetrisRenderer';
 import { PartykitGameSync } from '../services/partykit/gameSync';
 import { AbilityEffects } from './AbilityEffects';
 import { AbilityInfo } from './AbilityInfo';
+import { ParticleEffect } from './ParticleEffect';
+import { FlashOverlay } from './FlashOverlay';
 import {
   AbilityEffectManager,
   ABILITIES,
@@ -62,6 +64,9 @@ export function MultiplayerGame({ roomId, playerId, opponentId, theme, onExit }:
   const [activeEffects, setActiveEffects] = useState<any[]>([]);
   const [explosion, setExplosion] = useState<{ x: number; y: number; startTime: number } | null>(null);
   const [showAbilityInfo, setShowAbilityInfo] = useState(false);
+  const [screenShake, setScreenShake] = useState(0); // 0 = no shake, 1-3 = intensity
+  const [flashEffect, setFlashEffect] = useState<{ color: string } | null>(null);
+  const [particles, setParticles] = useState<{ x: number; y: number; id: number } | null>(null);
 
   const { availableAbilities } = useAbilityStore();
 
@@ -190,10 +195,58 @@ export function MultiplayerGame({ roomId, playerId, opponentId, theme, onExit }:
     setOnBombExplode((x, y, type) => {
       console.log('Explosion triggered at', x, y, type);
       setExplosion({ x, y, startTime: Date.now() });
-      // Clear explosion after 500ms
-      setTimeout(() => setExplosion(null), 500);
+
+      // Trigger dramatic effects for bomb
+      haptics.heavy();
+      setScreenShake(3); // Maximum shake
+      setFlashEffect({ color: 'rgba(255, 100, 0, 0.7)' }); // Orange flash
+
+      // Get screen position for particles (approximate center of board)
+      if (canvasRef.current) {
+        const rect = canvasRef.current.getBoundingClientRect();
+        setParticles({ x: rect.left + rect.width / 2, y: rect.top + rect.height / 2, id: Date.now() });
+      }
+
+      setTimeout(() => {
+        setExplosion(null);
+        setScreenShake(0);
+      }, 500);
     });
   }, [setOnBombExplode]);
+
+  // Monitor for line clears and trigger effects
+  const prevLinesRef = useRef(gameState.linesCleared);
+  useEffect(() => {
+    const linesDiff = gameState.linesCleared - prevLinesRef.current;
+    if (linesDiff > 0) {
+      // Line clear detected!
+      console.log(`${linesDiff} lines cleared!`);
+
+      if (linesDiff >= 4) {
+        // TETRIS! Maximum effects
+        haptics.heavy();
+        setScreenShake(3);
+        setFlashEffect({ color: 'rgba(0, 255, 136, 0.8)' }); // Green flash
+        if (canvasRef.current) {
+          const rect = canvasRef.current.getBoundingClientRect();
+          setParticles({ x: rect.left + rect.width / 2, y: rect.top + rect.height / 2, id: Date.now() });
+        }
+      } else if (linesDiff >= 2) {
+        // Double/Triple
+        haptics.medium();
+        setScreenShake(2);
+        setFlashEffect({ color: 'rgba(0, 212, 255, 0.6)' }); // Cyan flash
+      } else {
+        // Single line
+        haptics.light();
+        setScreenShake(1);
+        setFlashEffect({ color: 'rgba(255, 255, 255, 0.4)' }); // White flash
+      }
+
+      setTimeout(() => setScreenShake(0), 400);
+    }
+    prevLinesRef.current = gameState.linesCleared;
+  }, [gameState.linesCleared]);
 
   // Render own board
   useEffect(() => {
@@ -238,6 +291,14 @@ export function MultiplayerGame({ roomId, playerId, opponentId, theme, onExit }:
       });
     }
   }, [opponentState]);
+
+  // Wrap hardDrop to add effects
+  const handleHardDrop = () => {
+    hardDrop();
+    haptics.medium();
+    setScreenShake(1);
+    setTimeout(() => setScreenShake(0), 300);
+  };
 
   // Handle ability activation
   const handleAbilityActivate = (ability: Ability) => {
@@ -434,7 +495,7 @@ export function MultiplayerGame({ roomId, playerId, opponentId, theme, onExit }:
         case ' ':
           e.preventDefault();
           audioManager.playSfx('hard_drop');
-          hardDrop();
+          handleHardDrop();
           break;
         case 'p':
         case 'P':
@@ -499,18 +560,32 @@ export function MultiplayerGame({ roomId, playerId, opponentId, theme, onExit }:
             color: '#00d4ff',
             textShadow: '0 0 10px rgba(0, 212, 255, 0.8), 0 0 20px rgba(0, 212, 255, 0.4)',
           }}>YOUR BOARD</h3>
-          <div style={{
-            flex: 1,
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            justifyContent: 'center',
-            position: 'relative',
-            transform: effectManager.isEffectActive('screen_shake')
-              ? `translate(${Math.sin(Date.now() / 50) * 5}px, ${Math.cos(Date.now() / 70) * 5}px) rotate(${Math.sin(Date.now() / 100) * 2}deg)`
-              : 'none',
-            transition: 'none',
-          }}>
+          <motion.div
+            animate={
+              screenShake > 0
+                ? {
+                    x: [0, -10 * screenShake, 10 * screenShake, -10 * screenShake, 10 * screenShake, 0],
+                    y: [0, -5 * screenShake, 5 * screenShake, -5 * screenShake, 5 * screenShake, 0],
+                    rotate: [0, -2 * screenShake, 2 * screenShake, -2 * screenShake, 2 * screenShake, 0],
+                  }
+                : effectManager.isEffectActive('screen_shake')
+                ? {
+                    x: [0, -5, 5, -5, 5, 0],
+                    y: [0, -3, 3, -3, 3, 0],
+                    rotate: [0, -1, 1, -1, 1, 0],
+                  }
+                : {}
+            }
+            transition={{ duration: 0.4, repeat: effectManager.isEffectActive('screen_shake') ? Infinity : 0 }}
+            style={{
+              flex: 1,
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              justifyContent: 'center',
+              position: 'relative',
+            }}
+          >
             <canvas
               ref={canvasRef}
               width={250}
@@ -527,7 +602,7 @@ export function MultiplayerGame({ roomId, playerId, opponentId, theme, onExit }:
                 boxShadow: '0 0 20px rgba(0, 212, 255, 0.5), 0 0 40px rgba(0, 212, 255, 0.2), inset 0 0 20px rgba(0, 212, 255, 0.05)',
               }}
             />
-          </div>
+          </motion.div>
           <AbilityEffects activeEffects={activeEffects} theme={theme} />
           <div
             style={{
@@ -857,9 +932,8 @@ export function MultiplayerGame({ roomId, playerId, opponentId, theme, onExit }:
           transition={springs.snappy}
           onPointerDown={(e) => {
             e.preventDefault();
-            haptics.medium();
             audioManager.playSfx('hard_drop');
-            hardDrop();
+            handleHardDrop();
           }}
           className="glass-button"
           style={{
@@ -1037,8 +1111,29 @@ export function MultiplayerGame({ roomId, playerId, opponentId, theme, onExit }:
         </div>
       )}
 
-      {showAbilityInfo && (
-        <AbilityInfo onClose={() => setShowAbilityInfo(false)} />
+      <AnimatePresence>
+        {showAbilityInfo && (
+          <AbilityInfo onClose={() => setShowAbilityInfo(false)} />
+        )}
+      </AnimatePresence>
+
+      {/* Flash overlay for line clears */}
+      {flashEffect && (
+        <FlashOverlay
+          color={flashEffect.color}
+          onComplete={() => setFlashEffect(null)}
+        />
+      )}
+
+      {/* Particle effects */}
+      {particles && (
+        <ParticleEffect
+          key={particles.id}
+          x={particles.x}
+          y={particles.y}
+          count={50}
+          onComplete={() => setParticles(null)}
+        />
       )}
     </div>
   );

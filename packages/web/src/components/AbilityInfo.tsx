@@ -1,6 +1,8 @@
 import { ABILITIES } from '@tetris-battle/game-core';
 import type { Ability } from '@tetris-battle/game-core';
 import * as IoIcons from 'react-icons/io5';
+import { motion } from 'framer-motion';
+import { overlayVariants, modalVariants, springs } from '../utils/animations';
 
 // Icon component mapping
 const iconMap: Record<string, React.ComponentType<{ style?: React.CSSProperties }>> = {
@@ -109,7 +111,12 @@ export function AbilityInfo({ onClose }: AbilityInfoProps) {
   };
 
   return (
-    <div
+    <motion.div
+      variants={overlayVariants}
+      initial="hidden"
+      animate="visible"
+      exit="exit"
+      transition={{ duration: 0.2 }}
       style={{
         position: 'fixed',
         top: 0,
@@ -123,11 +130,18 @@ export function AbilityInfo({ onClose }: AbilityInfoProps) {
         padding: '20px',
       }}
     >
-      <div style={{
-        maxWidth: '900px',
-        margin: '0 auto',
-        paddingBottom: '40px',
-      }}>
+      <motion.div
+        variants={modalVariants}
+        initial="hidden"
+        animate="visible"
+        exit="exit"
+        transition={springs.smooth}
+        style={{
+          maxWidth: '900px',
+          margin: '0 auto',
+          paddingBottom: '40px',
+        }}
+      >
         {/* Header */}
         <div style={{
           display: 'flex',
@@ -246,7 +260,7 @@ export function AbilityInfo({ onClose }: AbilityInfoProps) {
             <li>Combine abilities strategically for maximum effect</li>
           </ul>
         </div>
-      </div>
-    </div>
+      </motion.div>
+    </motion.div>
   );
 }
