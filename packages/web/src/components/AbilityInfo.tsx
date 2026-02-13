@@ -1,26 +1,7 @@
 import { ABILITIES } from '@tetris-battle/game-core';
 import type { Ability } from '@tetris-battle/game-core';
-import * as IoIcons from 'react-icons/io5';
 import { motion } from 'framer-motion';
 import { overlayVariants, modalVariants, springs } from '../utils/animations';
-
-// Icon component mapping
-const iconMap: Record<string, React.ComponentType<{ style?: React.CSSProperties }>> = {
-  IoAdd: IoIcons.IoAdd,
-  IoRadioButtonOn: IoIcons.IoRadioButtonOn,
-  IoRemove: IoIcons.IoRemove,
-  IoStar: IoIcons.IoStar,
-  IoEllipsisVertical: IoIcons.IoEllipsisVertical,
-  IoSpeedometerOutline: IoIcons.IoSpeedometerOutline,
-  IoEllipse: IoIcons.IoEllipse,
-  IoDotChart: IoIcons.IoChatboxEllipses,
-  IoLockClosed: IoIcons.IoLockClosed,
-  IoEyeOff: IoIcons.IoEyeOff,
-  IoSwapHorizontal: IoIcons.IoSwapHorizontal,
-  IoTrendingDown: IoIcons.IoTrendingDown,
-  IoPhonePortraitOutline: IoIcons.IoPhonePortraitOutline,
-  IoArrowDown: IoIcons.IoArrowDown,
-};
 
 interface AbilityInfoProps {
   onClose: () => void;
@@ -32,75 +13,55 @@ export function AbilityInfo({ onClose }: AbilityInfoProps) {
 
   const renderAbilityCard = (ability: Ability) => {
     const isBuff = ability.category === 'buff';
-    const gradient = isBuff
-      ? 'linear-gradient(135deg, #00d4ff 0%, #0080ff 100%)'
-      : 'linear-gradient(135deg, #c942ff 0%, #ff006e 100%)';
+    const textColor = isBuff ? '#00d4ff' : '#ff006e';
     const glowColor = isBuff
-      ? 'rgba(0, 212, 255, 0.3)'
-      : 'rgba(201, 66, 255, 0.3)';
-    const borderColor = isBuff ? '#00d4ff' : '#c942ff';
+      ? 'rgba(0, 212, 255, 0.6)'
+      : 'rgba(255, 0, 110, 0.6)';
 
     return (
       <div
         key={ability.id}
         style={{
-          background: gradient,
-          border: `2px solid ${borderColor}`,
+          background: 'rgba(10, 10, 30, 0.6)',
+          backdropFilter: 'blur(20px)',
+          border: '1px solid rgba(255, 255, 255, 0.2)',
           borderRadius: '12px',
           padding: '16px',
-          boxShadow: `0 0 20px ${glowColor}, inset 0 0 15px rgba(255,255,255,0.1)`,
+          boxShadow: '0 4px 15px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.1)',
           display: 'flex',
           flexDirection: 'column',
           gap: '8px',
         }}
       >
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-          {(() => {
-            const IconComponent = iconMap[ability.icon];
-            return IconComponent ? (
-              <IconComponent
-                style={{
-                  width: '48px',
-                  height: '48px',
-                  color: '#ffffff',
-                  filter: `drop-shadow(0 0 8px ${glowColor})`,
-                }}
-              />
-            ) : null;
-          })()}
-          <div style={{ flex: 1 }}>
-            <div style={{
-              fontSize: '16px',
-              fontWeight: '700',
-              color: '#ffffff',
-              textShadow: '0 2px 4px rgba(0,0,0,0.5)',
-            }}>
-              {ability.name}
-            </div>
-            <div style={{
-              fontSize: '12px',
-              color: 'rgba(255,255,255,0.8)',
-              marginTop: '2px',
-            }}>
-              Cost: {ability.cost} • Power: {ability.powerRating}/10
-            </div>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px' }}>
+          <div style={{
+            fontSize: '18px',
+            fontWeight: '800',
+            color: textColor,
+            textShadow: `0 0 12px ${glowColor}`,
+            letterSpacing: '0.5px',
+          }}>
+            {ability.shortName}
+          </div>
+          <div style={{
+            fontSize: '12px',
+            color: 'rgba(255,255,255,0.6)',
+          }}>
+            {ability.cost} ★ • {ability.powerRating}/10
           </div>
         </div>
         <div style={{
           fontSize: '14px',
           color: '#ffffff',
-          lineHeight: '1.4',
-          background: 'transparent',
-          padding: '10px',
-          borderRadius: '8px',
-          border: 'none',
+          lineHeight: '1.5',
+          opacity: 0.9,
         }}>
           {ability.description}
         </div>
         {ability.duration && (
           <div style={{
             fontSize: '11px',
-            color: 'rgba(255,255,255,0.7)',
+            color: 'rgba(255,255,255,0.5)',
             fontStyle: 'italic',
           }}>
             Duration: {ability.duration > 1000 ? `${ability.duration / 1000}s` : `${ability.duration} pieces`}
@@ -167,15 +128,16 @@ export function AbilityInfo({ onClose }: AbilityInfoProps) {
           <button
             onClick={onClose}
             style={{
-              background: 'linear-gradient(135deg, #ff006e 0%, #ff4500 100%)',
-              border: '2px solid #ff006e',
+              background: 'rgba(10, 10, 30, 0.6)',
+              backdropFilter: 'blur(20px)',
+              border: '1px solid rgba(255, 255, 255, 0.2)',
               borderRadius: '50%',
               width: '40px',
               height: '40px',
               fontSize: '20px',
               color: '#ffffff',
               cursor: 'pointer',
-              boxShadow: '0 0 15px rgba(255, 0, 110, 0.5)',
+              boxShadow: '0 4px 15px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.1)',
               fontWeight: 'bold',
             }}
           >

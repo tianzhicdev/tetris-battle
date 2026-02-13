@@ -125,7 +125,8 @@ export function MultiplayerGame({ roomId, playerId, opponentId, theme, onExit }:
         gameState.stars,
         gameState.linesCleared,
         gameState.comboCount,
-        gameState.isGameOver
+        gameState.isGameOver,
+        gameState.currentPiece
       );
 
       // Check for game over
@@ -278,12 +279,10 @@ export function MultiplayerGame({ roomId, playerId, opponentId, theme, onExit }:
     }
   }, [opponentState]);
 
-  // Wrap hardDrop to add effects
+  // Wrap hardDrop to add effects (no screen shake, just haptics)
   const handleHardDrop = () => {
     hardDrop();
     haptics.medium();
-    setScreenShake(1);
-    setTimeout(() => setScreenShake(0), 300);
   };
 
   // Handle ability activation
@@ -664,8 +663,45 @@ export function MultiplayerGame({ roomId, playerId, opponentId, theme, onExit }:
             alignItems: 'center',
           }}>
             {/* User Account Button */}
-            <div style={{ transform: 'scale(0.9)' }}>
-              <UserButton />
+            <div style={{
+              width: 'clamp(30px, 7.5vw, 38px)',
+              height: 'clamp(30px, 7.5vw, 38px)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}>
+              <UserButton
+                appearance={{
+                  elements: {
+                    rootBox: {
+                      width: '100%',
+                      height: '100%',
+                    },
+                    avatarBox: {
+                      width: '100%',
+                      height: '100%',
+                    },
+                    userButtonPopoverCard: {
+                      background: 'rgba(10, 10, 30, 0.95)',
+                      backdropFilter: 'blur(30px)',
+                      border: '1px solid rgba(255, 255, 255, 0.2)',
+                      boxShadow: '0 8px 32px rgba(0, 0, 0, 0.6)',
+                    },
+                    userButtonPopoverActionButton: {
+                      color: '#ffffff',
+                      '&:hover': {
+                        background: 'rgba(255, 255, 255, 0.1)',
+                      },
+                    },
+                    userButtonPopoverActionButtonText: {
+                      color: '#ffffff',
+                    },
+                    userButtonPopoverFooter: {
+                      background: 'rgba(0, 0, 0, 0.2)',
+                    },
+                  },
+                }}
+              />
             </div>
 
             {/* Ability Info Button */}
@@ -786,7 +822,7 @@ export function MultiplayerGame({ roomId, playerId, opponentId, theme, onExit }:
                     display: 'flex',
                     justifyContent: 'space-between',
                     alignItems: 'center',
-                    gap: 'clamp(6px, 1.5vw, 10px)',
+                    gap: 'clamp(4px, 1vw, 6px)',
                     boxShadow: isAffordable
                       ? '0 4px 15px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.1)'
                       : 'none',
@@ -806,22 +842,21 @@ export function MultiplayerGame({ roomId, playerId, opponentId, theme, onExit }:
                         : '0 0 8px rgba(255, 0, 110, 0.6)')
                       : 'none',
                     textAlign: 'left',
-                    whiteSpace: 'nowrap',
-                    overflow: 'hidden',
-                    textOverflow: 'ellipsis',
+                    flex: 1,
+                    minWidth: 0,
                   }}>
                     {ability.shortName}
                   </div>
                   <div style={{
-                    fontSize: 'clamp(9px, 2.2vw, 11px)',
+                    fontSize: 'clamp(7px, 1.8vw, 9px)',
                     fontWeight: '800',
                     background: isAffordable
                       ? (ability.category === 'buff'
                         ? 'rgba(0, 212, 255, 0.15)'
                         : 'rgba(255, 0, 110, 0.15)')
                       : 'rgba(100, 100, 100, 0.1)',
-                    padding: 'clamp(2px, 0.5vw, 3px) clamp(6px, 1.5vw, 8px)',
-                    borderRadius: 'clamp(4px, 1vw, 6px)',
+                    padding: 'clamp(1px, 0.3vw, 2px) clamp(4px, 1vw, 6px)',
+                    borderRadius: 'clamp(3px, 0.8vw, 4px)',
                     border: `1px solid ${isAffordable
                       ? (ability.category === 'buff'
                         ? 'rgba(0, 212, 255, 0.3)'
@@ -831,6 +866,8 @@ export function MultiplayerGame({ roomId, playerId, opponentId, theme, onExit }:
                       ? (ability.category === 'buff' ? '#00d4ff' : '#ff006e')
                       : '#666',
                     flexShrink: 0,
+                    minWidth: 'clamp(20px, 5vw, 28px)',
+                    textAlign: 'center',
                   }}>
                     {ability.cost}
                   </div>

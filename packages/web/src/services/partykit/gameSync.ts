@@ -89,7 +89,8 @@ export class PartykitGameSync {
     stars: number,
     linesCleared: number,
     comboCount: number,
-    isGameOver: boolean
+    isGameOver: boolean,
+    currentPiece?: any
   ): void {
     this.send({
       type: 'game_state_update',
@@ -101,6 +102,7 @@ export class PartykitGameSync {
         linesCleared,
         comboCount,
         isGameOver,
+        currentPiece,
       },
     });
   }
