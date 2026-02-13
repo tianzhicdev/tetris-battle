@@ -68,7 +68,24 @@ export function movePiece(piece: Tetromino, dx: number, dy: number): Tetromino {
 
 // Rotate piece
 export function rotatePiece(piece: Tetromino, clockwise: boolean = true): Tetromino {
-  const numRotations = TETROMINO_SHAPES[piece.type].length;
+  // Check if this is a custom shape (mini block or weird shape)
+  // Custom shapes won't match any standard tetromino rotation
+  const standardShapes = TETROMINO_SHAPES[piece.type];
+  const isCustomShape = !standardShapes.some(stdShape =>
+    JSON.stringify(stdShape) === JSON.stringify(piece.shape)
+  );
+
+  // If custom shape, rotate the matrix itself
+  if (isCustomShape) {
+    const rotatedShape = clockwise ? rotateMatrixCW(piece.shape) : rotateMatrixCCW(piece.shape);
+    return {
+      ...piece,
+      shape: rotatedShape,
+    };
+  }
+
+  // Standard tetromino - use lookup table
+  const numRotations = standardShapes.length;
   const newRotation = clockwise
     ? (piece.rotation + 1) % numRotations
     : (piece.rotation - 1 + numRotations) % numRotations;
@@ -76,8 +93,42 @@ export function rotatePiece(piece: Tetromino, clockwise: boolean = true): Tetrom
   return {
     ...piece,
     rotation: newRotation,
-    shape: TETROMINO_SHAPES[piece.type][newRotation],
+    shape: standardShapes[newRotation],
   };
+}
+
+// Rotate a matrix 90 degrees clockwise
+function rotateMatrixCW(matrix: number[][]): number[][] {
+  const rows = matrix.length;
+  const cols = matrix[0].length;
+  const rotated: number[][] = [];
+
+  for (let col = 0; col < cols; col++) {
+    const newRow: number[] = [];
+    for (let row = rows - 1; row >= 0; row--) {
+      newRow.push(matrix[row][col]);
+    }
+    rotated.push(newRow);
+  }
+
+  return rotated;
+}
+
+// Rotate a matrix 90 degrees counter-clockwise
+function rotateMatrixCCW(matrix: number[][]): number[][] {
+  const rows = matrix.length;
+  const cols = matrix[0].length;
+  const rotated: number[][] = [];
+
+  for (let col = cols - 1; col >= 0; col--) {
+    const newRow: number[] = [];
+    for (let row = 0; row < rows; row++) {
+      newRow.push(matrix[row][col]);
+    }
+    rotated.push(newRow);
+  }
+
+  return rotated;
 }
 
 // Lock piece to board
