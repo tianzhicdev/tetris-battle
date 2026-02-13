@@ -1,5 +1,24 @@
 import { ABILITIES } from '@tetris-battle/game-core';
 import type { Ability } from '@tetris-battle/game-core';
+import * as IoIcons from 'react-icons/io5';
+
+// Icon component mapping
+const iconMap: Record<string, React.ComponentType<{ style?: React.CSSProperties }>> = {
+  IoAdd: IoIcons.IoAdd,
+  IoRadioButtonOn: IoIcons.IoRadioButtonOn,
+  IoRemove: IoIcons.IoRemove,
+  IoStar: IoIcons.IoStar,
+  IoEllipsisVertical: IoIcons.IoEllipsisVertical,
+  IoSpeedometerOutline: IoIcons.IoSpeedometerOutline,
+  IoEllipse: IoIcons.IoEllipse,
+  IoDotChart: IoIcons.IoChatboxEllipses,
+  IoLockClosed: IoIcons.IoLockClosed,
+  IoEyeOff: IoIcons.IoEyeOff,
+  IoSwapHorizontal: IoIcons.IoSwapHorizontal,
+  IoTrendingDown: IoIcons.IoTrendingDown,
+  IoPhonePortraitOutline: IoIcons.IoPhonePortraitOutline,
+  IoArrowDown: IoIcons.IoArrowDown,
+};
 
 interface AbilityInfoProps {
   onClose: () => void;
@@ -34,16 +53,19 @@ export function AbilityInfo({ onClose }: AbilityInfoProps) {
         }}
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-          <img
-            src={ability.icon}
-            alt={ability.name}
-            style={{
-              width: '48px',
-              height: '48px',
-              objectFit: 'contain',
-              filter: `drop-shadow(0 0 8px ${glowColor})`,
-            }}
-          />
+          {(() => {
+            const IconComponent = iconMap[ability.icon];
+            return IconComponent ? (
+              <IconComponent
+                style={{
+                  width: '48px',
+                  height: '48px',
+                  color: '#ffffff',
+                  filter: `drop-shadow(0 0 8px ${glowColor})`,
+                }}
+              />
+            ) : null;
+          })()}
           <div style={{ flex: 1 }}>
             <div style={{
               fontSize: '16px',

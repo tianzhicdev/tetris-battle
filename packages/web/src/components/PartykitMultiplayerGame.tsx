@@ -15,6 +15,25 @@ import {
 import type { Ability } from '@tetris-battle/game-core';
 import type { Theme } from '../themes';
 import { audioManager } from '../services/audioManager';
+import * as IoIcons from 'react-icons/io5';
+
+// Icon component mapping
+const iconMap: Record<string, React.ComponentType<{ style?: React.CSSProperties; className?: string }>> = {
+  IoAdd: IoIcons.IoAdd,
+  IoRadioButtonOn: IoIcons.IoRadioButtonOn,
+  IoRemove: IoIcons.IoRemove,
+  IoStar: IoIcons.IoStar,
+  IoEllipsisVertical: IoIcons.IoEllipsisVertical,
+  IoSpeedometerOutline: IoIcons.IoSpeedometerOutline,
+  IoEllipse: IoIcons.IoEllipse,
+  IoDotChart: IoIcons.IoChatboxEllipses, // IoIcons doesn't have IoDotChart, using alternative
+  IoLockClosed: IoIcons.IoLockClosed,
+  IoEyeOff: IoIcons.IoEyeOff,
+  IoSwapHorizontal: IoIcons.IoSwapHorizontal,
+  IoTrendingDown: IoIcons.IoTrendingDown,
+  IoPhonePortraitOutline: IoIcons.IoPhonePortraitOutline,
+  IoArrowDown: IoIcons.IoArrowDown,
+};
 
 interface MultiplayerGameProps {
   roomId: string;
@@ -695,18 +714,21 @@ export function MultiplayerGame({ roomId, playerId, opponentId, theme, onExit }:
                     position: 'relative',
                     overflow: 'hidden',
                   }}
-                  title={`${ability.name} (${ability.cost}⭐)`}
+                  title={`${ability.name} (${ability.cost})`}
                 >
-                  <img
-                    src={ability.icon}
-                    alt={ability.name}
-                    style={{
-                      width: 'clamp(28px, 7vw, 40px)',
-                      height: 'clamp(28px, 7vw, 40px)',
-                      objectFit: 'contain',
-                      filter: isAffordable ? `drop-shadow(0 0 6px ${glowColor})` : 'grayscale(100%) opacity(0.5)',
-                    }}
-                  />
+                  {(() => {
+                    const IconComponent = iconMap[ability.icon];
+                    return IconComponent ? (
+                      <IconComponent
+                        style={{
+                          width: 'clamp(28px, 7vw, 40px)',
+                          height: 'clamp(28px, 7vw, 40px)',
+                          color: isAffordable ? '#ffffff' : '#666',
+                          filter: isAffordable ? `drop-shadow(0 0 6px ${glowColor})` : 'none',
+                        }}
+                      />
+                    ) : null;
+                  })()}
                   <div style={{
                     fontSize: 'clamp(8px, 2vw, 11px)',
                     whiteSpace: 'nowrap',

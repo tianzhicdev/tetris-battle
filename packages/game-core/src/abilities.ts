@@ -15,7 +15,7 @@ export const ABILITIES: Record<AbilityType, Ability> = {
     cooldown: 15000,
     powerRating: 7,
     category: 'buff',
-    icon: '/abilities/cross-firebomb.png',
+    icon: 'IoAdd',
   },
   circle_bomb: {
     id: 'circle_bomb',
@@ -26,7 +26,7 @@ export const ABILITIES: Record<AbilityType, Ability> = {
     cooldown: 15000,
     powerRating: 7,
     category: 'buff',
-    icon: '/abilities/circle-bomb.png',
+    icon: 'IoRadioButtonOn',
   },
   clear_rows: {
     id: 'clear_rows',
@@ -37,7 +37,7 @@ export const ABILITIES: Record<AbilityType, Ability> = {
     cooldown: 15000,
     powerRating: 8,
     category: 'buff',
-    icon: '/abilities/clear-rows.png',
+    icon: 'IoRemove',
   },
   cascade_multiplier: {
     id: 'cascade_multiplier',
@@ -49,7 +49,7 @@ export const ABILITIES: Record<AbilityType, Ability> = {
     cooldown: 25000,
     powerRating: 9,
     category: 'buff',
-    icon: '/abilities/cascade-multiplier.png',
+    icon: 'IoStar',
   },
   mini_blocks: {
     id: 'mini_blocks',
@@ -61,7 +61,7 @@ export const ABILITIES: Record<AbilityType, Ability> = {
     cooldown: 20000,
     powerRating: 5,
     category: 'buff',
-    icon: '/abilities/mini-blocks.png',
+    icon: 'IoEllipsisVertical',
   },
 
   // ========== DEBUFFS (10) ==========
@@ -75,7 +75,7 @@ export const ABILITIES: Record<AbilityType, Ability> = {
     cooldown: 20000,
     powerRating: 5,
     category: 'debuff',
-    icon: '/abilities/speed-up.png',
+    icon: 'IoSpeedometerOutline',
   },
   weird_shapes: {
     id: 'weird_shapes',
@@ -87,7 +87,7 @@ export const ABILITIES: Record<AbilityType, Ability> = {
     cooldown: 25000,
     powerRating: 8,
     category: 'debuff',
-    icon: '/abilities/weird-shapes.png',
+    icon: 'IoEllipse',
   },
   random_spawner: {
     id: 'random_spawner',
@@ -99,7 +99,7 @@ export const ABILITIES: Record<AbilityType, Ability> = {
     cooldown: 20000,
     powerRating: 6,
     category: 'debuff',
-    icon: '/abilities/random-spawner.png',
+    icon: 'IoDotChart',
   },
   rotation_lock: {
     id: 'rotation_lock',
@@ -111,7 +111,7 @@ export const ABILITIES: Record<AbilityType, Ability> = {
     cooldown: 20000,
     powerRating: 7,
     category: 'debuff',
-    icon: '/abilities/rotation-lock.png',
+    icon: 'IoLockClosed',
   },
   blind_spot: {
     id: 'blind_spot',
@@ -123,7 +123,7 @@ export const ABILITIES: Record<AbilityType, Ability> = {
     cooldown: 25000,
     powerRating: 8,
     category: 'debuff',
-    icon: '/abilities/blind-spot.png',
+    icon: 'IoEyeOff',
   },
   reverse_controls: {
     id: 'reverse_controls',
@@ -135,7 +135,7 @@ export const ABILITIES: Record<AbilityType, Ability> = {
     cooldown: 15000,
     powerRating: 5,
     category: 'debuff',
-    icon: '/abilities/reverse-controls.png',
+    icon: 'IoSwapHorizontal',
   },
   earthquake: {
     id: 'earthquake',
@@ -146,7 +146,7 @@ export const ABILITIES: Record<AbilityType, Ability> = {
     cooldown: 20000,
     powerRating: 7,
     category: 'debuff',
-    icon: '/abilities/earthquake.png',
+    icon: 'IoTrendingDown',
   },
   screen_shake: {
     id: 'screen_shake',
@@ -158,7 +158,7 @@ export const ABILITIES: Record<AbilityType, Ability> = {
     cooldown: 15000,
     powerRating: 3,
     category: 'debuff',
-    icon: '/abilities/screen-shake.png',
+    icon: 'IoPhonePortraitOutline',
   },
   shrink_ceiling: {
     id: 'shrink_ceiling',
@@ -170,7 +170,7 @@ export const ABILITIES: Record<AbilityType, Ability> = {
     cooldown: 20000,
     powerRating: 7,
     category: 'debuff',
-    icon: '/abilities/shrink-ceiling.png',
+    icon: 'IoArrowDown',
   },
 };
 
