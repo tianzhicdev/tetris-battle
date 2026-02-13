@@ -65,6 +65,7 @@ export interface Ability {
   cooldown: number;
   powerRating: number;
   category: 'buff' | 'debuff' | 'defense' | 'ultra';
+  icon: string; // emoji icon for UI
 }
 
 export interface ActiveAbility {

@@ -15,6 +15,7 @@ export const ABILITIES: Record<AbilityType, Ability> = {
     cooldown: 15000,
     powerRating: 7,
     category: 'buff',
+    icon: '💥',
   },
   circle_bomb: {
     id: 'circle_bomb',
@@ -25,6 +26,7 @@ export const ABILITIES: Record<AbilityType, Ability> = {
     cooldown: 15000,
     powerRating: 7,
     category: 'buff',
+    icon: '💣',
   },
   clear_rows: {
     id: 'clear_rows',
@@ -35,6 +37,7 @@ export const ABILITIES: Record<AbilityType, Ability> = {
     cooldown: 15000,
     powerRating: 8,
     category: 'buff',
+    icon: '🧹',
   },
   cascade_multiplier: {
     id: 'cascade_multiplier',
@@ -46,6 +49,7 @@ export const ABILITIES: Record<AbilityType, Ability> = {
     cooldown: 25000,
     powerRating: 9,
     category: 'buff',
+    icon: '⭐',
   },
   mini_blocks: {
     id: 'mini_blocks',
@@ -57,6 +61,7 @@ export const ABILITIES: Record<AbilityType, Ability> = {
     cooldown: 20000,
     powerRating: 5,
     category: 'buff',
+    icon: '🔹',
   },
 
   // ========== DEBUFFS (10) ==========
@@ -70,6 +75,7 @@ export const ABILITIES: Record<AbilityType, Ability> = {
     cooldown: 20000,
     powerRating: 5,
     category: 'debuff',
+    icon: '⚡',
   },
   weird_shapes: {
     id: 'weird_shapes',
@@ -81,6 +87,7 @@ export const ABILITIES: Record<AbilityType, Ability> = {
     cooldown: 25000,
     powerRating: 8,
     category: 'debuff',
+    icon: '🎲',
   },
   random_spawner: {
     id: 'random_spawner',
@@ -92,6 +99,7 @@ export const ABILITIES: Record<AbilityType, Ability> = {
     cooldown: 20000,
     powerRating: 6,
     category: 'debuff',
+    icon: '🌧️',
   },
   rotation_lock: {
     id: 'rotation_lock',
@@ -103,6 +111,7 @@ export const ABILITIES: Record<AbilityType, Ability> = {
     cooldown: 20000,
     powerRating: 7,
     category: 'debuff',
+    icon: '🔒',
   },
   blind_spot: {
     id: 'blind_spot',
@@ -114,6 +123,7 @@ export const ABILITIES: Record<AbilityType, Ability> = {
     cooldown: 25000,
     powerRating: 8,
     category: 'debuff',
+    icon: '🙈',
   },
   reverse_controls: {
     id: 'reverse_controls',
@@ -125,6 +135,7 @@ export const ABILITIES: Record<AbilityType, Ability> = {
     cooldown: 15000,
     powerRating: 5,
     category: 'debuff',
+    icon: '🔄',
   },
   earthquake: {
     id: 'earthquake',
@@ -135,6 +146,7 @@ export const ABILITIES: Record<AbilityType, Ability> = {
     cooldown: 20000,
     powerRating: 7,
     category: 'debuff',
+    icon: '🌍',
   },
   screen_shake: {
     id: 'screen_shake',
@@ -146,6 +158,7 @@ export const ABILITIES: Record<AbilityType, Ability> = {
     cooldown: 15000,
     powerRating: 3,
     category: 'debuff',
+    icon: '📳',
   },
   shrink_ceiling: {
     id: 'shrink_ceiling',
@@ -157,6 +170,7 @@ export const ABILITIES: Record<AbilityType, Ability> = {
     cooldown: 20000,
     powerRating: 7,
     category: 'debuff',
+    icon: '⬇️',
   },
 };
 

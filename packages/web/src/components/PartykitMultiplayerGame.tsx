@@ -451,7 +451,7 @@ export function MultiplayerGame({ roomId, playerId, opponentId, theme, onExit }:
       style={{
         display: 'flex',
         flexDirection: 'column',
-        height: '100vh',
+        height: '100dvh', // Dynamic viewport height for mobile
         width: '100vw',
         overflow: 'hidden',
         backgroundColor: theme.backgroundColor,
@@ -463,10 +463,10 @@ export function MultiplayerGame({ roomId, playerId, opponentId, theme, onExit }:
       }}
     >
       {/* Main Game Area - Top Section */}
-      <div style={{ display: 'flex', flex: 1, overflow: 'hidden', padding: '8px', gap: '8px' }}>
+      <div style={{ display: 'flex', flex: 1, overflow: 'hidden', padding: '4px', gap: '4px' }}>
         {/* Left: Your Board */}
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0 }}>
-          <h3 style={{ textAlign: 'center', margin: '0 0 4px 0', fontSize: '12px' }}>YOU</h3>
+          <h3 style={{ textAlign: 'center', margin: '0 0 2px 0', fontSize: 'clamp(10px, 2.5vw, 12px)' }}>YOU</h3>
           <div style={{
             flex: 1,
             display: 'flex',
@@ -486,8 +486,10 @@ export function MultiplayerGame({ roomId, playerId, opponentId, theme, onExit }:
               style={{
                 border: `2px solid ${theme.textColor}`,
                 backgroundColor: theme.backgroundColor,
-                maxHeight: 'calc(100vh - 140px)', // Account for header and bottom controls
+                maxHeight: 'calc(100dvh - 110px)', // Account for header and bottom controls
                 maxWidth: '100%',
+                height: 'auto',
+                width: 'auto',
                 objectFit: 'contain',
               }}
             />
@@ -511,10 +513,10 @@ export function MultiplayerGame({ roomId, playerId, opponentId, theme, onExit }:
 
         {/* Right: Vertical Panel */}
         <div style={{
-          width: '100px',
+          width: 'clamp(85px, 22vw, 110px)',
           display: 'flex',
           flexDirection: 'column',
-          gap: '8px',
+          gap: 'clamp(4px, 1vh, 8px)',
           overflow: 'hidden'
         }}>
           {/* Settings Button */}
@@ -523,15 +525,15 @@ export function MultiplayerGame({ roomId, playerId, opponentId, theme, onExit }:
               if (confirm('Leave game?')) onExit();
             }}
             style={{
-              padding: '8px',
+              padding: '4px',
               backgroundColor: theme.uiBackgroundColor,
               border: `1px solid ${theme.textColor}`,
               borderRadius: '50%',
               color: theme.textColor,
-              fontSize: '20px',
+              fontSize: 'clamp(16px, 4vw, 20px)',
               cursor: 'pointer',
-              width: '40px',
-              height: '40px',
+              width: 'clamp(32px, 8vw, 40px)',
+              height: 'clamp(32px, 8vw, 40px)',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
@@ -543,26 +545,26 @@ export function MultiplayerGame({ roomId, playerId, opponentId, theme, onExit }:
 
           {/* Opponent's Board */}
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-            <h3 style={{ margin: '0 0 4px 0', fontSize: '9px' }}>OPPONENT</h3>
+            <h3 style={{ margin: '0 0 2px 0', fontSize: 'clamp(7px, 2vw, 9px)' }}>OPP</h3>
             <canvas
               ref={opponentCanvasRef}
               width={80}
               height={160}
               style={{
-                border: `2px solid ${theme.colors.Z}`,
+                border: `1px solid ${theme.colors.Z}`,
                 backgroundColor: theme.backgroundColor,
-                width: '80px',
-                height: '160px',
+                width: 'clamp(65px, 17vw, 80px)',
+                height: 'clamp(130px, 34vw, 160px)',
               }}
             />
             {opponentState && (
               <div
                 style={{
-                  marginTop: '4px',
-                  padding: '3px',
+                  marginTop: '2px',
+                  padding: '2px',
                   backgroundColor: theme.uiBackgroundColor,
-                  borderRadius: '3px',
-                  fontSize: '8px',
+                  borderRadius: '2px',
+                  fontSize: 'clamp(6px, 1.5vw, 8px)',
                   textAlign: 'center',
                 }}
               >
@@ -578,15 +580,11 @@ export function MultiplayerGame({ roomId, playerId, opponentId, theme, onExit }:
             display: 'grid',
             gridTemplateColumns: '1fr 1fr',
             gridTemplateRows: 'repeat(4, 1fr)',
-            gap: '4px',
-            overflow: 'hidden'
+            gap: 'clamp(2px, 0.5vw, 4px)',
+            overflow: 'hidden',
+            minHeight: 0,
           }}>
             {availableAbilities.slice(0, 8).map((ability, index) => {
-              // Simple icon mapping based on category
-              const icon = ability.category === 'buff' ? '💪' :
-                          ability.category === 'debuff' ? '⚡' :
-                          ability.category === 'defense' ? '🛡️' : '✨';
-
               return (
                 <button
                   key={index}
@@ -597,14 +595,14 @@ export function MultiplayerGame({ roomId, playerId, opponentId, theme, onExit }:
                   }}
                   disabled={gameState.stars < ability.cost}
                   style={{
-                    padding: '4px',
+                    padding: 'clamp(2px, 0.5vw, 4px)',
                     backgroundColor: gameState.stars >= ability.cost
                       ? (ability.category === 'buff' ? theme.colors.T : theme.colors.Z)
                       : theme.uiBackgroundColor,
                     border: `1px solid ${theme.textColor}`,
                     borderRadius: '50%',
-                    color: theme.textColor,
-                    fontSize: '14px',
+                    color: '#ffffff',
+                    fontSize: 'clamp(10px, 2.5vw, 14px)',
                     cursor: gameState.stars >= ability.cost ? 'pointer' : 'not-allowed',
                     opacity: gameState.stars >= ability.cost ? 1 : 0.4,
                     display: 'flex',
@@ -612,11 +610,13 @@ export function MultiplayerGame({ roomId, playerId, opponentId, theme, onExit }:
                     alignItems: 'center',
                     justifyContent: 'center',
                     minHeight: 0,
+                    minWidth: 0,
+                    aspectRatio: '1',
                   }}
                   title={`${ability.name} (${ability.cost}⭐)`}
                 >
-                  <div style={{ fontSize: '16px' }}>{icon}</div>
-                  <div style={{ fontSize: '7px', marginTop: '2px' }}>{ability.cost}⭐</div>
+                  <div style={{ fontSize: 'clamp(12px, 3.5vw, 16px)', lineHeight: 1 }}>{ability.icon}</div>
+                  <div style={{ fontSize: 'clamp(6px, 1.5vw, 7px)', marginTop: '1px', whiteSpace: 'nowrap' }}>{ability.cost}⭐</div>
                 </button>
               );
             })}
@@ -627,10 +627,10 @@ export function MultiplayerGame({ roomId, playerId, opponentId, theme, onExit }:
       {/* Bottom: Touch Controls - Single Row */}
       <div
         style={{
-          height: '70px',
+          height: 'clamp(60px, 12vh, 80px)',
           display: 'flex',
-          gap: '6px',
-          padding: '8px',
+          gap: 'clamp(4px, 1vw, 8px)',
+          padding: 'clamp(6px, 1.5vw, 10px)',
           backgroundColor: theme.uiBackgroundColor,
           borderTop: `2px solid ${theme.textColor}`,
         }}
@@ -647,13 +647,14 @@ export function MultiplayerGame({ roomId, playerId, opponentId, theme, onExit }:
           }}
           style={{
             flex: 1,
-            fontSize: '24px',
+            fontSize: 'clamp(18px, 5vw, 28px)',
             backgroundColor: theme.colors.T,
             color: '#ffffff',
             border: 'none',
-            borderRadius: '8px',
+            borderRadius: 'clamp(6px, 1.5vw, 10px)',
             cursor: 'pointer',
             touchAction: 'manipulation',
+            minWidth: 0,
           }}
         >
           ←
@@ -670,13 +671,14 @@ export function MultiplayerGame({ roomId, playerId, opponentId, theme, onExit }:
           }}
           style={{
             flex: 1,
-            fontSize: '24px',
+            fontSize: 'clamp(18px, 5vw, 28px)',
             backgroundColor: theme.colors.S,
             color: '#ffffff',
             border: 'none',
-            borderRadius: '8px',
+            borderRadius: 'clamp(6px, 1.5vw, 10px)',
             cursor: 'pointer',
             touchAction: 'manipulation',
+            minWidth: 0,
           }}
         >
           ↓
@@ -697,13 +699,14 @@ export function MultiplayerGame({ roomId, playerId, opponentId, theme, onExit }:
           }}
           style={{
             flex: 1,
-            fontSize: '24px',
+            fontSize: 'clamp(18px, 5vw, 28px)',
             backgroundColor: theme.colors.I,
             color: '#ffffff',
             border: 'none',
-            borderRadius: '8px',
+            borderRadius: 'clamp(6px, 1.5vw, 10px)',
             cursor: 'pointer',
             touchAction: 'manipulation',
+            minWidth: 0,
           }}
         >
           ↻
@@ -720,13 +723,14 @@ export function MultiplayerGame({ roomId, playerId, opponentId, theme, onExit }:
           }}
           style={{
             flex: 1,
-            fontSize: '24px',
+            fontSize: 'clamp(18px, 5vw, 28px)',
             backgroundColor: theme.colors.O,
             color: '#ffffff',
             border: 'none',
-            borderRadius: '8px',
+            borderRadius: 'clamp(6px, 1.5vw, 10px)',
             cursor: 'pointer',
             touchAction: 'manipulation',
+            minWidth: 0,
           }}
         >
           ⬇⬇
@@ -743,13 +747,14 @@ export function MultiplayerGame({ roomId, playerId, opponentId, theme, onExit }:
           }}
           style={{
             flex: 1,
-            fontSize: '24px',
+            fontSize: 'clamp(18px, 5vw, 28px)',
             backgroundColor: theme.colors.L,
             color: '#ffffff',
             border: 'none',
-            borderRadius: '8px',
+            borderRadius: 'clamp(6px, 1.5vw, 10px)',
             cursor: 'pointer',
             touchAction: 'manipulation',
+            minWidth: 0,
           }}
         >
           {isPaused ? '▶' : '⏸'}
