@@ -454,9 +454,9 @@ export function MultiplayerGame({ roomId, playerId, opponentId, theme, onExit }:
         height: '100dvh', // Dynamic viewport height for mobile
         width: '100vw',
         overflow: 'hidden',
-        backgroundColor: theme.backgroundColor,
-        color: theme.textColor,
-        fontFamily: 'monospace',
+        background: 'linear-gradient(135deg, #1e1e2e 0%, #2d2d44 100%)',
+        color: '#ffffff',
+        fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
         position: 'fixed',
         top: 0,
         left: 0,
@@ -466,7 +466,17 @@ export function MultiplayerGame({ roomId, playerId, opponentId, theme, onExit }:
       <div style={{ display: 'flex', flex: 1, overflow: 'hidden', padding: '4px', gap: '4px' }}>
         {/* Left: Your Board */}
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0 }}>
-          <h3 style={{ textAlign: 'center', margin: '0 0 2px 0', fontSize: 'clamp(10px, 2.5vw, 12px)' }}>YOU</h3>
+          <h3 style={{
+            textAlign: 'center',
+            margin: '0 0 4px 0',
+            fontSize: 'clamp(11px, 2.8vw, 14px)',
+            fontWeight: '700',
+            letterSpacing: '1px',
+            background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+            WebkitBackgroundClip: 'text',
+            WebkitTextFillColor: 'transparent',
+            textShadow: 'none',
+          }}>YOUR BOARD</h3>
           <div style={{
             flex: 1,
             display: 'flex',
@@ -484,13 +494,15 @@ export function MultiplayerGame({ roomId, playerId, opponentId, theme, onExit }:
               width={250}
               height={500}
               style={{
-                border: `2px solid ${theme.textColor}`,
-                backgroundColor: theme.backgroundColor,
+                border: '3px solid rgba(102, 126, 234, 0.5)',
+                backgroundColor: 'rgba(0,0,0,0.3)',
                 maxHeight: 'calc(100dvh - 110px)', // Account for header and bottom controls
                 maxWidth: '100%',
                 height: 'auto',
                 width: 'auto',
                 objectFit: 'contain',
+                borderRadius: 'clamp(6px, 1.5vw, 10px)',
+                boxShadow: '0 4px 20px rgba(0,0,0,0.4), inset 0 0 20px rgba(102, 126, 234, 0.1)',
               }}
             />
           </div>
@@ -498,16 +510,20 @@ export function MultiplayerGame({ roomId, playerId, opponentId, theme, onExit }:
           <div
             style={{
               marginTop: '4px',
-              padding: '6px',
-              backgroundColor: theme.uiBackgroundColor,
-              borderRadius: '4px',
-              fontSize: '10px',
+              padding: '6px 8px',
+              background: 'linear-gradient(135deg, rgba(102, 126, 234, 0.2) 0%, rgba(118, 75, 162, 0.2) 100%)',
+              backdropFilter: 'blur(10px)',
+              border: '1px solid rgba(255,255,255,0.1)',
+              borderRadius: '8px',
+              fontSize: 'clamp(9px, 2.2vw, 11px)',
               textAlign: 'center',
+              fontWeight: '600',
+              boxShadow: '0 2px 8px rgba(0,0,0,0.2)',
             }}
           >
-            <span style={{ marginRight: '8px' }}>Score: {gameState.score}</span>
+            <span style={{ marginRight: '8px' }}>🎯 {gameState.score}</span>
             <span style={{ marginRight: '8px' }}>⭐ {gameState.stars}</span>
-            <span>Lines: {gameState.linesCleared}</span>
+            <span>📊 {gameState.linesCleared}</span>
           </div>
         </div>
 
@@ -525,51 +541,70 @@ export function MultiplayerGame({ roomId, playerId, opponentId, theme, onExit }:
               if (confirm('Leave game?')) onExit();
             }}
             style={{
-              padding: '4px',
-              backgroundColor: theme.uiBackgroundColor,
-              border: `1px solid ${theme.textColor}`,
+              padding: '6px',
+              background: 'linear-gradient(135deg, rgba(250, 112, 154, 0.3) 0%, rgba(254, 225, 64, 0.3) 100%)',
+              backdropFilter: 'blur(10px)',
+              border: '1px solid rgba(255,255,255,0.2)',
               borderRadius: '50%',
-              color: theme.textColor,
+              color: '#ffffff',
               fontSize: 'clamp(16px, 4vw, 20px)',
               cursor: 'pointer',
-              width: 'clamp(32px, 8vw, 40px)',
-              height: 'clamp(32px, 8vw, 40px)',
+              width: 'clamp(34px, 8.5vw, 42px)',
+              height: 'clamp(34px, 8.5vw, 42px)',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
               alignSelf: 'center',
+              boxShadow: '0 2px 8px rgba(0,0,0,0.2)',
             }}
           >
             ⚙
           </button>
 
           {/* Opponent's Board */}
-          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-            <h3 style={{ margin: '0 0 2px 0', fontSize: 'clamp(7px, 2vw, 9px)' }}>OPP</h3>
+          <div style={{
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            background: 'linear-gradient(135deg, rgba(240, 147, 251, 0.15) 0%, rgba(245, 87, 108, 0.15) 100%)',
+            padding: 'clamp(4px, 1vw, 6px)',
+            borderRadius: 'clamp(6px, 1.5vw, 10px)',
+            border: '1px solid rgba(255,255,255,0.1)',
+          }}>
+            <h3 style={{
+              margin: '0 0 3px 0',
+              fontSize: 'clamp(7px, 2vw, 9px)',
+              fontWeight: '700',
+              letterSpacing: '0.5px',
+              opacity: 0.8,
+            }}>OPPONENT</h3>
             <canvas
               ref={opponentCanvasRef}
               width={80}
               height={160}
               style={{
-                border: `1px solid ${theme.colors.Z}`,
-                backgroundColor: theme.backgroundColor,
+                border: '2px solid rgba(245, 87, 108, 0.4)',
+                backgroundColor: 'rgba(0,0,0,0.3)',
                 width: 'clamp(65px, 17vw, 80px)',
                 height: 'clamp(130px, 34vw, 160px)',
+                borderRadius: 'clamp(4px, 1vw, 6px)',
+                boxShadow: '0 2px 8px rgba(0,0,0,0.3)',
               }}
             />
             {opponentState && (
               <div
                 style={{
-                  marginTop: '2px',
-                  padding: '2px',
-                  backgroundColor: theme.uiBackgroundColor,
-                  borderRadius: '2px',
+                  marginTop: '3px',
+                  padding: '3px 6px',
+                  background: 'rgba(0,0,0,0.3)',
+                  borderRadius: '4px',
                   fontSize: 'clamp(6px, 1.5vw, 8px)',
                   textAlign: 'center',
+                  fontWeight: '600',
                 }}
               >
-                <div>S: {opponentState.score}</div>
-                <div>⭐: {opponentState.stars}</div>
+                <div>🎯 {opponentState.score}</div>
+                <div>⭐ {opponentState.stars}</div>
               </div>
             )}
           </div>
@@ -580,43 +615,68 @@ export function MultiplayerGame({ roomId, playerId, opponentId, theme, onExit }:
             display: 'grid',
             gridTemplateColumns: '1fr 1fr',
             gridTemplateRows: 'repeat(4, 1fr)',
-            gap: 'clamp(2px, 0.5vw, 4px)',
+            gap: 'clamp(3px, 0.8vw, 6px)',
             overflow: 'hidden',
             minHeight: 0,
           }}>
             {availableAbilities.slice(0, 8).map((ability, index) => {
+              const isAffordable = gameState.stars >= ability.cost;
+              const gradient = ability.category === 'buff'
+                ? 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)'
+                : 'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)';
+
               return (
                 <button
                   key={index}
                   onClick={() => {
-                    if (gameState.stars >= ability.cost) {
+                    if (isAffordable) {
                       handleAbilityActivate(ability);
                     }
                   }}
-                  disabled={gameState.stars < ability.cost}
+                  disabled={!isAffordable}
                   style={{
-                    padding: 'clamp(2px, 0.5vw, 4px)',
-                    backgroundColor: gameState.stars >= ability.cost
-                      ? (ability.category === 'buff' ? theme.colors.T : theme.colors.Z)
-                      : theme.uiBackgroundColor,
-                    border: `1px solid ${theme.textColor}`,
-                    borderRadius: '50%',
+                    padding: 'clamp(3px, 0.8vw, 5px)',
+                    background: isAffordable ? gradient : 'rgba(0,0,0,0.3)',
+                    border: isAffordable
+                      ? '1px solid rgba(255,255,255,0.3)'
+                      : '1px solid rgba(255,255,255,0.1)',
+                    borderRadius: 'clamp(4px, 1vw, 8px)',
                     color: '#ffffff',
-                    fontSize: 'clamp(10px, 2.5vw, 14px)',
-                    cursor: gameState.stars >= ability.cost ? 'pointer' : 'not-allowed',
-                    opacity: gameState.stars >= ability.cost ? 1 : 0.4,
+                    cursor: isAffordable ? 'pointer' : 'not-allowed',
+                    opacity: isAffordable ? 1 : 0.4,
                     display: 'flex',
                     flexDirection: 'column',
                     alignItems: 'center',
                     justifyContent: 'center',
                     minHeight: 0,
                     minWidth: 0,
-                    aspectRatio: '1',
+                    boxShadow: isAffordable
+                      ? '0 2px 8px rgba(0,0,0,0.3)'
+                      : 'none',
+                    transition: 'all 0.2s ease',
+                    position: 'relative',
+                    overflow: 'hidden',
                   }}
                   title={`${ability.name} (${ability.cost}⭐)`}
                 >
-                  <div style={{ fontSize: 'clamp(12px, 3.5vw, 16px)', lineHeight: 1 }}>{ability.icon}</div>
-                  <div style={{ fontSize: 'clamp(6px, 1.5vw, 7px)', marginTop: '1px', whiteSpace: 'nowrap' }}>{ability.cost}⭐</div>
+                  <div style={{
+                    fontSize: 'clamp(14px, 3.5vw, 18px)',
+                    lineHeight: 1,
+                    textShadow: '0 1px 3px rgba(0,0,0,0.3)',
+                  }}>
+                    {ability.icon}
+                  </div>
+                  <div style={{
+                    fontSize: 'clamp(7px, 1.8vw, 9px)',
+                    marginTop: '2px',
+                    whiteSpace: 'nowrap',
+                    fontWeight: '600',
+                    background: 'rgba(0,0,0,0.2)',
+                    padding: '1px 3px',
+                    borderRadius: '3px',
+                  }}>
+                    {ability.cost}⭐
+                  </div>
                 </button>
               );
             })}
@@ -631,34 +691,13 @@ export function MultiplayerGame({ roomId, playerId, opponentId, theme, onExit }:
           display: 'flex',
           gap: 'clamp(4px, 1vw, 8px)',
           padding: 'clamp(6px, 1.5vw, 10px)',
-          backgroundColor: theme.uiBackgroundColor,
-          borderTop: `2px solid ${theme.textColor}`,
+          background: 'linear-gradient(180deg, rgba(0,0,0,0.3) 0%, rgba(0,0,0,0.5) 100%)',
+          backdropFilter: 'blur(10px)',
+          borderTop: `1px solid rgba(255,255,255,0.1)`,
+          boxShadow: '0 -4px 20px rgba(0,0,0,0.3)',
         }}
       >
-        <button
-          onTouchStart={(e) => {
-            e.preventDefault();
-            audioManager.playSfx('piece_move', 0.3);
-            effectManager.isEffectActive('reverse_controls') ? movePieceRight() : movePieceLeft();
-          }}
-          onClick={() => {
-            audioManager.playSfx('piece_move', 0.3);
-            effectManager.isEffectActive('reverse_controls') ? movePieceRight() : movePieceLeft();
-          }}
-          style={{
-            flex: 1,
-            fontSize: 'clamp(18px, 5vw, 28px)',
-            backgroundColor: theme.colors.T,
-            color: '#ffffff',
-            border: 'none',
-            borderRadius: 'clamp(6px, 1.5vw, 10px)',
-            cursor: 'pointer',
-            touchAction: 'manipulation',
-            minWidth: 0,
-          }}
-        >
-          ←
-        </button>
+        {/* Soft Drop */}
         <button
           onTouchStart={(e) => {
             e.preventDefault();
@@ -672,45 +711,20 @@ export function MultiplayerGame({ roomId, playerId, opponentId, theme, onExit }:
           style={{
             flex: 1,
             fontSize: 'clamp(18px, 5vw, 28px)',
-            backgroundColor: theme.colors.S,
+            background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
             color: '#ffffff',
             border: 'none',
-            borderRadius: 'clamp(6px, 1.5vw, 10px)',
+            borderRadius: 'clamp(8px, 2vw, 12px)',
             cursor: 'pointer',
             touchAction: 'manipulation',
             minWidth: 0,
+            boxShadow: '0 4px 15px rgba(102, 126, 234, 0.4)',
+            fontWeight: 'bold',
           }}
         >
           ↓
         </button>
-        <button
-          onTouchStart={(e) => {
-            e.preventDefault();
-            audioManager.playSfx('piece_rotate', 0.5);
-            if (!effectManager.isEffectActive('rotation_lock')) {
-              rotatePieceClockwise();
-            }
-          }}
-          onClick={() => {
-            audioManager.playSfx('piece_rotate', 0.5);
-            if (!effectManager.isEffectActive('rotation_lock')) {
-              rotatePieceClockwise();
-            }
-          }}
-          style={{
-            flex: 1,
-            fontSize: 'clamp(18px, 5vw, 28px)',
-            backgroundColor: theme.colors.I,
-            color: '#ffffff',
-            border: 'none',
-            borderRadius: 'clamp(6px, 1.5vw, 10px)',
-            cursor: 'pointer',
-            touchAction: 'manipulation',
-            minWidth: 0,
-          }}
-        >
-          ↻
-        </button>
+        {/* Hard Drop */}
         <button
           onTouchStart={(e) => {
             e.preventDefault();
@@ -724,40 +738,103 @@ export function MultiplayerGame({ roomId, playerId, opponentId, theme, onExit }:
           style={{
             flex: 1,
             fontSize: 'clamp(18px, 5vw, 28px)',
-            backgroundColor: theme.colors.O,
+            background: 'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)',
             color: '#ffffff',
             border: 'none',
-            borderRadius: 'clamp(6px, 1.5vw, 10px)',
+            borderRadius: 'clamp(8px, 2vw, 12px)',
             cursor: 'pointer',
             touchAction: 'manipulation',
             minWidth: 0,
+            boxShadow: '0 4px 15px rgba(245, 87, 108, 0.4)',
+            fontWeight: 'bold',
           }}
         >
           ⬇⬇
         </button>
+        {/* Move Left */}
         <button
           onTouchStart={(e) => {
             e.preventDefault();
-            audioManager.playSfx(isPaused ? 'resume' : 'pause');
-            togglePause();
+            audioManager.playSfx('piece_move', 0.3);
+            effectManager.isEffectActive('reverse_controls') ? movePieceRight() : movePieceLeft();
           }}
           onClick={() => {
-            audioManager.playSfx(isPaused ? 'resume' : 'pause');
-            togglePause();
+            audioManager.playSfx('piece_move', 0.3);
+            effectManager.isEffectActive('reverse_controls') ? movePieceRight() : movePieceLeft();
           }}
           style={{
             flex: 1,
             fontSize: 'clamp(18px, 5vw, 28px)',
-            backgroundColor: theme.colors.L,
+            background: 'linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)',
             color: '#ffffff',
             border: 'none',
-            borderRadius: 'clamp(6px, 1.5vw, 10px)',
+            borderRadius: 'clamp(8px, 2vw, 12px)',
             cursor: 'pointer',
             touchAction: 'manipulation',
             minWidth: 0,
+            boxShadow: '0 4px 15px rgba(79, 172, 254, 0.4)',
+            fontWeight: 'bold',
           }}
         >
-          {isPaused ? '▶' : '⏸'}
+          ←
+        </button>
+        {/* Rotate */}
+        <button
+          onTouchStart={(e) => {
+            e.preventDefault();
+            audioManager.playSfx('piece_rotate', 0.5);
+            if (!effectManager.isEffectActive('rotation_lock')) {
+              rotatePieceClockwise();
+            }
+          }}
+          onClick={() => {
+            audioManager.playSfx('piece_rotate', 0.5);
+            if (!effectManager.isEffectActive('rotation_lock')) {
+              rotatePieceClockwise();
+            }
+          }}
+          style={{
+            flex: 1,
+            fontSize: 'clamp(18px, 5vw, 28px)',
+            background: 'linear-gradient(135deg, #43e97b 0%, #38f9d7 100%)',
+            color: '#ffffff',
+            border: 'none',
+            borderRadius: 'clamp(8px, 2vw, 12px)',
+            cursor: 'pointer',
+            touchAction: 'manipulation',
+            minWidth: 0,
+            boxShadow: '0 4px 15px rgba(67, 233, 123, 0.4)',
+            fontWeight: 'bold',
+          }}
+        >
+          ↻
+        </button>
+        {/* Move Right */}
+        <button
+          onTouchStart={(e) => {
+            e.preventDefault();
+            audioManager.playSfx('piece_move', 0.3);
+            effectManager.isEffectActive('reverse_controls') ? movePieceLeft() : movePieceRight();
+          }}
+          onClick={() => {
+            audioManager.playSfx('piece_move', 0.3);
+            effectManager.isEffectActive('reverse_controls') ? movePieceLeft() : movePieceRight();
+          }}
+          style={{
+            flex: 1,
+            fontSize: 'clamp(18px, 5vw, 28px)',
+            background: 'linear-gradient(135deg, #fa709a 0%, #fee140 100%)',
+            color: '#ffffff',
+            border: 'none',
+            borderRadius: 'clamp(8px, 2vw, 12px)',
+            cursor: 'pointer',
+            touchAction: 'manipulation',
+            minWidth: 0,
+            boxShadow: '0 4px 15px rgba(250, 112, 154, 0.4)',
+            fontWeight: 'bold',
+          }}
+        >
+          →
         </button>
       </div>
 
