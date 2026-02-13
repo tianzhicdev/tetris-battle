@@ -33,6 +33,7 @@ export interface GameState {
   isGameOver: boolean;
   lastClearTime: number;
   comboCount: number;
+  bombType: 'cross' | 'circle' | null; // Track if current piece is a bomb
 }
 
 // Abilities

@@ -22,6 +22,7 @@ export function createInitialGameState(): GameState {
     isGameOver: false,
     lastClearTime: 0,
     comboCount: 0,
+    bombType: null,
   };
 }
 

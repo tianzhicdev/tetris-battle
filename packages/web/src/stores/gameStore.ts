@@ -12,6 +12,8 @@ import {
   calculateStars,
   getHardDropPosition,
   STAR_VALUES,
+  applyCrossBomb,
+  applyCircleBomb,
 } from '@tetris-battle/game-core';
 
 interface GameStore {
@@ -19,6 +21,7 @@ interface GameStore {
   ghostPiece: Tetromino | null;
   activeAbilities: ActiveAbility[];
   isPaused: boolean;
+  isCascadeMultiplierActive: boolean; // Track cascade multiplier state
 
   // Actions
   initGame: () => void;
@@ -34,6 +37,8 @@ interface GameStore {
   togglePause: () => void;
   updateBoard: (newBoard: any) => void;
   deductStars: (cost: number) => void;
+  setBombType: (bombType: 'cross' | 'circle' | null) => void;
+  setCascadeMultiplier: (active: boolean) => void;
 }
 
 export const useGameStore = create<GameStore>((set, get) => ({
@@ -41,6 +46,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
   ghostPiece: null,
   activeAbilities: [],
   isPaused: false,
+  isCascadeMultiplierActive: false,
 
   initGame: () => {
     const initialState = createInitialGameState();
@@ -139,14 +145,35 @@ export const useGameStore = create<GameStore>((set, get) => ({
       });
     } else {
       // Lock piece
-      const newBoard = lockPiece(gameState.board, gameState.currentPiece);
-      const { board: clearedBoard, linesCleared } = clearLines(newBoard);
+      let boardAfterLock = lockPiece(gameState.board, gameState.currentPiece);
+
+      // Check if piece is a bomb - apply bomb effect at landing position
+      if (gameState.bombType) {
+        const centerX = gameState.currentPiece.position.x + Math.floor(gameState.currentPiece.shape[0].length / 2);
+        const centerY = gameState.currentPiece.position.y + Math.floor(gameState.currentPiece.shape.length / 2);
+
+        console.log(`Bomb landed at (${centerX}, ${centerY}) - Type: ${gameState.bombType}`);
+
+        if (gameState.bombType === 'cross') {
+          boardAfterLock = applyCrossBomb(boardAfterLock, centerX, centerY);
+        } else if (gameState.bombType === 'circle') {
+          boardAfterLock = applyCircleBomb(boardAfterLock, centerX, centerY, 3);
+        }
+      }
+
+      const { board: clearedBoard, linesCleared } = clearLines(boardAfterLock);
 
       // Calculate stars and check combo
       const now = Date.now();
       const isCombo = now - gameState.lastClearTime < STAR_VALUES.comboWindow;
       const comboCount = linesCleared > 0 && isCombo ? gameState.comboCount + 1 : 0;
-      const starsEarned = calculateStars(linesCleared, comboCount);
+      let starsEarned = calculateStars(linesCleared, comboCount);
+
+      // Apply cascade multiplier (doubles stars earned)
+      if (get().isCascadeMultiplierActive) {
+        starsEarned *= 2;
+      }
+
       const newStars = Math.min(
         gameState.stars + starsEarned,
         STAR_VALUES.maxCapacity
@@ -162,6 +189,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
           linesCleared: gameState.linesCleared + linesCleared,
           lastClearTime: linesCleared > 0 ? now : gameState.lastClearTime,
           comboCount,
+          bombType: null, // Clear bomb flag after it lands
         },
       });
 
@@ -262,5 +290,19 @@ export const useGameStore = create<GameStore>((set, get) => ({
         stars: Math.max(0, gameState.stars - cost),
       },
     });
+  },
+
+  setBombType: (bombType: 'cross' | 'circle' | null) => {
+    const { gameState } = get();
+    set({
+      gameState: {
+        ...gameState,
+        bombType,
+      },
+    });
+  },
+
+  setCascadeMultiplier: (active: boolean) => {
+    set({ isCascadeMultiplierActive: active });
   },
 }));

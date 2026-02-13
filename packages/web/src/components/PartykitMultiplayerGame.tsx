@@ -9,8 +9,6 @@ import { TouchControls } from './TouchControls';
 import {
   AbilityEffectManager,
   ABILITIES,
-  applyCrossBomb,
-  applyCircleBomb,
   applyClearRows,
   applyRandomSpawner,
   applyEarthquake,
@@ -57,6 +55,8 @@ export function MultiplayerGame({ roomId, playerId, opponentId, theme, onExit }:
     togglePause,
     updateBoard,
     deductStars,
+    setBombType,
+    setCascadeMultiplier,
   } = useGameStore();
 
   // Initialize game sync
@@ -135,7 +135,7 @@ export function MultiplayerGame({ roomId, playerId, opponentId, theme, onExit }:
 
       // Speed up opponent makes pieces fall faster (debuff)
       if (effectManager.isEffectActive('speed_up_opponent')) {
-        tickRate = BASE_TICK_RATE * 0.6; // 1.67x faster
+        tickRate = BASE_TICK_RATE / 3; // 3x faster
       }
 
       tick();
@@ -195,22 +195,16 @@ export function MultiplayerGame({ roomId, playerId, opponentId, theme, onExit }:
       // Apply instant buff effects
       switch (ability.type) {
         case 'cross_firebomb': {
-          // Clear 3 rows and 3 columns in cross pattern
-          const centerX = Math.floor(gameState.board.width / 2);
-          const centerY = gameState.board.height - 5; // 5 rows from bottom
-          const newBoard = applyCrossBomb(gameState.board, centerX, centerY);
-          updateBoard(newBoard);
-          console.log('Cross FireBomb applied at:', centerX, centerY);
+          // Make current piece a bomb - it will explode when it lands
+          setBombType('cross');
+          console.log('Cross FireBomb activated - piece will explode on landing');
           break;
         }
 
         case 'circle_bomb': {
-          // Clear all blocks within circular radius
-          const centerX = Math.floor(gameState.board.width / 2);
-          const centerY = gameState.board.height - 5; // 5 rows from bottom
-          const newBoard = applyCircleBomb(gameState.board, centerX, centerY, 3);
-          updateBoard(newBoard);
-          console.log('Circle Bomb applied at:', centerX, centerY);
+          // Make current piece a bomb - it will explode when it lands
+          setBombType('circle');
+          console.log('Circle Bomb activated - piece will explode on landing');
           break;
         }
 
@@ -314,6 +308,15 @@ export function MultiplayerGame({ roomId, playerId, opponentId, theme, onExit }:
     const interval = setInterval(updateActiveEffects, 100);
     return () => clearInterval(interval);
   }, []);
+
+  // Sync cascade multiplier with effect manager
+  useEffect(() => {
+    const interval = setInterval(() => {
+      const isActive = effectManager.isEffectActive('cascade_multiplier');
+      setCascadeMultiplier(isActive);
+    }, 100);
+    return () => clearInterval(interval);
+  }, [setCascadeMultiplier]);
 
   // Keyboard controls
   useEffect(() => {

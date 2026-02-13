@@ -16,6 +16,7 @@ export function AbilityCarousel({ currentStars, onActivate, theme }: AbilityCaro
     canActivate,
     useAbility,
     getCooldownRemaining,
+    isTestMode,
   } = useAbilityStore();
 
   // Auto-refresh abilities every 10 seconds
@@ -42,9 +43,19 @@ export function AbilityCarousel({ currentStars, onActivate, theme }: AbilityCaro
         borderRadius: '5px',
       }}
     >
-      <h4 style={{ margin: '0 0 10px 0', fontSize: '13px' }}>Abilities</h4>
+      <h4 style={{ margin: '0 0 10px 0', fontSize: '13px' }}>
+        Abilities {isTestMode && '(TEST MODE - All 25 Available)'}
+      </h4>
 
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+      <div
+        style={{
+          display: 'flex',
+          flexDirection: 'column',
+          gap: '6px',
+          maxHeight: isTestMode ? '400px' : 'none',
+          overflowY: isTestMode ? 'auto' : 'visible',
+        }}
+      >
         {availableAbilities.map((ability, index) => {
           const canUse = canActivate(ability.id, currentStars);
           const cooldown = getCooldownRemaining(ability.id);
@@ -127,7 +138,9 @@ export function AbilityCarousel({ currentStars, onActivate, theme }: AbilityCaro
       </style>
 
       <div style={{ marginTop: '8px', fontSize: '10px', opacity: 0.7, textAlign: 'center' }}>
-        Press 1, 2, or 3 to activate
+        {isTestMode
+          ? 'Click to activate (no cooldowns in test mode)'
+          : 'Press 1, 2, or 3 to activate'}
       </div>
     </div>
   );
