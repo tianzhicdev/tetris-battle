@@ -697,68 +697,10 @@ export function MultiplayerGame({ roomId, playerId, opponentId, theme, onExit }:
           boxShadow: '0 -4px 20px rgba(0,0,0,0.3)',
         }}
       >
-        {/* Soft Drop */}
-        <button
-          onTouchStart={(e) => {
-            e.preventDefault();
-            audioManager.playSfx('soft_drop', 0.4);
-            movePieceDown();
-          }}
-          onClick={() => {
-            audioManager.playSfx('soft_drop', 0.4);
-            movePieceDown();
-          }}
-          style={{
-            flex: 1,
-            fontSize: 'clamp(18px, 5vw, 28px)',
-            background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-            color: '#ffffff',
-            border: 'none',
-            borderRadius: 'clamp(8px, 2vw, 12px)',
-            cursor: 'pointer',
-            touchAction: 'manipulation',
-            minWidth: 0,
-            boxShadow: '0 4px 15px rgba(102, 126, 234, 0.4)',
-            fontWeight: 'bold',
-          }}
-        >
-          ↓
-        </button>
-        {/* Hard Drop */}
-        <button
-          onTouchStart={(e) => {
-            e.preventDefault();
-            audioManager.playSfx('hard_drop');
-            hardDrop();
-          }}
-          onClick={() => {
-            audioManager.playSfx('hard_drop');
-            hardDrop();
-          }}
-          style={{
-            flex: 1,
-            fontSize: 'clamp(18px, 5vw, 28px)',
-            background: 'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)',
-            color: '#ffffff',
-            border: 'none',
-            borderRadius: 'clamp(8px, 2vw, 12px)',
-            cursor: 'pointer',
-            touchAction: 'manipulation',
-            minWidth: 0,
-            boxShadow: '0 4px 15px rgba(245, 87, 108, 0.4)',
-            fontWeight: 'bold',
-          }}
-        >
-          ⬇⬇
-        </button>
         {/* Move Left */}
         <button
-          onTouchStart={(e) => {
+          onPointerDown={(e) => {
             e.preventDefault();
-            audioManager.playSfx('piece_move', 0.3);
-            effectManager.isEffectActive('reverse_controls') ? movePieceRight() : movePieceLeft();
-          }}
-          onClick={() => {
             audioManager.playSfx('piece_move', 0.3);
             effectManager.isEffectActive('reverse_controls') ? movePieceRight() : movePieceLeft();
           }}
@@ -778,16 +720,56 @@ export function MultiplayerGame({ roomId, playerId, opponentId, theme, onExit }:
         >
           ←
         </button>
+        {/* Hard Drop */}
+        <button
+          onPointerDown={(e) => {
+            e.preventDefault();
+            audioManager.playSfx('hard_drop');
+            hardDrop();
+          }}
+          style={{
+            flex: 1,
+            fontSize: 'clamp(18px, 5vw, 28px)',
+            background: 'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)',
+            color: '#ffffff',
+            border: 'none',
+            borderRadius: 'clamp(8px, 2vw, 12px)',
+            cursor: 'pointer',
+            touchAction: 'manipulation',
+            minWidth: 0,
+            boxShadow: '0 4px 15px rgba(245, 87, 108, 0.4)',
+            fontWeight: 'bold',
+          }}
+        >
+          ⬇⬇
+        </button>
+        {/* Soft Drop */}
+        <button
+          onPointerDown={(e) => {
+            e.preventDefault();
+            audioManager.playSfx('soft_drop', 0.4);
+            movePieceDown();
+          }}
+          style={{
+            flex: 1,
+            fontSize: 'clamp(18px, 5vw, 28px)',
+            background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+            color: '#ffffff',
+            border: 'none',
+            borderRadius: 'clamp(8px, 2vw, 12px)',
+            cursor: 'pointer',
+            touchAction: 'manipulation',
+            minWidth: 0,
+            boxShadow: '0 4px 15px rgba(102, 126, 234, 0.4)',
+            fontWeight: 'bold',
+          }}
+        >
+          ↓
+        </button>
         {/* Rotate */}
         <button
-          onTouchStart={(e) => {
+          onPointerDown={(e) => {
             e.preventDefault();
-            audioManager.playSfx('piece_rotate', 0.5);
-            if (!effectManager.isEffectActive('rotation_lock')) {
-              rotatePieceClockwise();
-            }
-          }}
-          onClick={() => {
             audioManager.playSfx('piece_rotate', 0.5);
             if (!effectManager.isEffectActive('rotation_lock')) {
               rotatePieceClockwise();
@@ -811,12 +793,8 @@ export function MultiplayerGame({ roomId, playerId, opponentId, theme, onExit }:
         </button>
         {/* Move Right */}
         <button
-          onTouchStart={(e) => {
+          onPointerDown={(e) => {
             e.preventDefault();
-            audioManager.playSfx('piece_move', 0.3);
-            effectManager.isEffectActive('reverse_controls') ? movePieceLeft() : movePieceRight();
-          }}
-          onClick={() => {
             audioManager.playSfx('piece_move', 0.3);
             effectManager.isEffectActive('reverse_controls') ? movePieceLeft() : movePieceRight();
           }}
