@@ -1,5 +1,4 @@
 import type { Board, Tetromino, CellValue, TetrominoType } from './types';
-import { TETROMINO_SHAPES } from './tetrominos';
 
 export interface AbilityEffect {
   type: 'buff' | 'debuff';
@@ -91,21 +90,43 @@ export function applyClearRows(board: Board, numRows: number = 5): { board: Boar
 // DEBUFF EFFECTS (Opponent Disruption)
 
 export function applyWeirdShapes(piece: Tetromino): Tetromino {
-  // Randomly rotate or flip the piece shape
-  const rotation = Math.floor(Math.random() * 4);
-  const flip = Math.random() > 0.5;
+  // Create a random 5x5 shape with 5-8 filled blocks
+  const numBlocks = Math.floor(Math.random() * 4) + 5; // 5-8 blocks
+  const positions = new Set<string>();
 
-  let shape = TETROMINO_SHAPES[piece.type][rotation];
+  // Start from center and add random adjacent blocks
+  positions.add('2,2'); // Center of 5x5 grid
 
-  if (flip) {
-    // Flip horizontally
-    shape = shape.map(row => [...row].reverse());
+  while (positions.size < numBlocks) {
+    // Pick a random existing position and try to add an adjacent block
+    const posArray = Array.from(positions);
+    const randomPos = posArray[Math.floor(Math.random() * posArray.length)];
+    const [y, x] = randomPos.split(',').map(Number);
+
+    // Try random adjacent direction
+    const directions = [[-1, 0], [1, 0], [0, -1], [0, 1]];
+    const [dy, dx] = directions[Math.floor(Math.random() * directions.length)];
+    const newY = y + dy;
+    const newX = x + dx;
+
+    // Check bounds
+    if (newY >= 0 && newY < 5 && newX >= 0 && newX < 5) {
+      positions.add(`${newY},${newX}`);
+    }
   }
+
+  // Convert positions to 5x5 shape array
+  const shape: number[][] = Array(5).fill(0).map(() => Array(5).fill(0));
+  positions.forEach(pos => {
+    const [y, x] = pos.split(',').map(Number);
+    shape[y][x] = 1;
+  });
 
   return {
     ...piece,
     shape,
-    rotation,
+    rotation: 0,
+    position: { x: 2, y: 0 }, // Centered spawn position for bigger piece
   };
 }
 

@@ -198,6 +198,23 @@ export class TetrisRenderer {
     this.ctx.fill();
   }
 
+  drawShrinkCeiling(board: Board, ceilingRows: number): void {
+    // Draw blocked ceiling rows
+    this.ctx.fillStyle = 'rgba(50, 50, 50, 0.9)';
+    this.ctx.fillRect(0, 0, board.width * this.blockSize, ceilingRows * this.blockSize);
+
+    // Draw hazard stripes
+    this.ctx.strokeStyle = 'rgba(255, 200, 0, 0.6)';
+    this.ctx.lineWidth = 3;
+    for (let i = 0; i < 5; i++) {
+      const y = (ceilingRows * this.blockSize) - 5;
+      this.ctx.beginPath();
+      this.ctx.moveTo(i * 40, y - 10);
+      this.ctx.lineTo(i * 40 + 20, y + 10);
+      this.ctx.stroke();
+    }
+  }
+
   render(
     board: Board,
     currentPiece: Tetromino | null,

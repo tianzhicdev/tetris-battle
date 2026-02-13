@@ -15,6 +15,7 @@ import {
   applyCrossBomb,
   applyCircleBomb,
   createMiniBlock,
+  applyWeirdShapes,
 } from '@tetris-battle/game-core';
 
 interface GameStore {
@@ -24,6 +25,8 @@ interface GameStore {
   isPaused: boolean;
   isCascadeMultiplierActive: boolean; // Track cascade multiplier state
   miniBlocksRemaining: number; // Track how many mini block pieces to spawn
+  weirdShapesRemaining: number; // Track how many weird shape pieces to spawn
+  shrinkCeilingRows: number; // Track number of rows blocked from top
   onBombExplode: ((x: number, y: number, type: 'cross' | 'circle') => void) | null;
 
   // Actions
@@ -42,6 +45,9 @@ interface GameStore {
   deductStars: (cost: number) => void;
   setBombType: (bombType: 'cross' | 'circle' | null) => void;
   setCascadeMultiplier: (active: boolean) => void;
+  setMiniBlocksRemaining: (count: number) => void;
+  setWeirdShapesRemaining: (count: number) => void;
+  setShrinkCeilingRows: (rows: number) => void;
   setOnBombExplode: (callback: (x: number, y: number, type: 'cross' | 'circle') => void) => void;
 }
 
@@ -51,6 +57,9 @@ export const useGameStore = create<GameStore>((set, get) => ({
   activeAbilities: [],
   isPaused: false,
   isCascadeMultiplierActive: false,
+  miniBlocksRemaining: 0,
+  weirdShapesRemaining: 0,
+  shrinkCeilingRows: 0,
   onBombExplode: null,
 
   initGame: () => {
@@ -78,8 +87,33 @@ export const useGameStore = create<GameStore>((set, get) => ({
   },
 
   spawnPiece: () => {
-    const { gameState } = get();
-    const newPiece = createTetromino(gameState.nextPiece, gameState.board.width);
+    const { gameState, miniBlocksRemaining, weirdShapesRemaining, shrinkCeilingRows } = get();
+
+    let newPiece: Tetromino;
+
+    // Check if we should spawn a mini block
+    if (miniBlocksRemaining > 0) {
+      newPiece = createMiniBlock();
+      set({ miniBlocksRemaining: miniBlocksRemaining - 1 });
+    }
+    // Check if we should spawn a weird shape
+    else if (weirdShapesRemaining > 0) {
+      const basePiece = createTetromino(gameState.nextPiece, gameState.board.width);
+      newPiece = applyWeirdShapes(basePiece);
+      set({ weirdShapesRemaining: weirdShapesRemaining - 1 });
+    }
+    else {
+      newPiece = createTetromino(gameState.nextPiece, gameState.board.width);
+    }
+
+    // Offset spawn position if ceiling is shrunk
+    if (shrinkCeilingRows > 0) {
+      newPiece = {
+        ...newPiece,
+        position: { ...newPiece.position, y: newPiece.position.y + shrinkCeilingRows },
+      };
+    }
+
     const nextPiece = getRandomTetromino();
 
     // Check game over
@@ -314,6 +348,18 @@ export const useGameStore = create<GameStore>((set, get) => ({
 
   setCascadeMultiplier: (active: boolean) => {
     set({ isCascadeMultiplierActive: active });
+  },
+
+  setMiniBlocksRemaining: (count: number) => {
+    set({ miniBlocksRemaining: count });
+  },
+
+  setWeirdShapesRemaining: (count: number) => {
+    set({ weirdShapesRemaining: count });
+  },
+
+  setShrinkCeilingRows: (rows: number) => {
+    set({ shrinkCeilingRows: rows });
   },
 
   setOnBombExplode: (callback: (x: number, y: number, type: 'cross' | 'circle') => void) => {

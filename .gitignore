@@ -45,3 +45,11 @@ yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 .vercel
+
+# Audio Generation
+venv/
+__pycache__/
+*.pyc
+*.pyo
+packages/web/public/audio/
+packages/web/public/audio_v*/

@@ -13,7 +13,6 @@ import {
   applyRandomSpawner,
   applyEarthquake,
   applyColumnBomb,
-  createMiniBlock,
 } from '@tetris-battle/game-core';
 import type { Ability } from '@tetris-battle/game-core';
 import type { Theme } from '../themes';
@@ -59,6 +58,9 @@ export function MultiplayerGame({ roomId, playerId, opponentId, theme, onExit }:
     deductStars,
     setBombType,
     setCascadeMultiplier,
+    setMiniBlocksRemaining,
+    setWeirdShapesRemaining,
+    setShrinkCeilingRows,
     setOnBombExplode,
   } = useGameStore();
 
@@ -169,11 +171,21 @@ export function MultiplayerGame({ roomId, playerId, opponentId, theme, onExit }:
   // Render own board
   useEffect(() => {
     if (rendererRef.current) {
+      // Check if blind spot is active
+      const blindSpotRows = effectManager.isEffectActive('blind_spot') ? 4 : 0;
+      const shrinkCeilingRows = effectManager.isEffectActive('shrink_ceiling') ? 4 : 0;
+
       rendererRef.current.render(gameState.board, gameState.currentPiece, ghostPiece, {
         showGrid: true,
         showGhost: true,
         isBomb: gameState.bombType !== null,
+        blindSpotRows,
       });
+
+      // Draw shrink ceiling overlay
+      if (shrinkCeilingRows > 0) {
+        rendererRef.current.drawShrinkCeiling(gameState.board, shrinkCeilingRows);
+      }
 
       // Draw explosion if active
       if (explosion) {
@@ -237,8 +249,14 @@ export function MultiplayerGame({ roomId, playerId, opponentId, theme, onExit }:
           break;
         }
 
+        case 'mini_blocks': {
+          // Activate mini blocks - next 5 pieces will be 2-cell dominoes
+          setMiniBlocksRemaining(5);
+          console.log('Mini Blocks activated - next 5 pieces will be small');
+          break;
+        }
+
         case 'piece_preview_plus':
-        case 'mini_blocks':
         case 'cascade_multiplier':
         case 'deflect_shield':
           // Duration-based effects handled by AbilityEffectManager
@@ -296,8 +314,14 @@ export function MultiplayerGame({ roomId, playerId, opponentId, theme, onExit }:
         break;
       }
 
+      case 'weird_shapes': {
+        // Next 3 pieces will be weird 5x5 shapes
+        setWeirdShapesRemaining(3);
+        console.log('Weird Shapes received - next 3 pieces will be large random shapes');
+        break;
+      }
+
       case 'speed_up_opponent':
-      case 'weird_shapes':
       case 'rotation_lock':
       case 'blind_spot':
       case 'reverse_controls':
@@ -329,6 +353,15 @@ export function MultiplayerGame({ roomId, playerId, opponentId, theme, onExit }:
     }, 100);
     return () => clearInterval(interval);
   }, [setCascadeMultiplier]);
+
+  // Sync shrink ceiling with effect manager
+  useEffect(() => {
+    const interval = setInterval(() => {
+      const isActive = effectManager.isEffectActive('shrink_ceiling');
+      setShrinkCeilingRows(isActive ? 4 : 0);
+    }, 100);
+    return () => clearInterval(interval);
+  }, [setShrinkCeilingRows]);
 
   // Keyboard controls
   useEffect(() => {
