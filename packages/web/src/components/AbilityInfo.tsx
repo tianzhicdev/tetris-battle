@@ -34,12 +34,16 @@ export function AbilityInfo({ onClose }: AbilityInfoProps) {
         }}
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-          <div style={{
-            fontSize: '32px',
-            textShadow: `0 0 10px ${glowColor}`,
-          }}>
-            {ability.icon}
-          </div>
+          <img
+            src={ability.icon}
+            alt={ability.name}
+            style={{
+              width: '48px',
+              height: '48px',
+              objectFit: 'contain',
+              filter: `drop-shadow(0 0 8px ${glowColor})`,
+            }}
+          />
           <div style={{ flex: 1 }}>
             <div style={{
               fontSize: '16px',

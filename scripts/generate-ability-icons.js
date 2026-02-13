@@ -2,7 +2,8 @@ import Replicate from 'replicate';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import https from 'https';
+import { pipeline } from 'stream/promises';
+import { Readable } from 'stream';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -75,21 +76,15 @@ const abilityIconSpecs = {
   },
 };
 
-// Download image from URL
-function downloadImage(url, filepath) {
-  return new Promise((resolve, reject) => {
-    const file = fs.createWriteStream(filepath);
-    https.get(url, (response) => {
-      response.pipe(file);
-      file.on('finish', () => {
-        file.close();
-        resolve();
-      });
-    }).on('error', (err) => {
-      fs.unlink(filepath, () => {});
-      reject(err);
-    });
-  });
+// Download image from URL using fetch
+async function downloadImage(url, filepath) {
+  const response = await fetch(url);
+  if (!response.ok) {
+    throw new Error(`Failed to download image: ${response.statusText}`);
+  }
+
+  const fileStream = fs.createWriteStream(filepath);
+  await pipeline(Readable.fromWeb(response.body), fileStream);
 }
 
 // Generate icon using Replicate
@@ -99,6 +94,7 @@ async function generateIcon(abilityId, spec) {
 
   try {
     // Use SDXL for high-quality icons
+    console.log(`   🔄 Calling Replicate API...`);
     const output = await replicate.run(
       "stability-ai/sdxl:39ed52f2a78e934b3ba6e2a89f5b1c712de7dfea535525255b1aa35c5565e08b",
       {
@@ -112,12 +108,16 @@ async function generateIcon(abilityId, spec) {
       }
     );
 
+    console.log(`   📥 Received output:`, typeof output, Array.isArray(output) ? `array[${output.length}]` : 'single value');
+
     // SDXL returns an array of URLs
     const imageUrl = Array.isArray(output) ? output[0] : output;
 
     if (!imageUrl) {
       throw new Error('No image URL returned from Replicate');
     }
+
+    console.log(`   📸 Image URL: ${imageUrl}`);
 
     // Download the image
     const outputDir = path.join(__dirname, '../packages/web/public/abilities');
@@ -126,12 +126,15 @@ async function generateIcon(abilityId, spec) {
     }
 
     const filepath = path.join(outputDir, spec.filename);
+    console.log(`   💾 Downloading to: ${filepath}`);
     await downloadImage(imageUrl, filepath);
 
     console.log(`   ✅ Saved to ${spec.filename}`);
     return true;
   } catch (error) {
-    console.error(`   ❌ Failed to generate ${abilityId}:`, error.message);
+    console.error(`   ❌ Failed to generate ${abilityId}:`);
+    console.error(`   Error message: ${error.message}`);
+    console.error(`   Error stack:`, error.stack);
     return false;
   }
 }

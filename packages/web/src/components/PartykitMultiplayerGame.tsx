@@ -698,13 +698,16 @@ export function MultiplayerGame({ roomId, playerId, opponentId, theme, onExit }:
                   }}
                   title={`${ability.name} (${ability.cost}⭐)`}
                 >
-                  <div style={{
-                    fontSize: 'clamp(14px, 3.5vw, 18px)',
-                    lineHeight: 1,
-                    textShadow: isAffordable ? `0 0 8px ${glowColor}` : 'none',
-                  }}>
-                    {ability.icon}
-                  </div>
+                  <img
+                    src={ability.icon}
+                    alt={ability.name}
+                    style={{
+                      width: 'clamp(18px, 4.5vw, 24px)',
+                      height: 'clamp(18px, 4.5vw, 24px)',
+                      objectFit: 'contain',
+                      filter: isAffordable ? `drop-shadow(0 0 4px ${glowColor})` : 'grayscale(100%) opacity(0.5)',
+                    }}
+                  />
                   <div style={{
                     fontSize: 'clamp(7px, 1.8vw, 9px)',
                     marginTop: '2px',
