@@ -4,6 +4,7 @@ import { useAbilityStore } from '../stores/abilityStore';
 import { TetrisRenderer } from '../renderer/TetrisRenderer';
 import { PartykitGameSync } from '../services/partykit/gameSync';
 import { AbilityEffects } from './AbilityEffects';
+import { AbilityInfo } from './AbilityInfo';
 import {
   AbilityEffectManager,
   ABILITIES,
@@ -38,6 +39,7 @@ export function MultiplayerGame({ roomId, playerId, opponentId, theme, onExit }:
   const [effectManager] = useState(() => new AbilityEffectManager());
   const [activeEffects, setActiveEffects] = useState<any[]>([]);
   const [explosion, setExplosion] = useState<{ x: number; y: number; startTime: number } | null>(null);
+  const [showAbilityInfo, setShowAbilityInfo] = useState(false);
 
   const { availableAbilities } = useAbilityStore();
 
@@ -454,7 +456,7 @@ export function MultiplayerGame({ roomId, playerId, opponentId, theme, onExit }:
         height: '100dvh', // Dynamic viewport height for mobile
         width: '100vw',
         overflow: 'hidden',
-        background: 'linear-gradient(135deg, #1e1e2e 0%, #2d2d44 100%)',
+        background: 'linear-gradient(135deg, #0a0e27 0%, #1a1433 50%, #0f0a1e 100%)',
         color: '#ffffff',
         fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
         position: 'fixed',
@@ -471,11 +473,9 @@ export function MultiplayerGame({ roomId, playerId, opponentId, theme, onExit }:
             margin: '0 0 4px 0',
             fontSize: 'clamp(11px, 2.8vw, 14px)',
             fontWeight: '700',
-            letterSpacing: '1px',
-            background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-            WebkitBackgroundClip: 'text',
-            WebkitTextFillColor: 'transparent',
-            textShadow: 'none',
+            letterSpacing: '2px',
+            color: '#00d4ff',
+            textShadow: '0 0 10px rgba(0, 212, 255, 0.8), 0 0 20px rgba(0, 212, 255, 0.4)',
           }}>YOUR BOARD</h3>
           <div style={{
             flex: 1,
@@ -494,15 +494,15 @@ export function MultiplayerGame({ roomId, playerId, opponentId, theme, onExit }:
               width={250}
               height={500}
               style={{
-                border: '3px solid rgba(102, 126, 234, 0.5)',
-                backgroundColor: 'rgba(0,0,0,0.3)',
+                border: '2px solid #00d4ff',
+                backgroundColor: 'rgba(5,5,15,0.8)',
                 maxHeight: 'calc(100dvh - 110px)', // Account for header and bottom controls
                 maxWidth: '100%',
                 height: 'auto',
                 width: 'auto',
                 objectFit: 'contain',
                 borderRadius: 'clamp(6px, 1.5vw, 10px)',
-                boxShadow: '0 4px 20px rgba(0,0,0,0.4), inset 0 0 20px rgba(102, 126, 234, 0.1)',
+                boxShadow: '0 0 20px rgba(0, 212, 255, 0.5), 0 0 40px rgba(0, 212, 255, 0.2), inset 0 0 20px rgba(0, 212, 255, 0.05)',
               }}
             />
           </div>
@@ -511,19 +511,19 @@ export function MultiplayerGame({ roomId, playerId, opponentId, theme, onExit }:
             style={{
               marginTop: '4px',
               padding: '6px 8px',
-              background: 'linear-gradient(135deg, rgba(102, 126, 234, 0.2) 0%, rgba(118, 75, 162, 0.2) 100%)',
-              backdropFilter: 'blur(10px)',
-              border: '1px solid rgba(255,255,255,0.1)',
+              background: 'linear-gradient(135deg, rgba(0, 212, 255, 0.15) 0%, rgba(201, 66, 255, 0.15) 100%)',
+              backdropFilter: 'blur(15px)',
+              border: '1px solid rgba(0, 212, 255, 0.3)',
               borderRadius: '8px',
               fontSize: 'clamp(9px, 2.2vw, 11px)',
               textAlign: 'center',
-              fontWeight: '600',
-              boxShadow: '0 2px 8px rgba(0,0,0,0.2)',
+              fontWeight: '700',
+              boxShadow: '0 0 15px rgba(0, 212, 255, 0.2), inset 0 0 10px rgba(0, 212, 255, 0.05)',
             }}
           >
-            <span style={{ marginRight: '8px' }}>🎯 {gameState.score}</span>
-            <span style={{ marginRight: '8px' }}>⭐ {gameState.stars}</span>
-            <span>📊 {gameState.linesCleared}</span>
+            <span style={{ marginRight: '8px', color: '#00d4ff' }}>🎯 {gameState.score}</span>
+            <span style={{ marginRight: '8px', color: '#c942ff' }}>⭐ {gameState.stars}</span>
+            <span style={{ color: '#00ff88' }}>📊 {gameState.linesCleared}</span>
           </div>
         </div>
 
@@ -535,60 +535,92 @@ export function MultiplayerGame({ roomId, playerId, opponentId, theme, onExit }:
           gap: 'clamp(4px, 1vh, 8px)',
           overflow: 'hidden'
         }}>
-          {/* Settings Button */}
-          <button
-            onClick={() => {
-              if (confirm('Leave game?')) onExit();
-            }}
-            style={{
-              padding: '6px',
-              background: 'linear-gradient(135deg, rgba(250, 112, 154, 0.3) 0%, rgba(254, 225, 64, 0.3) 100%)',
-              backdropFilter: 'blur(10px)',
-              border: '1px solid rgba(255,255,255,0.2)',
-              borderRadius: '50%',
-              color: '#ffffff',
-              fontSize: 'clamp(16px, 4vw, 20px)',
-              cursor: 'pointer',
-              width: 'clamp(34px, 8.5vw, 42px)',
-              height: 'clamp(34px, 8.5vw, 42px)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              alignSelf: 'center',
-              boxShadow: '0 2px 8px rgba(0,0,0,0.2)',
-            }}
-          >
-            ⚙
-          </button>
+          {/* Top Buttons Row */}
+          <div style={{
+            display: 'flex',
+            gap: 'clamp(4px, 1vw, 6px)',
+            justifyContent: 'center',
+          }}>
+            {/* Settings Button */}
+            <button
+              onClick={() => {
+                if (confirm('Leave game?')) onExit();
+              }}
+              style={{
+                padding: '6px',
+                background: 'linear-gradient(135deg, rgba(255, 0, 110, 0.4) 0%, rgba(255, 100, 0, 0.4) 100%)',
+                backdropFilter: 'blur(15px)',
+                border: '2px solid rgba(255, 0, 110, 0.5)',
+                borderRadius: '50%',
+                color: '#ffffff',
+                fontSize: 'clamp(14px, 3.5vw, 18px)',
+                cursor: 'pointer',
+                width: 'clamp(30px, 7.5vw, 38px)',
+                height: 'clamp(30px, 7.5vw, 38px)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                boxShadow: '0 0 15px rgba(255, 0, 110, 0.4), inset 0 0 10px rgba(255, 0, 110, 0.1)',
+              }}
+            >
+              ⚙
+            </button>
+
+            {/* Ability Info Button */}
+            <button
+              onClick={() => setShowAbilityInfo(true)}
+              style={{
+                padding: '6px',
+                background: 'linear-gradient(135deg, rgba(0, 212, 255, 0.4) 0%, rgba(201, 66, 255, 0.4) 100%)',
+                backdropFilter: 'blur(15px)',
+                border: '2px solid rgba(0, 212, 255, 0.5)',
+                borderRadius: '50%',
+                color: '#ffffff',
+                fontSize: 'clamp(14px, 3.5vw, 18px)',
+                fontWeight: 'bold',
+                cursor: 'pointer',
+                width: 'clamp(30px, 7.5vw, 38px)',
+                height: 'clamp(30px, 7.5vw, 38px)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                boxShadow: '0 0 15px rgba(0, 212, 255, 0.4), inset 0 0 10px rgba(0, 212, 255, 0.1)',
+              }}
+            >
+              ?
+            </button>
+          </div>
 
           {/* Opponent's Board */}
           <div style={{
             display: 'flex',
             flexDirection: 'column',
             alignItems: 'center',
-            background: 'linear-gradient(135deg, rgba(240, 147, 251, 0.15) 0%, rgba(245, 87, 108, 0.15) 100%)',
+            background: 'linear-gradient(135deg, rgba(255, 0, 110, 0.12) 0%, rgba(255, 100, 0, 0.12) 100%)',
             padding: 'clamp(4px, 1vw, 6px)',
             borderRadius: 'clamp(6px, 1.5vw, 10px)',
-            border: '1px solid rgba(255,255,255,0.1)',
+            border: '1px solid rgba(255, 0, 110, 0.3)',
+            boxShadow: '0 0 10px rgba(255, 0, 110, 0.15)',
           }}>
             <h3 style={{
               margin: '0 0 3px 0',
               fontSize: 'clamp(7px, 2vw, 9px)',
               fontWeight: '700',
-              letterSpacing: '0.5px',
-              opacity: 0.8,
+              letterSpacing: '1px',
+              color: '#ff006e',
+              textShadow: '0 0 5px rgba(255, 0, 110, 0.5)',
             }}>OPPONENT</h3>
             <canvas
               ref={opponentCanvasRef}
               width={80}
               height={160}
               style={{
-                border: '2px solid rgba(245, 87, 108, 0.4)',
-                backgroundColor: 'rgba(0,0,0,0.3)',
+                border: '1px solid rgba(255, 0, 110, 0.5)',
+                backgroundColor: 'rgba(5,5,15,0.8)',
                 width: 'clamp(65px, 17vw, 80px)',
                 height: 'clamp(130px, 34vw, 160px)',
                 borderRadius: 'clamp(4px, 1vw, 6px)',
-                boxShadow: '0 2px 8px rgba(0,0,0,0.3)',
+                boxShadow: '0 0 10px rgba(255, 0, 110, 0.3), inset 0 0 10px rgba(255, 0, 110, 0.05)',
               }}
             />
             {opponentState && (
@@ -596,15 +628,16 @@ export function MultiplayerGame({ roomId, playerId, opponentId, theme, onExit }:
                 style={{
                   marginTop: '3px',
                   padding: '3px 6px',
-                  background: 'rgba(0,0,0,0.3)',
+                  background: 'rgba(0,0,0,0.5)',
                   borderRadius: '4px',
                   fontSize: 'clamp(6px, 1.5vw, 8px)',
                   textAlign: 'center',
-                  fontWeight: '600',
+                  fontWeight: '700',
+                  border: '1px solid rgba(255, 0, 110, 0.2)',
                 }}
               >
-                <div>🎯 {opponentState.score}</div>
-                <div>⭐ {opponentState.stars}</div>
+                <div style={{ color: '#ff006e' }}>🎯 {opponentState.score}</div>
+                <div style={{ color: '#c942ff' }}>⭐ {opponentState.stars}</div>
               </div>
             )}
           </div>
@@ -622,8 +655,14 @@ export function MultiplayerGame({ roomId, playerId, opponentId, theme, onExit }:
             {availableAbilities.slice(0, 8).map((ability, index) => {
               const isAffordable = gameState.stars >= ability.cost;
               const gradient = ability.category === 'buff'
-                ? 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)'
-                : 'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)';
+                ? 'linear-gradient(135deg, #00d4ff 0%, #0080ff 100%)'
+                : 'linear-gradient(135deg, #c942ff 0%, #ff006e 100%)';
+              const glowColor = ability.category === 'buff'
+                ? 'rgba(0, 212, 255, 0.4)'
+                : 'rgba(201, 66, 255, 0.4)';
+              const borderColor = ability.category === 'buff'
+                ? '#00d4ff'
+                : '#c942ff';
 
               return (
                 <button
@@ -636,9 +675,9 @@ export function MultiplayerGame({ roomId, playerId, opponentId, theme, onExit }:
                   disabled={!isAffordable}
                   style={{
                     padding: 'clamp(3px, 0.8vw, 5px)',
-                    background: isAffordable ? gradient : 'rgba(0,0,0,0.3)',
+                    background: isAffordable ? gradient : 'rgba(10,10,25,0.6)',
                     border: isAffordable
-                      ? '1px solid rgba(255,255,255,0.3)'
+                      ? `1px solid ${borderColor}`
                       : '1px solid rgba(255,255,255,0.1)',
                     borderRadius: 'clamp(4px, 1vw, 8px)',
                     color: '#ffffff',
@@ -651,7 +690,7 @@ export function MultiplayerGame({ roomId, playerId, opponentId, theme, onExit }:
                     minHeight: 0,
                     minWidth: 0,
                     boxShadow: isAffordable
-                      ? '0 2px 8px rgba(0,0,0,0.3)'
+                      ? `0 0 10px ${glowColor}, inset 0 0 5px rgba(255,255,255,0.1)`
                       : 'none',
                     transition: 'all 0.2s ease',
                     position: 'relative',
@@ -662,7 +701,7 @@ export function MultiplayerGame({ roomId, playerId, opponentId, theme, onExit }:
                   <div style={{
                     fontSize: 'clamp(14px, 3.5vw, 18px)',
                     lineHeight: 1,
-                    textShadow: '0 1px 3px rgba(0,0,0,0.3)',
+                    textShadow: isAffordable ? `0 0 8px ${glowColor}` : 'none',
                   }}>
                     {ability.icon}
                   </div>
@@ -670,10 +709,11 @@ export function MultiplayerGame({ roomId, playerId, opponentId, theme, onExit }:
                     fontSize: 'clamp(7px, 1.8vw, 9px)',
                     marginTop: '2px',
                     whiteSpace: 'nowrap',
-                    fontWeight: '600',
-                    background: 'rgba(0,0,0,0.2)',
+                    fontWeight: '700',
+                    background: 'rgba(0,0,0,0.4)',
                     padding: '1px 3px',
                     borderRadius: '3px',
+                    border: '1px solid rgba(255,255,255,0.1)',
                   }}>
                     {ability.cost}⭐
                   </div>
@@ -691,10 +731,10 @@ export function MultiplayerGame({ roomId, playerId, opponentId, theme, onExit }:
           display: 'flex',
           gap: 'clamp(4px, 1vw, 8px)',
           padding: 'clamp(6px, 1.5vw, 10px)',
-          background: 'linear-gradient(180deg, rgba(0,0,0,0.3) 0%, rgba(0,0,0,0.5) 100%)',
-          backdropFilter: 'blur(10px)',
-          borderTop: `1px solid rgba(255,255,255,0.1)`,
-          boxShadow: '0 -4px 20px rgba(0,0,0,0.3)',
+          background: 'linear-gradient(180deg, rgba(10,10,25,0.4) 0%, rgba(5,5,15,0.8) 100%)',
+          backdropFilter: 'blur(20px)',
+          borderTop: `1px solid rgba(0, 212, 255, 0.2)`,
+          boxShadow: '0 -5px 25px rgba(0, 212, 255, 0.1)',
         }}
       >
         {/* Move Left */}
@@ -707,14 +747,14 @@ export function MultiplayerGame({ roomId, playerId, opponentId, theme, onExit }:
           style={{
             flex: 1,
             fontSize: 'clamp(18px, 5vw, 28px)',
-            background: 'linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)',
+            background: 'linear-gradient(135deg, #00d4ff 0%, #0080ff 100%)',
             color: '#ffffff',
-            border: 'none',
+            border: '2px solid rgba(0, 212, 255, 0.4)',
             borderRadius: 'clamp(8px, 2vw, 12px)',
             cursor: 'pointer',
             touchAction: 'manipulation',
             minWidth: 0,
-            boxShadow: '0 4px 15px rgba(79, 172, 254, 0.4)',
+            boxShadow: '0 0 20px rgba(0, 212, 255, 0.5), inset 0 0 10px rgba(0, 212, 255, 0.2)',
             fontWeight: 'bold',
           }}
         >
@@ -730,14 +770,14 @@ export function MultiplayerGame({ roomId, playerId, opponentId, theme, onExit }:
           style={{
             flex: 1,
             fontSize: 'clamp(18px, 5vw, 28px)',
-            background: 'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)',
+            background: 'linear-gradient(135deg, #ff006e 0%, #ff4500 100%)',
             color: '#ffffff',
-            border: 'none',
+            border: '2px solid rgba(255, 0, 110, 0.4)',
             borderRadius: 'clamp(8px, 2vw, 12px)',
             cursor: 'pointer',
             touchAction: 'manipulation',
             minWidth: 0,
-            boxShadow: '0 4px 15px rgba(245, 87, 108, 0.4)',
+            boxShadow: '0 0 20px rgba(255, 0, 110, 0.5), inset 0 0 10px rgba(255, 0, 110, 0.2)',
             fontWeight: 'bold',
           }}
         >
@@ -753,14 +793,14 @@ export function MultiplayerGame({ roomId, playerId, opponentId, theme, onExit }:
           style={{
             flex: 1,
             fontSize: 'clamp(18px, 5vw, 28px)',
-            background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+            background: 'linear-gradient(135deg, #c942ff 0%, #8b5cf6 100%)',
             color: '#ffffff',
-            border: 'none',
+            border: '2px solid rgba(201, 66, 255, 0.4)',
             borderRadius: 'clamp(8px, 2vw, 12px)',
             cursor: 'pointer',
             touchAction: 'manipulation',
             minWidth: 0,
-            boxShadow: '0 4px 15px rgba(102, 126, 234, 0.4)',
+            boxShadow: '0 0 20px rgba(201, 66, 255, 0.5), inset 0 0 10px rgba(201, 66, 255, 0.2)',
             fontWeight: 'bold',
           }}
         >
@@ -778,14 +818,14 @@ export function MultiplayerGame({ roomId, playerId, opponentId, theme, onExit }:
           style={{
             flex: 1,
             fontSize: 'clamp(18px, 5vw, 28px)',
-            background: 'linear-gradient(135deg, #43e97b 0%, #38f9d7 100%)',
+            background: 'linear-gradient(135deg, #00ff88 0%, #00cc6a 100%)',
             color: '#ffffff',
-            border: 'none',
+            border: '2px solid rgba(0, 255, 136, 0.4)',
             borderRadius: 'clamp(8px, 2vw, 12px)',
             cursor: 'pointer',
             touchAction: 'manipulation',
             minWidth: 0,
-            boxShadow: '0 4px 15px rgba(67, 233, 123, 0.4)',
+            boxShadow: '0 0 20px rgba(0, 255, 136, 0.5), inset 0 0 10px rgba(0, 255, 136, 0.2)',
             fontWeight: 'bold',
           }}
         >
@@ -801,14 +841,14 @@ export function MultiplayerGame({ roomId, playerId, opponentId, theme, onExit }:
           style={{
             flex: 1,
             fontSize: 'clamp(18px, 5vw, 28px)',
-            background: 'linear-gradient(135deg, #fa709a 0%, #fee140 100%)',
+            background: 'linear-gradient(135deg, #ffa500 0%, #ff6b00 100%)',
             color: '#ffffff',
-            border: 'none',
+            border: '2px solid rgba(255, 165, 0, 0.4)',
             borderRadius: 'clamp(8px, 2vw, 12px)',
             cursor: 'pointer',
             touchAction: 'manipulation',
             minWidth: 0,
-            boxShadow: '0 4px 15px rgba(250, 112, 154, 0.4)',
+            boxShadow: '0 0 20px rgba(255, 165, 0, 0.5), inset 0 0 10px rgba(255, 165, 0, 0.2)',
             fontWeight: 'bold',
           }}
         >
@@ -867,6 +907,10 @@ export function MultiplayerGame({ roomId, playerId, opponentId, theme, onExit }:
             Back to Menu
           </button>
         </div>
+      )}
+
+      {showAbilityInfo && (
+        <AbilityInfo onClose={() => setShowAbilityInfo(false)} />
       )}
     </div>
   );

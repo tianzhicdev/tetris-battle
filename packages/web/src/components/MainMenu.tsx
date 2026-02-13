@@ -4,6 +4,7 @@ import type { UserProfile } from '@tetris-battle/game-core';
 import { AbilityShop } from './AbilityShop';
 import { LoadoutManager } from './LoadoutManager';
 import { ProfilePage } from './ProfilePage';
+import { AbilityInfo } from './AbilityInfo';
 import { audioManager } from '../services/audioManager';
 
 interface MainMenuProps {
@@ -17,6 +18,7 @@ export function MainMenu({ onSelectMode, theme, profile, onProfileUpdate }: Main
   const [showShop, setShowShop] = useState(false);
   const [showLoadout, setShowLoadout] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
+  const [showAbilityInfo, setShowAbilityInfo] = useState(false);
 
   const stage = getLevelStage(profile.level);
 
@@ -223,6 +225,28 @@ export function MainMenu({ onSelectMode, theme, profile, onProfileUpdate }: Main
         >
           Loadout
         </button>
+
+        <button
+          onClick={() => {
+            audioManager.playSfx('button_click');
+            setShowAbilityInfo(true);
+          }}
+          style={{
+            padding: '12px 20px',
+            fontSize: '14px',
+            backgroundColor: '#ff00ff',
+            color: '#fff',
+            border: 'none',
+            borderRadius: '6px',
+            cursor: 'pointer',
+            fontFamily: 'monospace',
+            fontWeight: 'bold',
+            minWidth: '90px',
+            touchAction: 'manipulation',
+          }}
+        >
+          Abilities
+        </button>
       </div>
 
       {/* Modals */}
@@ -247,6 +271,10 @@ export function MainMenu({ onSelectMode, theme, profile, onProfileUpdate }: Main
           profile={profile}
           onClose={() => setShowProfile(false)}
         />
+      )}
+
+      {showAbilityInfo && (
+        <AbilityInfo onClose={() => setShowAbilityInfo(false)} />
       )}
     </div>
   );
