@@ -87,7 +87,7 @@ export class TetrisRenderer {
     }
   }
 
-  drawPiece(piece: Tetromino, ghost: boolean = false): void {
+  drawPiece(piece: Tetromino, ghost: boolean = false, isBomb: boolean = false): void {
     const alpha = ghost ? 0.3 : 1.0;
     this.ctx.globalAlpha = alpha;
 
@@ -100,7 +100,7 @@ export class TetrisRenderer {
           if (boardY >= 0) {
             if (ghost) {
               // Ghost piece - just draw outline
-              this.ctx.strokeStyle = this.theme.colors[piece.type];
+              this.ctx.strokeStyle = isBomb ? '#ff4444' : this.theme.colors[piece.type];
               this.ctx.lineWidth = 2;
               this.ctx.strokeRect(
                 boardX * this.blockSize + 2,
@@ -109,13 +109,43 @@ export class TetrisRenderer {
                 this.blockSize - 4
               );
             } else {
-              this.theme.renderBlock(
-                this.ctx,
-                boardX * this.blockSize,
-                boardY * this.blockSize,
-                this.blockSize,
-                piece.type
-              );
+              if (isBomb) {
+                // Draw bomb piece with pulsing red/orange effect
+                const px = boardX * this.blockSize;
+                const py = boardY * this.blockSize;
+                const time = Date.now() / 200;
+                const pulse = Math.sin(time) * 0.3 + 0.7;
+
+                // Red/orange gradient
+                const gradient = this.ctx.createRadialGradient(
+                  px + this.blockSize / 2,
+                  py + this.blockSize / 2,
+                  0,
+                  px + this.blockSize / 2,
+                  py + this.blockSize / 2,
+                  this.blockSize / 2
+                );
+                gradient.addColorStop(0, `rgba(255, 100, 0, ${pulse})`);
+                gradient.addColorStop(1, `rgba(200, 0, 0, ${pulse})`);
+
+                this.ctx.fillStyle = gradient;
+                this.ctx.fillRect(px, py, this.blockSize, this.blockSize);
+
+                // Draw bomb icon (💣)
+                this.ctx.fillStyle = '#000';
+                this.ctx.font = `${this.blockSize * 0.6}px Arial`;
+                this.ctx.textAlign = 'center';
+                this.ctx.textBaseline = 'middle';
+                this.ctx.fillText('💣', px + this.blockSize / 2, py + this.blockSize / 2);
+              } else {
+                this.theme.renderBlock(
+                  this.ctx,
+                  boardX * this.blockSize,
+                  boardY * this.blockSize,
+                  this.blockSize,
+                  piece.type
+                );
+              }
             }
           }
         }
@@ -146,13 +176,35 @@ export class TetrisRenderer {
     this.blockSize = originalBlockSize;
   }
 
+  drawExplosion(x: number, y: number, radius: number, progress: number): void {
+    // Draw fire/explosion effect
+    const centerX = x * this.blockSize + this.blockSize / 2;
+    const centerY = y * this.blockSize + this.blockSize / 2;
+    const explosionRadius = radius * this.blockSize * progress;
+
+    // Outer fire ring
+    const gradient = this.ctx.createRadialGradient(
+      centerX, centerY, 0,
+      centerX, centerY, explosionRadius
+    );
+    gradient.addColorStop(0, `rgba(255, 255, 100, ${1 - progress})`);
+    gradient.addColorStop(0.3, `rgba(255, 100, 0, ${0.8 - progress * 0.8})`);
+    gradient.addColorStop(0.6, `rgba(255, 50, 0, ${0.5 - progress * 0.5})`);
+    gradient.addColorStop(1, 'rgba(100, 0, 0, 0)');
+
+    this.ctx.fillStyle = gradient;
+    this.ctx.beginPath();
+    this.ctx.arc(centerX, centerY, explosionRadius, 0, Math.PI * 2);
+    this.ctx.fill();
+  }
+
   render(
     board: Board,
     currentPiece: Tetromino | null,
     ghostPiece: Tetromino | null,
-    options: RenderOptions = {}
+    options: RenderOptions & { isBomb?: boolean } = {}
   ): void {
-    const { showGrid = true, showGhost = true, blindSpotRows = 0 } = options;
+    const { showGrid = true, showGhost = true, blindSpotRows = 0, isBomb = false } = options;
 
     // Clear canvas
     this.clear();
@@ -167,12 +219,12 @@ export class TetrisRenderer {
 
     // Draw ghost piece (preview of where piece will land)
     if (showGhost && ghostPiece) {
-      this.drawPiece(ghostPiece, true);
+      this.drawPiece(ghostPiece, true, isBomb);
     }
 
     // Draw current piece
     if (currentPiece) {
-      this.drawPiece(currentPiece, false);
+      this.drawPiece(currentPiece, false, isBomb);
     }
   }
 }

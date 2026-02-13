@@ -1,4 +1,4 @@
-import type { Board, Tetromino, CellValue } from './types';
+import type { Board, Tetromino, CellValue, TetrominoType } from './types';
 import { TETROMINO_SHAPES } from './tetrominos';
 
 export interface AbilityEffect {
@@ -214,8 +214,22 @@ export interface ActiveAbilityEffect {
   data?: any;
 }
 
+export function createMiniBlock(): Tetromino {
+  // Create a 2-cell domino piece (horizontal or vertical)
+  const isHorizontal = Math.random() > 0.5;
+  const type: TetrominoType = ['I', 'O', 'T', 'S', 'Z', 'L', 'J'][Math.floor(Math.random() * 7)] as TetrominoType;
+
+  return {
+    type,
+    shape: isHorizontal ? [[1, 1]] : [[1], [1]],
+    position: { x: 4, y: 0 },
+    rotation: 0,
+  };
+}
+
 export class AbilityEffectManager {
   private activeEffects: Map<string, ActiveAbilityEffect> = new Map();
+  public miniBlocksRemaining: number = 0;
 
   activateEffect(abilityType: string, duration: number, data?: any): void {
     const now = Date.now();
@@ -225,6 +239,24 @@ export class AbilityEffectManager {
       endTime: now + duration,
       data,
     });
+
+    // Special handling for mini_blocks (duration is number of pieces, not time)
+    if (abilityType === 'mini_blocks') {
+      this.miniBlocksRemaining = duration; // duration is 5 pieces
+    }
+  }
+
+  useMiniBlock(): void {
+    if (this.miniBlocksRemaining > 0) {
+      this.miniBlocksRemaining--;
+      if (this.miniBlocksRemaining === 0) {
+        this.clearEffect('mini_blocks');
+      }
+    }
+  }
+
+  shouldUseMiniBlock(): boolean {
+    return this.miniBlocksRemaining > 0;
   }
 
   isEffectActive(abilityType: string): boolean {

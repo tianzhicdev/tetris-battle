@@ -14,6 +14,7 @@ import {
   STAR_VALUES,
   applyCrossBomb,
   applyCircleBomb,
+  createMiniBlock,
 } from '@tetris-battle/game-core';
 
 interface GameStore {
@@ -22,6 +23,8 @@ interface GameStore {
   activeAbilities: ActiveAbility[];
   isPaused: boolean;
   isCascadeMultiplierActive: boolean; // Track cascade multiplier state
+  miniBlocksRemaining: number; // Track how many mini block pieces to spawn
+  onBombExplode: ((x: number, y: number, type: 'cross' | 'circle') => void) | null;
 
   // Actions
   initGame: () => void;
@@ -39,6 +42,7 @@ interface GameStore {
   deductStars: (cost: number) => void;
   setBombType: (bombType: 'cross' | 'circle' | null) => void;
   setCascadeMultiplier: (active: boolean) => void;
+  setOnBombExplode: (callback: (x: number, y: number, type: 'cross' | 'circle') => void) => void;
 }
 
 export const useGameStore = create<GameStore>((set, get) => ({
@@ -47,6 +51,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
   activeAbilities: [],
   isPaused: false,
   isCascadeMultiplierActive: false,
+  onBombExplode: null,
 
   initGame: () => {
     const initialState = createInitialGameState();
@@ -153,6 +158,11 @@ export const useGameStore = create<GameStore>((set, get) => ({
         const centerY = gameState.currentPiece.position.y + Math.floor(gameState.currentPiece.shape.length / 2);
 
         console.log(`Bomb landed at (${centerX}, ${centerY}) - Type: ${gameState.bombType}`);
+
+        // Trigger explosion animation
+        if (get().onBombExplode) {
+          get().onBombExplode!(centerX, centerY, gameState.bombType);
+        }
 
         if (gameState.bombType === 'cross') {
           boardAfterLock = applyCrossBomb(boardAfterLock, centerX, centerY);
@@ -304,5 +314,9 @@ export const useGameStore = create<GameStore>((set, get) => ({
 
   setCascadeMultiplier: (active: boolean) => {
     set({ isCascadeMultiplierActive: active });
+  },
+
+  setOnBombExplode: (callback: (x: number, y: number, type: 'cross' | 'circle') => void) => {
+    set({ onBombExplode: callback });
   },
 }));

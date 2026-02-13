@@ -1,0 +1,356 @@
+{
+  "music": [
+    {
+      "id": "menu_theme",
+      "name": "Main Menu Theme",
+      "type": "music",
+      "loop": true,
+      "duration": 90,
+      "bpm": 120,
+      "mood": "upbeat, welcoming, retro",
+      "prompt": "Upbeat retro 8-bit chiptune main menu music, playful synth melody, nostalgic arcade game feeling, energetic but not rushed, major key",
+      "filename": "menu_theme.wav",
+      "category": "menu"
+    },
+    {
+      "id": "gameplay_normal",
+      "name": "Gameplay - Normal Intensity",
+      "type": "music",
+      "loop": true,
+      "duration": 120,
+      "bpm": 130,
+      "mood": "focused, competitive, energetic",
+      "prompt": "Fast-paced retro chiptune gameplay music, driving beat, 8-bit synth arpeggios, Tetris-style electronic game music, medium intensity, catchy melody",
+      "filename": "gameplay_normal.wav",
+      "category": "gameplay"
+    },
+    {
+      "id": "gameplay_intense",
+      "name": "Gameplay - High Intensity",
+      "type": "music",
+      "loop": true,
+      "duration": 120,
+      "bpm": 150,
+      "mood": "urgent, intense, competitive",
+      "prompt": "Intense fast retro chiptune battle music, rapid 8-bit arpeggios, driving bassline, high energy electronic game music, urgent feeling, competitive",
+      "filename": "gameplay_intense.wav",
+      "category": "gameplay"
+    },
+    {
+      "id": "matchmaking_waiting",
+      "name": "Matchmaking Lobby",
+      "type": "music",
+      "loop": true,
+      "duration": 60,
+      "bpm": 100,
+      "mood": "anticipation, calm, ambient",
+      "prompt": "Calm ambient chiptune waiting music, soft 8-bit pads, gentle melody, relaxing but anticipatory, retro game lobby atmosphere",
+      "filename": "matchmaking_waiting.wav",
+      "category": "menu"
+    },
+    {
+      "id": "victory_theme",
+      "name": "Victory Music",
+      "type": "music",
+      "loop": false,
+      "duration": 8,
+      "bpm": 140,
+      "mood": "triumphant, celebratory, victorious",
+      "prompt": "Short triumphant 8-bit victory fanfare, celebratory chiptune melody, uplifting retro game win music, major key, satisfying conclusion",
+      "filename": "victory_theme.wav",
+      "category": "result"
+    },
+    {
+      "id": "defeat_theme",
+      "name": "Defeat Music",
+      "type": "music",
+      "loop": false,
+      "duration": 6,
+      "bpm": 90,
+      "mood": "disappointed, somber, game over",
+      "prompt": "Short melancholic 8-bit game over theme, descending chiptune melody, retro arcade defeat sound, minor key, gentle and sympathetic",
+      "filename": "defeat_theme.wav",
+      "category": "result"
+    }
+  ],
+  "sfx": [
+    {
+      "id": "piece_move",
+      "name": "Piece Move (Left/Right)",
+      "type": "sfx",
+      "loop": false,
+      "duration": 0.1,
+      "mood": "subtle, quick, mechanical",
+      "prompt": "Short soft 8-bit blip sound, quick mechanical click, subtle piece movement sound, retro game audio",
+      "filename": "piece_move.wav",
+      "category": "movement"
+    },
+    {
+      "id": "piece_rotate",
+      "name": "Piece Rotation",
+      "type": "sfx",
+      "loop": false,
+      "duration": 0.15,
+      "mood": "crisp, satisfying, mechanical",
+      "prompt": "Quick 8-bit rotation sound, satisfying click with slight pitch shift, crisp mechanical turn effect, retro Tetris sound",
+      "filename": "piece_rotate.wav",
+      "category": "movement"
+    },
+    {
+      "id": "soft_drop",
+      "name": "Soft Drop",
+      "type": "sfx",
+      "loop": false,
+      "duration": 0.08,
+      "mood": "quick, descending",
+      "prompt": "Very short descending 8-bit blip, quick downward pitch drop, subtle soft drop sound effect",
+      "filename": "soft_drop.wav",
+      "category": "movement"
+    },
+    {
+      "id": "hard_drop",
+      "name": "Hard Drop / Lock",
+      "type": "sfx",
+      "loop": false,
+      "duration": 0.3,
+      "mood": "impactful, solid, satisfying",
+      "prompt": "Satisfying 8-bit thud sound, solid impact with bass, piece locking sound, chunky retro game slam effect",
+      "filename": "hard_drop.wav",
+      "category": "movement"
+    },
+    {
+      "id": "line_clear_single",
+      "name": "Line Clear - Single",
+      "type": "sfx",
+      "loop": false,
+      "duration": 0.5,
+      "mood": "satisfying, positive, reward",
+      "prompt": "Pleasant 8-bit chime, single line clear sound, short ascending arpeggio, satisfying completion tone",
+      "filename": "line_clear_single.wav",
+      "category": "clear"
+    },
+    {
+      "id": "line_clear_double",
+      "name": "Line Clear - Double",
+      "type": "sfx",
+      "loop": false,
+      "duration": 0.6,
+      "mood": "satisfying, rewarding, positive",
+      "prompt": "Brighter 8-bit chime sequence, double line clear sound, two-note ascending melody, more rewarding than single",
+      "filename": "line_clear_double.wav",
+      "category": "clear"
+    },
+    {
+      "id": "line_clear_triple",
+      "name": "Line Clear - Triple",
+      "type": "sfx",
+      "loop": false,
+      "duration": 0.7,
+      "mood": "exciting, rewarding, powerful",
+      "prompt": "Exciting 8-bit melody burst, triple line clear sound, three-note ascending arpeggio, very satisfying retro achievement",
+      "filename": "line_clear_triple.wav",
+      "category": "clear"
+    },
+    {
+      "id": "line_clear_tetris",
+      "name": "Line Clear - Tetris (4 lines)",
+      "type": "sfx",
+      "loop": false,
+      "duration": 1.0,
+      "mood": "triumphant, epic, maximum reward",
+      "prompt": "Epic 8-bit fanfare, four-line Tetris clear sound, triumphant ascending melody, celebratory retro game achievement",
+      "filename": "line_clear_tetris.wav",
+      "category": "clear"
+    },
+    {
+      "id": "combo",
+      "name": "Combo Bonus",
+      "type": "sfx",
+      "loop": false,
+      "duration": 0.4,
+      "mood": "exciting, energetic, bonus",
+      "prompt": "Quick energetic 8-bit sparkle sound, combo multiplier effect, exciting bonus chime, retro achievement ping",
+      "filename": "combo.wav",
+      "category": "reward"
+    },
+    {
+      "id": "star_earned",
+      "name": "Star Earned",
+      "type": "sfx",
+      "loop": false,
+      "duration": 0.3,
+      "mood": "sparkle, collectible, reward",
+      "prompt": "Magical 8-bit sparkle chime, star collection sound, twinkling retro coin pickup effect, satisfying reward tone",
+      "filename": "star_earned.wav",
+      "category": "reward"
+    },
+    {
+      "id": "ability_buff_activate",
+      "name": "Ability Activation - Buff",
+      "type": "sfx",
+      "loop": false,
+      "duration": 0.8,
+      "mood": "powerful, positive, empowering",
+      "prompt": "Powerful 8-bit power-up sound, ascending chiptune whoosh, positive buff activation, retro game enhancement effect",
+      "filename": "ability_buff_activate.wav",
+      "category": "ability"
+    },
+    {
+      "id": "ability_debuff_activate",
+      "name": "Ability Activation - Debuff/Attack",
+      "type": "sfx",
+      "loop": false,
+      "duration": 0.8,
+      "mood": "aggressive, impactful, attack",
+      "prompt": "Aggressive 8-bit attack sound, descending chiptune zap, offensive ability launch, retro game weapon fire effect",
+      "filename": "ability_debuff_activate.wav",
+      "category": "ability"
+    },
+    {
+      "id": "ability_ultra_activate",
+      "name": "Ability Activation - Ultra",
+      "type": "sfx",
+      "loop": false,
+      "duration": 1.2,
+      "mood": "epic, dramatic, ultimate power",
+      "prompt": "Epic dramatic 8-bit ultimate ability sound, powerful chiptune explosion, legendary power activation, retro game super move",
+      "filename": "ability_ultra_activate.wav",
+      "category": "ability"
+    },
+    {
+      "id": "ability_ready",
+      "name": "Ability Ready",
+      "type": "sfx",
+      "loop": false,
+      "duration": 0.5,
+      "mood": "notification, positive, ready",
+      "prompt": "Gentle 8-bit notification chime, ability cooldown complete sound, soft ready tone, subtle alert",
+      "filename": "ability_ready.wav",
+      "category": "ability"
+    },
+    {
+      "id": "ability_bomb_explode",
+      "name": "Bomb Explosion",
+      "type": "sfx",
+      "loop": false,
+      "duration": 1.0,
+      "mood": "explosive, powerful, destructive",
+      "prompt": "Retro 8-bit explosion sound, chunky chiptune bomb blast, powerful block destruction effect, satisfying boom",
+      "filename": "ability_bomb_explode.wav",
+      "category": "ability"
+    },
+    {
+      "id": "countdown_321",
+      "name": "Countdown Beep (3-2-1)",
+      "type": "sfx",
+      "loop": false,
+      "duration": 0.3,
+      "mood": "anticipation, urgent, warning",
+      "prompt": "Sharp 8-bit countdown beep, single urgent tone, game start countdown sound, retro timer tick",
+      "filename": "countdown_beep.wav",
+      "category": "ui"
+    },
+    {
+      "id": "countdown_go",
+      "name": "Countdown GO",
+      "type": "sfx",
+      "loop": false,
+      "duration": 0.5,
+      "mood": "exciting, start, energetic",
+      "prompt": "Exciting 8-bit start tone, uplifting game begin sound, energetic GO signal, retro race start effect",
+      "filename": "countdown_go.wav",
+      "category": "ui"
+    },
+    {
+      "id": "match_found",
+      "name": "Match Found",
+      "type": "sfx",
+      "loop": false,
+      "duration": 1.0,
+      "mood": "exciting, notification, positive",
+      "prompt": "Exciting 8-bit fanfare, opponent found notification, uplifting match ready sound, retro game connection success",
+      "filename": "match_found.wav",
+      "category": "ui"
+    },
+    {
+      "id": "button_click",
+      "name": "Button Click / UI Interaction",
+      "type": "sfx",
+      "loop": false,
+      "duration": 0.1,
+      "mood": "crisp, responsive, clean",
+      "prompt": "Clean 8-bit click sound, simple UI button press, crisp menu selection, retro interface sound",
+      "filename": "button_click.wav",
+      "category": "ui"
+    },
+    {
+      "id": "button_hover",
+      "name": "Button Hover",
+      "type": "sfx",
+      "loop": false,
+      "duration": 0.08,
+      "mood": "subtle, soft, preview",
+      "prompt": "Very subtle 8-bit blip, soft UI hover sound, gentle menu highlight, quiet retro interface tone",
+      "filename": "button_hover.wav",
+      "category": "ui"
+    },
+    {
+      "id": "warning_high_stack",
+      "name": "Warning - High Stack",
+      "type": "sfx",
+      "loop": false,
+      "duration": 0.6,
+      "mood": "urgent, warning, danger",
+      "prompt": "Urgent 8-bit warning alarm, danger alert sound, tense cautionary beep, retro game hazard notification",
+      "filename": "warning_high_stack.wav",
+      "category": "warning"
+    },
+    {
+      "id": "game_over",
+      "name": "Game Over Sound",
+      "type": "sfx",
+      "loop": false,
+      "duration": 2.0,
+      "mood": "defeat, final, game over",
+      "prompt": "Classic 8-bit game over sound, descending chiptune melody, retro arcade death sound, final defeat tone",
+      "filename": "game_over.wav",
+      "category": "result"
+    },
+    {
+      "id": "pause",
+      "name": "Pause",
+      "type": "sfx",
+      "loop": false,
+      "duration": 0.4,
+      "mood": "gentle, pause, calm",
+      "prompt": "Soft 8-bit pause sound, gentle game suspension tone, calm menu open effect, retro pause chime",
+      "filename": "pause.wav",
+      "category": "ui"
+    },
+    {
+      "id": "resume",
+      "name": "Resume/Unpause",
+      "type": "sfx",
+      "loop": false,
+      "duration": 0.4,
+      "mood": "ready, restart, energetic",
+      "prompt": "Quick 8-bit resume sound, game restart tone, energetic unpause effect, retro continue chime",
+      "filename": "resume.wav",
+      "category": "ui"
+    }
+  ],
+  "metadata": {
+    "project": "Tetris Battle",
+    "generator": "Meta MusicGen",
+    "style": "8-bit chiptune retro arcade",
+    "format": "WAV (44.1kHz, 16-bit recommended)",
+    "total_music_tracks": 6,
+    "total_sfx": 25,
+    "notes": [
+      "All music tracks should loop seamlessly",
+      "SFX should have minimal silence/padding for responsive playback",
+      "Consider generating variations for variety",
+      "Gameplay music intensity can be dynamically switched based on board height"
+    ]
+  }
+}

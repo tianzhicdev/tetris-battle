@@ -12,7 +12,8 @@ import {
   applyClearRows,
   applyRandomSpawner,
   applyEarthquake,
-  applyColumnBomb
+  applyColumnBomb,
+  createMiniBlock,
 } from '@tetris-battle/game-core';
 import type { Ability } from '@tetris-battle/game-core';
 import type { Theme } from '../themes';
@@ -39,6 +40,7 @@ export function MultiplayerGame({ roomId, playerId, opponentId, theme, onExit }:
   const [winnerId, setWinnerId] = useState<string | null>(null);
   const [effectManager] = useState(() => new AbilityEffectManager());
   const [activeEffects, setActiveEffects] = useState<any[]>([]);
+  const [explosion, setExplosion] = useState<{ x: number; y: number; startTime: number } | null>(null);
 
   const { availableAbilities } = useAbilityStore();
 
@@ -57,6 +59,7 @@ export function MultiplayerGame({ roomId, playerId, opponentId, theme, onExit }:
     deductStars,
     setBombType,
     setCascadeMultiplier,
+    setOnBombExplode,
   } = useGameStore();
 
   // Initialize game sync
@@ -153,15 +156,34 @@ export function MultiplayerGame({ roomId, playerId, opponentId, theme, onExit }:
     };
   }, [tick, gameState.isGameOver, isConnected, gameFinished]);
 
+  // Set up bomb explosion callback
+  useEffect(() => {
+    setOnBombExplode((x, y, type) => {
+      console.log('Explosion triggered at', x, y, type);
+      setExplosion({ x, y, startTime: Date.now() });
+      // Clear explosion after 500ms
+      setTimeout(() => setExplosion(null), 500);
+    });
+  }, [setOnBombExplode]);
+
   // Render own board
   useEffect(() => {
     if (rendererRef.current) {
       rendererRef.current.render(gameState.board, gameState.currentPiece, ghostPiece, {
         showGrid: true,
         showGhost: true,
+        isBomb: gameState.bombType !== null,
       });
+
+      // Draw explosion if active
+      if (explosion) {
+        const elapsed = Date.now() - explosion.startTime;
+        const progress = Math.min(elapsed / 500, 1); // 500ms animation
+        const radius = gameState.bombType === 'cross' ? 4 : 3;
+        rendererRef.current.drawExplosion(explosion.x, explosion.y, radius, progress);
+      }
     }
-  }, [gameState.board, gameState.currentPiece, ghostPiece]);
+  }, [gameState.board, gameState.currentPiece, ghostPiece, gameState.bombType, explosion]);
 
   // Render opponent's board
   useEffect(() => {
@@ -402,16 +424,23 @@ export function MultiplayerGame({ roomId, playerId, opponentId, theme, onExit }:
         {/* Your Board */}
         <div style={{ position: 'relative' }}>
           <h3 style={{ textAlign: 'center', marginBottom: '5px', fontSize: '14px' }}>YOU</h3>
-          <canvas
-            ref={canvasRef}
-            width={250}
-            height={500}
-            style={{
-              border: `2px solid ${theme.textColor}`,
-              backgroundColor: theme.backgroundColor,
-              maxWidth: '100%',
-            }}
-          />
+          <div style={{
+            transform: effectManager.isEffectActive('screen_shake')
+              ? `translate(${Math.sin(Date.now() / 50) * 5}px, ${Math.cos(Date.now() / 70) * 5}px) rotate(${Math.sin(Date.now() / 100) * 2}deg)`
+              : 'none',
+            transition: 'none',
+          }}>
+            <canvas
+              ref={canvasRef}
+              width={250}
+              height={500}
+              style={{
+                border: `2px solid ${theme.textColor}`,
+                backgroundColor: theme.backgroundColor,
+                maxWidth: '100%',
+              }}
+            />
+          </div>
           <AbilityEffects activeEffects={activeEffects} theme={theme} />
           <div
             style={{
