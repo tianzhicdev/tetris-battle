@@ -215,23 +215,14 @@ export function MultiplayerGame({ roomId, playerId, opponentId, theme, onExit }:
           break;
         }
 
-        case 'row_eraser': {
-          // For now, clear the bottom row (later can add UI to select row)
-          const { board: erasedBoard } = applyClearRows(gameState.board, 1);
-          updateBoard(erasedBoard);
-          break;
-        }
-
         case 'piece_preview_plus':
         case 'mini_blocks':
-        case 'time_freeze':
         case 'cascade_multiplier':
         case 'deflect_shield':
           // Duration-based effects handled by AbilityEffectManager
           break;
 
         case 'board_swap':
-        case 'piece_thief':
         case 'gravity_invert':
         case 'mirror_match':
           // Ultra abilities - send to opponent for special handling
@@ -289,7 +280,6 @@ export function MultiplayerGame({ roomId, playerId, opponentId, theme, onExit }:
       case 'blind_spot':
       case 'reverse_controls':
       case 'screen_shake':
-      case 'color_scramble':
       case 'shrink_ceiling':
       case 'mirror_blocks':
         // Duration-based effects handled by AbilityEffectManager

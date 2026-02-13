@@ -69,29 +69,8 @@ export const ABILITIES: Record<AbilityType, Ability> = {
     powerRating: 5,
     category: 'buff',
   },
-  row_eraser: {
-    id: 'row_eraser',
-    type: 'row_eraser',
-    name: 'Row Eraser',
-    description: 'Delete any single row, even if incomplete',
-    cost: 70 * COST_FACTOR,
-    cooldown: 15000,
-    powerRating: 8,
-    category: 'buff',
-  },
-  time_freeze: {
-    id: 'time_freeze',
-    type: 'time_freeze',
-    name: 'Time Freeze',
-    description: 'Board pauses for 4 seconds. Plan freely',
-    cost: 55 * COST_FACTOR,
-    duration: 4000,
-    cooldown: 30000,
-    powerRating: 7,
-    category: 'buff',
-  },
 
-  // ========== DEBUFFS (12) ==========
+  // ========== DEBUFFS (10) ==========
   speed_up_opponent: {
     id: 'speed_up_opponent',
     type: 'speed_up_opponent',
@@ -189,17 +168,6 @@ export const ABILITIES: Record<AbilityType, Ability> = {
     powerRating: 3,
     category: 'debuff',
   },
-  color_scramble: {
-    id: 'color_scramble',
-    type: 'color_scramble',
-    name: 'Color Scramble',
-    description: 'All blocks randomize colors, gaps hard to read',
-    cost: 40 * COST_FACTOR,
-    duration: 15000,
-    cooldown: 20000,
-    powerRating: 5,
-    category: 'debuff',
-  },
   shrink_ceiling: {
     id: 'shrink_ceiling',
     type: 'shrink_ceiling',
@@ -235,7 +203,7 @@ export const ABILITIES: Record<AbilityType, Ability> = {
     category: 'defense',
   },
 
-  // ========== ULTRA / LEGENDARY (4) ==========
+  // ========== ULTRA / LEGENDARY (3) ==========
   board_swap: {
     id: 'board_swap',
     type: 'board_swap',
@@ -244,16 +212,6 @@ export const ABILITIES: Record<AbilityType, Ability> = {
     cost: 150 * COST_FACTOR,
     cooldown: 60000,
     powerRating: 10,
-    category: 'ultra',
-  },
-  piece_thief: {
-    id: 'piece_thief',
-    type: 'piece_thief',
-    name: 'Piece Thief',
-    description: "Steal opponent's current piece, give them yours",
-    cost: 100 * COST_FACTOR,
-    cooldown: 30000,
-    powerRating: 9,
     category: 'ultra',
   },
   gravity_invert: {

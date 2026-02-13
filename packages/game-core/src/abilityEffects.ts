@@ -110,44 +110,57 @@ export function applyWeirdShapes(piece: Tetromino): Tetromino {
 }
 
 export function applyRandomSpawner(board: Board): Board {
-  // Add 1-3 random blocks to the board
+  // Add 1-3 random garbage blocks to EMPTY cells only
   const newGrid = board.grid.map(row => [...row]);
   const numBlocks = Math.floor(Math.random() * 3) + 1;
+  const types: CellValue[] = ['I', 'O', 'T', 'S', 'Z', 'L', 'J'];
 
-  for (let i = 0; i < numBlocks; i++) {
-    const x = Math.floor(Math.random() * board.width);
-    const y = Math.floor(Math.random() * (board.height - 5)) + 5; // Don't spawn at top
-
-    if (!newGrid[y][x]) {
-      const types: CellValue[] = ['I', 'O', 'T', 'S', 'Z', 'L', 'J'];
-      newGrid[y][x] = types[Math.floor(Math.random() * types.length)];
+  // Find all empty cells
+  const emptyCells: { x: number; y: number }[] = [];
+  for (let y = 5; y < board.height; y++) { // Don't spawn in top 5 rows
+    for (let x = 0; x < board.width; x++) {
+      if (!newGrid[y][x]) {
+        emptyCells.push({ x, y });
+      }
     }
+  }
+
+  // Randomly select and fill empty cells
+  for (let i = 0; i < numBlocks && emptyCells.length > 0; i++) {
+    const randomIndex = Math.floor(Math.random() * emptyCells.length);
+    const { x, y } = emptyCells[randomIndex];
+    newGrid[y][x] = types[Math.floor(Math.random() * types.length)];
+    emptyCells.splice(randomIndex, 1); // Remove from available cells
   }
 
   return { ...board, grid: newGrid };
 }
 
 export function applyEarthquake(board: Board): Board {
-  // Every row randomly shifts 1-2 cells left or right
+  // Create random holes by removing 15-25 blocks from the board
   const newGrid = board.grid.map(row => [...row]);
 
+  // Find all filled cells
+  const filledCells: { x: number; y: number }[] = [];
   for (let y = 0; y < board.height; y++) {
-    const shift = Math.floor(Math.random() * 5) - 2; // -2 to 2 shift
-    if (shift === 0) continue;
-
-    const newRow: CellValue[] = Array(board.width).fill(null);
-
     for (let x = 0; x < board.width; x++) {
-      const newX = x + shift;
-      if (newX >= 0 && newX < board.width && board.grid[y][x]) {
-        newRow[newX] = board.grid[y][x];
+      if (newGrid[y][x]) {
+        filledCells.push({ x, y });
       }
     }
-
-    newGrid[y] = newRow;
   }
 
-  return { ...board, grid: newGrid };
+  // Remove 15-25 random blocks to create holes
+  const numHoles = Math.floor(Math.random() * 11) + 15; // 15-25 holes
+  for (let i = 0; i < numHoles && filledCells.length > 0; i++) {
+    const randomIndex = Math.floor(Math.random() * filledCells.length);
+    const { x, y } = filledCells[randomIndex];
+    newGrid[y][x] = null;
+    filledCells.splice(randomIndex, 1);
+  }
+
+  // Apply gravity so blocks fall into the holes
+  return applyGravity({ ...board, grid: newGrid });
 }
 
 export function applyColumnBomb(board: Board): Board {
