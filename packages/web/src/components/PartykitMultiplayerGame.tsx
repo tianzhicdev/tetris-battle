@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { useGameStore } from '../stores/gameStore';
 import { useAbilityStore } from '../stores/abilityStore';
 import { TetrisRenderer } from '../renderer/TetrisRenderer';
@@ -16,6 +17,8 @@ import type { Ability } from '@tetris-battle/game-core';
 import type { Theme } from '../themes';
 import { audioManager } from '../services/audioManager';
 import * as IoIcons from 'react-icons/io5';
+import { haptics } from '../utils/haptics';
+import { buttonVariants, springs, scoreVariants } from '../utils/animations';
 
 // Icon component mapping
 const iconMap: Record<string, React.ComponentType<{ style?: React.CSSProperties; className?: string }>> = {
@@ -536,11 +539,48 @@ export function MultiplayerGame({ roomId, playerId, opponentId, theme, onExit }:
               fontSize: 'clamp(9px, 2.2vw, 11px)',
               textAlign: 'center',
               fontWeight: '700',
+              fontVariantNumeric: 'tabular-nums',
             }}
           >
-            <span style={{ marginRight: '8px', color: '#00d4ff', textShadow: '0 0 8px rgba(0, 212, 255, 0.8)' }}>{gameState.score}</span>
-            <span style={{ marginRight: '8px', color: '#c942ff', textShadow: '0 0 8px rgba(201, 66, 255, 0.8)' }}>{gameState.stars}</span>
-            <span style={{ color: '#00ff88', textShadow: '0 0 8px rgba(0, 255, 136, 0.8)' }}>{gameState.linesCleared}</span>
+            <AnimatePresence mode="popLayout">
+              <motion.span
+                key={`score-${gameState.score}`}
+                variants={scoreVariants}
+                initial="initial"
+                animate="animate"
+                exit="exit"
+                transition={springs.gentle}
+                style={{ marginRight: '8px', color: '#00d4ff', textShadow: '0 0 8px rgba(0, 212, 255, 0.8)', display: 'inline-block' }}
+              >
+                {gameState.score}
+              </motion.span>
+            </AnimatePresence>
+            <AnimatePresence mode="popLayout">
+              <motion.span
+                key={`stars-${gameState.stars}`}
+                variants={scoreVariants}
+                initial="initial"
+                animate="animate"
+                exit="exit"
+                transition={springs.gentle}
+                style={{ marginRight: '8px', color: '#c942ff', textShadow: '0 0 8px rgba(201, 66, 255, 0.8)', display: 'inline-block' }}
+              >
+                {gameState.stars}
+              </motion.span>
+            </AnimatePresence>
+            <AnimatePresence mode="popLayout">
+              <motion.span
+                key={`lines-${gameState.linesCleared}`}
+                variants={scoreVariants}
+                initial="initial"
+                animate="animate"
+                exit="exit"
+                transition={springs.gentle}
+                style={{ color: '#00ff88', textShadow: '0 0 8px rgba(0, 255, 136, 0.8)', display: 'inline-block' }}
+              >
+                {gameState.linesCleared}
+              </motion.span>
+            </AnimatePresence>
           </div>
         </div>
 
@@ -559,8 +599,12 @@ export function MultiplayerGame({ roomId, playerId, opponentId, theme, onExit }:
             justifyContent: 'center',
           }}>
             {/* Settings Button */}
-            <button
+            <motion.button
+              whileTap="tap"
+              variants={buttonVariants}
+              transition={springs.snappy}
               onClick={() => {
+                haptics.medium();
                 if (confirm('Leave game?')) onExit();
               }}
               style={{
@@ -581,11 +625,17 @@ export function MultiplayerGame({ roomId, playerId, opponentId, theme, onExit }:
               }}
             >
               ⚙
-            </button>
+            </motion.button>
 
             {/* Ability Info Button */}
-            <button
-              onClick={() => setShowAbilityInfo(true)}
+            <motion.button
+              whileTap="tap"
+              variants={buttonVariants}
+              transition={springs.snappy}
+              onClick={() => {
+                haptics.light();
+                setShowAbilityInfo(true);
+              }}
               style={{
                 padding: '6px',
                 background: 'linear-gradient(135deg, rgba(0, 212, 255, 0.4) 0%, rgba(201, 66, 255, 0.4) 100%)',
@@ -605,7 +655,7 @@ export function MultiplayerGame({ roomId, playerId, opponentId, theme, onExit }:
               }}
             >
               ?
-            </button>
+            </motion.button>
           </div>
 
           {/* Opponent's Board */}
@@ -681,10 +731,17 @@ export function MultiplayerGame({ roomId, playerId, opponentId, theme, onExit }:
                 : '#c942ff';
 
               return (
-                <button
+                <motion.button
                   key={index}
+                  initial="initial"
+                  animate="animate"
+                  whileHover={isAffordable ? "hover" : undefined}
+                  whileTap={isAffordable ? "tap" : undefined}
+                  variants={buttonVariants}
+                  transition={springs.bouncy}
                   onClick={() => {
                     if (isAffordable) {
+                      haptics.medium();
                       handleAbilityActivate(ability);
                     }
                   }}
@@ -710,7 +767,6 @@ export function MultiplayerGame({ roomId, playerId, opponentId, theme, onExit }:
                     boxShadow: isAffordable
                       ? `0 0 15px ${glowColor}, inset 0 0 8px rgba(255,255,255,0.15)`
                       : 'none',
-                    transition: 'all 0.2s ease',
                     position: 'relative',
                     overflow: 'hidden',
                   }}
@@ -742,7 +798,7 @@ export function MultiplayerGame({ roomId, playerId, opponentId, theme, onExit }:
                   }}>
                     {ability.cost}
                   </div>
-                </button>
+                </motion.button>
               );
             })}
           </div>
@@ -763,9 +819,13 @@ export function MultiplayerGame({ roomId, playerId, opponentId, theme, onExit }:
         }}
       >
         {/* Move Left */}
-        <button
+        <motion.button
+          whileTap="tap"
+          variants={buttonVariants}
+          transition={springs.snappy}
           onPointerDown={(e) => {
             e.preventDefault();
+            haptics.light();
             audioManager.playSfx('piece_move', 0.3);
             effectManager.isEffectActive('reverse_controls') ? movePieceRight() : movePieceLeft();
           }}
@@ -789,11 +849,15 @@ export function MultiplayerGame({ roomId, playerId, opponentId, theme, onExit }:
           <svg width="clamp(20px, 5vw, 32px)" height="clamp(20px, 5vw, 32px)" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
             <polyline points="15 18 9 12 15 6" />
           </svg>
-        </button>
+        </motion.button>
         {/* Hard Drop */}
-        <button
+        <motion.button
+          whileTap="tap"
+          variants={buttonVariants}
+          transition={springs.snappy}
           onPointerDown={(e) => {
             e.preventDefault();
+            haptics.medium();
             audioManager.playSfx('hard_drop');
             hardDrop();
           }}
@@ -818,11 +882,15 @@ export function MultiplayerGame({ roomId, playerId, opponentId, theme, onExit }:
             <polyline points="7 13 12 18 17 13" />
             <polyline points="7 6 12 11 17 6" />
           </svg>
-        </button>
+        </motion.button>
         {/* Soft Drop */}
-        <button
+        <motion.button
+          whileTap="tap"
+          variants={buttonVariants}
+          transition={springs.snappy}
           onPointerDown={(e) => {
             e.preventDefault();
+            haptics.light();
             audioManager.playSfx('soft_drop', 0.4);
             movePieceDown();
           }}
@@ -846,11 +914,15 @@ export function MultiplayerGame({ roomId, playerId, opponentId, theme, onExit }:
           <svg width="clamp(20px, 5vw, 32px)" height="clamp(20px, 5vw, 32px)" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
             <polyline points="6 9 12 15 18 9" />
           </svg>
-        </button>
+        </motion.button>
         {/* Rotate */}
-        <button
+        <motion.button
+          whileTap="tap"
+          variants={buttonVariants}
+          transition={springs.snappy}
           onPointerDown={(e) => {
             e.preventDefault();
+            haptics.light();
             audioManager.playSfx('piece_rotate', 0.5);
             if (!effectManager.isEffectActive('rotation_lock')) {
               rotatePieceClockwise();
@@ -877,11 +949,15 @@ export function MultiplayerGame({ roomId, playerId, opponentId, theme, onExit }:
             <path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8" />
             <polyline points="21 3 21 8 16 8" />
           </svg>
-        </button>
+        </motion.button>
         {/* Move Right */}
-        <button
+        <motion.button
+          whileTap="tap"
+          variants={buttonVariants}
+          transition={springs.snappy}
           onPointerDown={(e) => {
             e.preventDefault();
+            haptics.light();
             audioManager.playSfx('piece_move', 0.3);
             effectManager.isEffectActive('reverse_controls') ? movePieceLeft() : movePieceRight();
           }}
@@ -905,7 +981,7 @@ export function MultiplayerGame({ roomId, playerId, opponentId, theme, onExit }:
           <svg width="clamp(20px, 5vw, 32px)" height="clamp(20px, 5vw, 32px)" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
             <polyline points="9 18 15 12 9 6" />
           </svg>
-        </button>
+        </motion.button>
       </div>
 
       {!isConnected && (
