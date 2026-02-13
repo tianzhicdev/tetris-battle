@@ -511,19 +511,17 @@ export function MultiplayerGame({ roomId, playerId, opponentId, theme, onExit }:
             style={{
               marginTop: '4px',
               padding: '6px 8px',
-              background: 'linear-gradient(135deg, rgba(0, 212, 255, 0.15) 0%, rgba(201, 66, 255, 0.15) 100%)',
-              backdropFilter: 'blur(15px)',
-              border: '1px solid rgba(0, 212, 255, 0.3)',
+              background: 'transparent',
+              border: 'none',
               borderRadius: '8px',
               fontSize: 'clamp(9px, 2.2vw, 11px)',
               textAlign: 'center',
               fontWeight: '700',
-              boxShadow: '0 0 15px rgba(0, 212, 255, 0.2), inset 0 0 10px rgba(0, 212, 255, 0.05)',
             }}
           >
-            <span style={{ marginRight: '8px', color: '#00d4ff' }}>🎯 {gameState.score}</span>
-            <span style={{ marginRight: '8px', color: '#c942ff' }}>⭐ {gameState.stars}</span>
-            <span style={{ color: '#00ff88' }}>📊 {gameState.linesCleared}</span>
+            <span style={{ marginRight: '8px', color: '#00d4ff', textShadow: '0 0 8px rgba(0, 212, 255, 0.8)' }}>{gameState.score}</span>
+            <span style={{ marginRight: '8px', color: '#c942ff', textShadow: '0 0 8px rgba(201, 66, 255, 0.8)' }}>{gameState.stars}</span>
+            <span style={{ color: '#00ff88', textShadow: '0 0 8px rgba(0, 255, 136, 0.8)' }}>{gameState.linesCleared}</span>
           </div>
         </div>
 
@@ -596,11 +594,10 @@ export function MultiplayerGame({ roomId, playerId, opponentId, theme, onExit }:
             display: 'flex',
             flexDirection: 'column',
             alignItems: 'center',
-            background: 'linear-gradient(135deg, rgba(255, 0, 110, 0.12) 0%, rgba(255, 100, 0, 0.12) 100%)',
+            background: 'transparent',
             padding: 'clamp(4px, 1vw, 6px)',
             borderRadius: 'clamp(6px, 1.5vw, 10px)',
-            border: '1px solid rgba(255, 0, 110, 0.3)',
-            boxShadow: '0 0 10px rgba(255, 0, 110, 0.15)',
+            border: 'none',
           }}>
             <h3 style={{
               margin: '0 0 3px 0',
@@ -608,7 +605,7 @@ export function MultiplayerGame({ roomId, playerId, opponentId, theme, onExit }:
               fontWeight: '700',
               letterSpacing: '1px',
               color: '#ff006e',
-              textShadow: '0 0 5px rgba(255, 0, 110, 0.5)',
+              textShadow: '0 0 8px rgba(255, 0, 110, 0.8)',
             }}>OPPONENT</h3>
             <canvas
               ref={opponentCanvasRef}
@@ -628,27 +625,27 @@ export function MultiplayerGame({ roomId, playerId, opponentId, theme, onExit }:
                 style={{
                   marginTop: '3px',
                   padding: '3px 6px',
-                  background: 'rgba(0,0,0,0.5)',
+                  background: 'transparent',
                   borderRadius: '4px',
                   fontSize: 'clamp(6px, 1.5vw, 8px)',
                   textAlign: 'center',
                   fontWeight: '700',
-                  border: '1px solid rgba(255, 0, 110, 0.2)',
+                  border: 'none',
                 }}
               >
-                <div style={{ color: '#ff006e' }}>🎯 {opponentState.score}</div>
-                <div style={{ color: '#c942ff' }}>⭐ {opponentState.stars}</div>
+                <div style={{ color: '#ff006e', textShadow: '0 0 8px rgba(255, 0, 110, 0.8)' }}>{opponentState.score}</div>
+                <div style={{ color: '#c942ff', textShadow: '0 0 8px rgba(201, 66, 255, 0.8)' }}>{opponentState.stars}</div>
               </div>
             )}
           </div>
 
-          {/* Abilities Grid - 4 rows x 2 columns */}
+          {/* Abilities Grid - 4 rows x 2 columns - Compact mobile layout */}
           <div style={{
             flex: 1,
             display: 'grid',
             gridTemplateColumns: '1fr 1fr',
             gridTemplateRows: 'repeat(4, 1fr)',
-            gap: 'clamp(3px, 0.8vw, 6px)',
+            gap: 'clamp(2px, 0.5vw, 4px)',
             overflow: 'hidden',
             minHeight: 0,
           }}>
@@ -673,13 +670,14 @@ export function MultiplayerGame({ roomId, playerId, opponentId, theme, onExit }:
                     }
                   }}
                   disabled={!isAffordable}
+                  className="glass-ability"
                   style={{
-                    padding: 'clamp(3px, 0.8vw, 5px)',
+                    padding: 'clamp(2px, 0.5vw, 4px)',
                     background: isAffordable ? gradient : 'rgba(10,10,25,0.6)',
                     border: isAffordable
                       ? `1px solid ${borderColor}`
                       : '1px solid rgba(255,255,255,0.1)',
-                    borderRadius: 'clamp(4px, 1vw, 8px)',
+                    borderRadius: 'clamp(6px, 1.5vw, 10px)',
                     color: '#ffffff',
                     cursor: isAffordable ? 'pointer' : 'not-allowed',
                     opacity: isAffordable ? 1 : 0.4,
@@ -687,10 +685,11 @@ export function MultiplayerGame({ roomId, playerId, opponentId, theme, onExit }:
                     flexDirection: 'column',
                     alignItems: 'center',
                     justifyContent: 'center',
+                    gap: 'clamp(1px, 0.3vw, 2px)',
                     minHeight: 0,
                     minWidth: 0,
                     boxShadow: isAffordable
-                      ? `0 0 10px ${glowColor}, inset 0 0 5px rgba(255,255,255,0.1)`
+                      ? `0 0 15px ${glowColor}, inset 0 0 8px rgba(255,255,255,0.15)`
                       : 'none',
                     transition: 'all 0.2s ease',
                     position: 'relative',
@@ -702,23 +701,24 @@ export function MultiplayerGame({ roomId, playerId, opponentId, theme, onExit }:
                     src={ability.icon}
                     alt={ability.name}
                     style={{
-                      width: 'clamp(18px, 4.5vw, 24px)',
-                      height: 'clamp(18px, 4.5vw, 24px)',
+                      width: 'clamp(28px, 7vw, 40px)',
+                      height: 'clamp(28px, 7vw, 40px)',
                       objectFit: 'contain',
-                      filter: isAffordable ? `drop-shadow(0 0 4px ${glowColor})` : 'grayscale(100%) opacity(0.5)',
+                      filter: isAffordable ? `drop-shadow(0 0 6px ${glowColor})` : 'grayscale(100%) opacity(0.5)',
                     }}
                   />
                   <div style={{
-                    fontSize: 'clamp(7px, 1.8vw, 9px)',
-                    marginTop: '2px',
+                    fontSize: 'clamp(8px, 2vw, 11px)',
                     whiteSpace: 'nowrap',
-                    fontWeight: '700',
-                    background: 'rgba(0,0,0,0.4)',
-                    padding: '1px 3px',
-                    borderRadius: '3px',
-                    border: '1px solid rgba(255,255,255,0.1)',
+                    fontWeight: '800',
+                    background: 'transparent',
+                    padding: 'clamp(1px, 0.3vw, 2px) clamp(3px, 0.8vw, 5px)',
+                    borderRadius: 'clamp(3px, 0.8vw, 5px)',
+                    border: 'none',
+                    textShadow: '0 0 8px rgba(201, 66, 255, 0.8)',
+                    color: '#c942ff',
                   }}>
-                    {ability.cost}⭐
+                    {ability.cost}
                   </div>
                 </button>
               );
@@ -747,9 +747,12 @@ export function MultiplayerGame({ roomId, playerId, opponentId, theme, onExit }:
             audioManager.playSfx('piece_move', 0.3);
             effectManager.isEffectActive('reverse_controls') ? movePieceRight() : movePieceLeft();
           }}
+          className="glass-button"
           style={{
             flex: 1,
-            fontSize: 'clamp(18px, 5vw, 28px)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
             background: 'linear-gradient(135deg, #00d4ff 0%, #0080ff 100%)',
             color: '#ffffff',
             border: '2px solid rgba(0, 212, 255, 0.4)',
@@ -758,10 +761,12 @@ export function MultiplayerGame({ roomId, playerId, opponentId, theme, onExit }:
             touchAction: 'manipulation',
             minWidth: 0,
             boxShadow: '0 0 20px rgba(0, 212, 255, 0.5), inset 0 0 10px rgba(0, 212, 255, 0.2)',
-            fontWeight: 'bold',
+            backdropFilter: 'blur(8px)',
           }}
         >
-          ←
+          <svg width="clamp(20px, 5vw, 32px)" height="clamp(20px, 5vw, 32px)" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+            <polyline points="15 18 9 12 15 6" />
+          </svg>
         </button>
         {/* Hard Drop */}
         <button
@@ -770,9 +775,12 @@ export function MultiplayerGame({ roomId, playerId, opponentId, theme, onExit }:
             audioManager.playSfx('hard_drop');
             hardDrop();
           }}
+          className="glass-button"
           style={{
             flex: 1,
-            fontSize: 'clamp(18px, 5vw, 28px)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
             background: 'linear-gradient(135deg, #ff006e 0%, #ff4500 100%)',
             color: '#ffffff',
             border: '2px solid rgba(255, 0, 110, 0.4)',
@@ -781,10 +789,13 @@ export function MultiplayerGame({ roomId, playerId, opponentId, theme, onExit }:
             touchAction: 'manipulation',
             minWidth: 0,
             boxShadow: '0 0 20px rgba(255, 0, 110, 0.5), inset 0 0 10px rgba(255, 0, 110, 0.2)',
-            fontWeight: 'bold',
+            backdropFilter: 'blur(8px)',
           }}
         >
-          ⬇⬇
+          <svg width="clamp(20px, 5vw, 32px)" height="clamp(20px, 5vw, 32px)" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+            <polyline points="7 13 12 18 17 13" />
+            <polyline points="7 6 12 11 17 6" />
+          </svg>
         </button>
         {/* Soft Drop */}
         <button
@@ -793,9 +804,12 @@ export function MultiplayerGame({ roomId, playerId, opponentId, theme, onExit }:
             audioManager.playSfx('soft_drop', 0.4);
             movePieceDown();
           }}
+          className="glass-button"
           style={{
             flex: 1,
-            fontSize: 'clamp(18px, 5vw, 28px)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
             background: 'linear-gradient(135deg, #c942ff 0%, #8b5cf6 100%)',
             color: '#ffffff',
             border: '2px solid rgba(201, 66, 255, 0.4)',
@@ -804,10 +818,12 @@ export function MultiplayerGame({ roomId, playerId, opponentId, theme, onExit }:
             touchAction: 'manipulation',
             minWidth: 0,
             boxShadow: '0 0 20px rgba(201, 66, 255, 0.5), inset 0 0 10px rgba(201, 66, 255, 0.2)',
-            fontWeight: 'bold',
+            backdropFilter: 'blur(8px)',
           }}
         >
-          ↓
+          <svg width="clamp(20px, 5vw, 32px)" height="clamp(20px, 5vw, 32px)" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+            <polyline points="6 9 12 15 18 9" />
+          </svg>
         </button>
         {/* Rotate */}
         <button
@@ -818,9 +834,12 @@ export function MultiplayerGame({ roomId, playerId, opponentId, theme, onExit }:
               rotatePieceClockwise();
             }
           }}
+          className="glass-button"
           style={{
             flex: 1,
-            fontSize: 'clamp(18px, 5vw, 28px)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
             background: 'linear-gradient(135deg, #00ff88 0%, #00cc6a 100%)',
             color: '#ffffff',
             border: '2px solid rgba(0, 255, 136, 0.4)',
@@ -829,10 +848,13 @@ export function MultiplayerGame({ roomId, playerId, opponentId, theme, onExit }:
             touchAction: 'manipulation',
             minWidth: 0,
             boxShadow: '0 0 20px rgba(0, 255, 136, 0.5), inset 0 0 10px rgba(0, 255, 136, 0.2)',
-            fontWeight: 'bold',
+            backdropFilter: 'blur(8px)',
           }}
         >
-          ↻
+          <svg width="clamp(20px, 5vw, 32px)" height="clamp(20px, 5vw, 32px)" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8" />
+            <polyline points="21 3 21 8 16 8" />
+          </svg>
         </button>
         {/* Move Right */}
         <button
@@ -841,9 +863,12 @@ export function MultiplayerGame({ roomId, playerId, opponentId, theme, onExit }:
             audioManager.playSfx('piece_move', 0.3);
             effectManager.isEffectActive('reverse_controls') ? movePieceLeft() : movePieceRight();
           }}
+          className="glass-button"
           style={{
             flex: 1,
-            fontSize: 'clamp(18px, 5vw, 28px)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
             background: 'linear-gradient(135deg, #ffa500 0%, #ff6b00 100%)',
             color: '#ffffff',
             border: '2px solid rgba(255, 165, 0, 0.4)',
@@ -852,10 +877,12 @@ export function MultiplayerGame({ roomId, playerId, opponentId, theme, onExit }:
             touchAction: 'manipulation',
             minWidth: 0,
             boxShadow: '0 0 20px rgba(255, 165, 0, 0.5), inset 0 0 10px rgba(255, 165, 0, 0.2)',
-            fontWeight: 'bold',
+            backdropFilter: 'blur(8px)',
           }}
         >
-          →
+          <svg width="clamp(20px, 5vw, 32px)" height="clamp(20px, 5vw, 32px)" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+            <polyline points="9 18 15 12 9 6" />
+          </svg>
         </button>
       </div>
 

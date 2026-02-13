@@ -13,7 +13,8 @@
     "dev:core": "pnpm --filter game-core dev",
     "build:all": "pnpm -r build",
     "type-check": "pnpm -r type-check",
-    "generate-icons": "node scripts/generate-ability-icons.js"
+    "generate-icons": "node scripts/generate-ability-icons.js",
+    "test-icon-styles": "node scripts/test-icon-styles.js"
   },
   "engines": {
     "node": ">=18.0.0",

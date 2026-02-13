@@ -58,7 +58,7 @@ export function AbilityInfo({ onClose }: AbilityInfoProps) {
               color: 'rgba(255,255,255,0.8)',
               marginTop: '2px',
             }}>
-              Cost: {ability.cost}⭐ • Power: {ability.powerRating}/10
+              Cost: {ability.cost} • Power: {ability.powerRating}/10
             </div>
           </div>
         </div>
@@ -66,10 +66,10 @@ export function AbilityInfo({ onClose }: AbilityInfoProps) {
           fontSize: '14px',
           color: '#ffffff',
           lineHeight: '1.4',
-          background: 'rgba(0,0,0,0.3)',
+          background: 'transparent',
           padding: '10px',
           borderRadius: '8px',
-          border: '1px solid rgba(255,255,255,0.1)',
+          border: 'none',
         }}>
           {ability.description}
         </div>
@@ -159,7 +159,7 @@ export function AbilityInfo({ onClose }: AbilityInfoProps) {
             alignItems: 'center',
             gap: '10px',
           }}>
-            <span>⚡</span> BUFFS (Help You)
+            BUFFS (Help You)
           </h3>
           <div style={{
             display: 'grid',
@@ -182,7 +182,7 @@ export function AbilityInfo({ onClose }: AbilityInfoProps) {
             alignItems: 'center',
             gap: '10px',
           }}>
-            <span>💀</span> DEBUFFS (Attack Opponent)
+            DEBUFFS (Attack Opponent)
           </h3>
           <div style={{
             display: 'grid',
@@ -196,11 +196,11 @@ export function AbilityInfo({ onClose }: AbilityInfoProps) {
         {/* Tips Section */}
         <div style={{
           marginTop: '40px',
-          background: 'linear-gradient(135deg, rgba(0, 255, 136, 0.1) 0%, rgba(0, 212, 255, 0.1) 100%)',
-          border: '2px solid rgba(0, 255, 136, 0.3)',
+          background: 'transparent',
+          border: '1px solid rgba(0, 255, 136, 0.2)',
           borderRadius: '12px',
           padding: '20px',
-          boxShadow: '0 0 20px rgba(0, 255, 136, 0.2)',
+          boxShadow: 'none',
         }}>
           <h4 style={{
             fontSize: '18px',
@@ -209,7 +209,7 @@ export function AbilityInfo({ onClose }: AbilityInfoProps) {
             marginBottom: '12px',
             textShadow: '0 0 10px rgba(0, 255, 136, 0.5)',
           }}>
-            💡 PRO TIPS
+            PRO TIPS
           </h4>
           <ul style={{
             color: '#ffffff',
