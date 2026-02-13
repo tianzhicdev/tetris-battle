@@ -1,0 +1,8 @@
+{
+  "name": "tetris-battle",
+  "main": "src/server.ts",
+  "parties": {
+    "matchmaking": "src/matchmaking.ts",
+    "game": "src/game.ts"
+  }
+}

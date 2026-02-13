@@ -1,0 +1,7 @@
+{
+  "buildCommand": "pnpm --filter web build",
+  "outputDirectory": "packages/web/dist",
+  "installCommand": "pnpm install",
+  "framework": null,
+  "devCommand": "pnpm --filter web dev"
+}

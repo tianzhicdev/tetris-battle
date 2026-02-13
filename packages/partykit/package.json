@@ -1,0 +1,17 @@
+{
+  "name": "@tetris-battle/partykit",
+  "version": "1.0.0",
+  "type": "module",
+  "main": "./src/server.ts",
+  "scripts": {
+    "dev": "partykit dev",
+    "deploy": "partykit deploy"
+  },
+  "dependencies": {
+    "partykit": "^0.0.111"
+  },
+  "devDependencies": {
+    "@types/node": "^20.10.0",
+    "typescript": "^5.3.3"
+  }
+}
