@@ -36,6 +36,29 @@ export interface GameState {
   bombType: 'cross' | 'circle' | null; // Track if current piece is a bomb
 }
 
+// AI Player Metrics for adaptive difficulty
+export interface PlayerMetrics {
+  averagePPM: number;         // Pieces per minute
+  averageLockTime: number;    // Milliseconds to lock piece
+  averageBoardHeight: number; // Average filled rows
+  mistakeRate: number;        // 0-1, fraction of suboptimal moves
+  pieceCount: number;         // Total pieces locked
+  totalLockTime: number;      // Sum of all lock times (for rolling average)
+  lastUpdateTime: number;     // Timestamp of last metrics update
+}
+
+export function createInitialPlayerMetrics(): PlayerMetrics {
+  return {
+    averagePPM: 30,           // Default ~1 piece every 2 seconds
+    averageLockTime: 2000,    // Default 2 seconds
+    averageBoardHeight: 8,    // Default mid-board
+    mistakeRate: 0.3,         // Default moderate mistakes
+    pieceCount: 0,
+    totalLockTime: 0,
+    lastUpdateTime: Date.now(),
+  };
+}
+
 // Abilities
 export type AbilityType =
   // Buffs (6)

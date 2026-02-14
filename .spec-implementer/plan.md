@@ -1,449 +1,404 @@
-# Implementation Plan for Spec 001: AI Players
+# Implementation Plan for Spec 003: AI Balancing and Ability System
 
 ## Overview
 - Total steps: 12
-- Estimated new files: 9
-- Estimated modified files: 6
+- Estimated new files: 2
+- Estimated modified files: 5
+- Build command: `cd /Users/biubiu/projects/tetris-battle && pnpm build:all`
+- Test command: `cd /Users/biubiu/projects/tetris-battle/packages/game-core && pnpm test`
 
 ## Steps
 
-### Step 1: Setup Test Framework for game-core
+### Step 1: Add PlayerMetrics Type Definition
 
 **Files to modify:**
-- `packages/game-core/package.json` — Add vitest dependencies and test scripts
+- `packages/game-core/src/types.ts`
 
 **Implementation details:**
-Add to devDependencies:
-```json
-"vitest": "^1.0.0",
-"@types/node": "^20.0.0"
-```
+After the `GameState` interface (around line 37), add:
 
-Add to scripts:
-```json
-"test": "vitest",
-"test:watch": "vitest --watch",
-"test:ui": "vitest --ui"
-```
-
-**Files to create:**
-- `packages/game-core/vitest.config.ts` — Vitest configuration
-
-Content:
 ```typescript
-import { defineConfig } from 'vitest/config';
-
-export default defineConfig({
-  test: {
-    globals: true,
-    environment: 'node',
-  },
-});
-```
-
-**Test:**
-- Run: `cd packages/game-core && pnpm install`
-- Run: `pnpm test --run` (should report 0 tests)
-
-**Verify:**
-- `pnpm test --run` executes without errors
-- vitest command is available
-
----
-
-### Step 2: Implement AI Core Logic (aiPlayer.ts)
-
-**Files to create:**
-- `packages/game-core/src/ai/aiPlayer.ts` — Core AI decision-making logic
-
-**Implementation details:**
-
-Export these types:
-```typescript
-export interface AIMove {
-  type: 'left' | 'right' | 'rotate_cw' | 'rotate_ccw' | 'hard_drop';
+// AI Player Metrics for adaptive difficulty
+export interface PlayerMetrics {
+  averagePPM: number;         // Pieces per minute
+  averageLockTime: number;    // Milliseconds to lock piece
+  averageBoardHeight: number; // Average filled rows
+  mistakeRate: number;        // 0-1, fraction of suboptimal moves
+  pieceCount: number;         // Total pieces locked
+  totalLockTime: number;      // Sum of all lock times (for rolling average)
+  lastUpdateTime: number;     // Timestamp of last metrics update
 }
 
-export interface AIDecision {
-  moves: AIMove[];
-  targetPosition: Position;
-  targetRotation: number;
-  score: number;
-}
-
-export interface BoardEvaluation {
-  aggregateHeight: number;
-  completeLines: number;
-  holes: number;
-  bumpiness: number;
-}
-```
-
-Implement these functions:
-
-1. `evaluateBoard(board: Board): BoardEvaluation`
-   - Calculate aggregateHeight: sum of column heights
-   - Calculate completeLines: count full rows
-   - Calculate holes: count empty cells with filled cell above
-   - Calculate bumpiness: sum of abs(height[i] - height[i+1])
-
-2. `scoreBoard(eval: BoardEvaluation, weights: AIWeights): number`
-   - Return weighted sum: weights.aggregateHeight * eval.aggregateHeight + ...
-   - Use negative weights for bad metrics (holes, bumpiness, height)
-   - Use positive weight for completeLines
-
-3. `findBestPlacement(board: Board, piece: Tetromino, weights: AIWeights): AIDecision`
-   - Iterate all rotations (0-3)
-   - For each rotation, iterate all horizontal positions (-2 to board.width+2)
-   - For each candidate: use getHardDropPosition to find where it lands
-   - Simulate lockPiece + clearLines
-   - Score the resulting board
-   - Return the placement with best score
-
-4. `generateMoves(currentPiece: Tetromino, targetPosition: Position, targetRotation: number): AIMove[]`
-   - Calculate rotation difference → generate 'rotate_cw' moves
-   - Calculate horizontal difference → generate 'left'/'right' moves
-   - Add 'hard_drop' at end
-   - Return ordered array of moves
-
-Reference existing engine functions from research.md (isValidPosition, movePiece, rotatePiece, lockPiece, clearLines, getHardDropPosition).
-
-**Test:**
-- Create `packages/game-core/src/ai/__tests__/aiPlayer.test.ts`
-- Test cases:
-  1. evaluateBoard with known board state returns correct metrics
-  2. findBestPlacement on empty board with I-piece chooses flat placement
-  3. generateMoves produces correct move sequence
-- Run: `pnpm test -- aiPlayer`
-
-**Verify:**
-- All tests pass
-- Build succeeds: `pnpm build`
-
----
-
-### Step 3: Implement AI Difficulty Presets (aiDifficulty.ts)
-
-**Files to create:**
-- `packages/game-core/src/ai/aiDifficulty.ts` — Difficulty configurations
-
-**Implementation details:**
-
-Export types:
-```typescript
-export interface AIWeights {
-  aggregateHeight: number;
-  completeLines: number;
-  holes: number;
-  bumpiness: number;
-}
-
-export type AIDifficultyLevel = 'easy' | 'medium' | 'hard';
-
-export interface AIDifficultyConfig {
-  weights: AIWeights;
-  moveDelay: number; // milliseconds between moves
-  randomMoveChance: number; // 0-1 probability
-  useAbilities: 'never' | 'random' | 'strategic';
-  abilityThreshold: number; // stars needed to consider using ability
-}
-```
-
-Export const:
-```typescript
-export const AI_DIFFICULTIES: Record<AIDifficultyLevel, AIDifficultyConfig> = {
-  easy: {
-    weights: { aggregateHeight: -0.3, completeLines: 5, holes: -3, bumpiness: -0.2 },
-    moveDelay: 300,
-    randomMoveChance: 0.3,
-    useAbilities: 'never',
-    abilityThreshold: 999,
-  },
-  medium: {
-    weights: { aggregateHeight: -0.5, completeLines: 8, holes: -7, bumpiness: -0.4 },
-    moveDelay: 150,
-    randomMoveChance: 0.1,
-    useAbilities: 'random',
-    abilityThreshold: 200,
-  },
-  hard: {
-    weights: { aggregateHeight: -0.8, completeLines: 10, holes: -10, bumpiness: -0.6 },
-    moveDelay: 80,
-    randomMoveChance: 0,
-    useAbilities: 'strategic',
-    abilityThreshold: 150,
-  },
-};
-```
-
-Export helper:
-```typescript
-export function shouldMakeRandomMove(difficulty: AIDifficultyLevel): boolean {
-  return Math.random() < AI_DIFFICULTIES[difficulty].randomMoveChance;
-}
-```
-
-**Test:**
-- Create `packages/game-core/src/ai/__tests__/aiDifficulty.test.ts`
-- Test cases:
-  1. AI_DIFFICULTIES contains all three levels
-  2. Easy has higher randomMoveChance than hard
-  3. shouldMakeRandomMove over 1000 trials produces ~30% for easy (within ±5%)
-- Run: `pnpm test -- aiDifficulty`
-
-**Verify:**
-- Tests pass
-- Build succeeds
-
----
-
-### Step 4: Implement AI Persona Generation (aiPersona.ts)
-
-**Files to create:**
-- `packages/game-core/src/ai/aiPersona.ts` — Bot name/identity generation
-
-**Implementation details:**
-
-Export types:
-```typescript
-export interface AIPersona {
-  id: string; // "bot_<name>"
-  name: string;
-  difficulty: AIDifficultyLevel;
-  rank: number;
-  isBot: true; // Flag for internal use only
-}
-```
-
-Export const (array of 20+ bot names):
-```typescript
-const BOT_NAMES = [
-  'TetrisBot_42', 'BlockMaster', 'RowClearer', 'StackAttack',
-  'LineBuster', 'PiecePerfect', 'GridWarrior', 'ComboKing',
-  'TetrisNinja', 'StackSensei', 'DropZone', 'ClearMachine',
-  'BlockBuster', 'RowRanger', 'PiecePlayer', 'GridGuru',
-  'LineLeader', 'StackStriker', 'TetrisTrainer', 'ComboChamp',
-  'PuzzlePro', 'BlockBrigade', 'RowRuler', 'GridGlider'
-];
-```
-
-Export function:
-```typescript
-export function generateAIPersona(targetRank?: number): AIPersona {
-  const name = BOT_NAMES[Math.floor(Math.random() * BOT_NAMES.length)];
-
-  // If targetRank provided, match difficulty to it
-  // Otherwise pick random difficulty
-  let difficulty: AIDifficultyLevel;
-  let rank: number;
-
-  if (targetRank) {
-    // Match difficulty: easy (200-600), medium (700-1300), hard (1400-2200)
-    if (targetRank < 700) {
-      difficulty = 'easy';
-      rank = 200 + Math.floor(Math.random() * 400);
-    } else if (targetRank < 1400) {
-      difficulty = 'medium';
-      rank = 700 + Math.floor(Math.random() * 600);
-    } else {
-      difficulty = 'hard';
-      rank = 1400 + Math.floor(Math.random() * 800);
-    }
-    // Adjust toward target within range
-    rank = Math.floor((rank + targetRank) / 2);
-  } else {
-    // Random
-    difficulty = ['easy', 'medium', 'hard'][Math.floor(Math.random() * 3)] as AIDifficultyLevel;
-    rank = difficulty === 'easy' ? 200 + Math.floor(Math.random() * 400)
-         : difficulty === 'medium' ? 700 + Math.floor(Math.random() * 600)
-         : 1400 + Math.floor(Math.random() * 800);
-  }
-
+export function createInitialPlayerMetrics(): PlayerMetrics {
   return {
-    id: `bot_${name}_${Date.now() % 10000}`,
-    name,
-    difficulty,
-    rank,
-    isBot: true,
+    averagePPM: 30,           // Default ~1 piece every 2 seconds
+    averageLockTime: 2000,    // Default 2 seconds
+    averageBoardHeight: 8,    // Default mid-board
+    mistakeRate: 0.3,         // Default moderate mistakes
+    pieceCount: 0,
+    totalLockTime: 0,
+    lastUpdateTime: Date.now(),
   };
 }
 ```
 
 **Test:**
-- In `packages/game-core/src/ai/__tests__/aiPersona.test.ts`:
-  1. Generate 100 personas without targetRank → all have unique IDs, ranks in appropriate ranges
-  2. Generate persona with targetRank=1000 → difficulty is medium, rank is ±300 from 1000
-  3. All personas have isBot: true
-- Run: `pnpm test -- aiPersona`
+- Build game-core: `cd packages/game-core && pnpm build`
+- Verify no TypeScript errors
 
 **Verify:**
-- Tests pass
-- Build succeeds
+- Type definition exports correctly
+- `createInitialPlayerMetrics()` returns valid object
 
 ---
 
-### Step 5: Create AI Module Barrel Export
+### Step 2: Create Adaptive AI Logic
 
 **Files to create:**
-- `packages/game-core/src/ai/index.ts` — Barrel export for AI module
+- `packages/game-core/src/ai/adaptiveAI.ts`
 
 **Implementation details:**
+Create new file with the following content (follow the pattern from aiPlayer.ts):
+
 ```typescript
-export * from './aiPlayer';
-export * from './aiDifficulty';
-export * from './aiPersona';
-```
+import type { Board, Tetromino, Position, PlayerMetrics } from '../types';
+import type { AIMove, AIDecision, AIWeights } from './aiPlayer';
+import {
+  findBestPlacement,
+  generateMoves,
+  evaluateBoard,
+} from './aiPlayer';
+import { isValidPosition, getHardDropPosition } from '../engine';
 
-**Files to modify:**
-- `packages/game-core/src/index.ts` (line 8, after existing exports)
+/**
+ * Adaptive AI that mirrors player skill level
+ */
+export class AdaptiveAI {
+  playerMetrics: PlayerMetrics;
+  baseMistakeRate: number = 0.35; // 35% base mistake rate
 
-Add:
-```typescript
-export * from './ai';
-```
+  constructor(playerMetrics: PlayerMetrics) {
+    this.playerMetrics = playerMetrics;
+  }
 
-**Test:**
-- In `packages/game-core/src/ai/__tests__/aiPlayer.test.ts`, add import test:
-  ```typescript
-  import { findBestPlacement, AI_DIFFICULTIES, generateAIPersona } from '@tetris-battle/game-core';
-  ```
-  Verify all exports are accessible from main package
+  /**
+   * Update player metrics for adaptation
+   */
+  updatePlayerMetrics(metrics: PlayerMetrics): void {
+    this.playerMetrics = metrics;
+  }
 
-**Verify:**
-- Build succeeds
-- No TypeScript errors
+  /**
+   * Calculate move delay to mirror player speed (±20% variance)
+   */
+  decideMoveDelay(): number {
+    const baseDelay = Math.max(100, this.playerMetrics.averageLockTime);
+    const variance = baseDelay * 0.2;
+    const delay = baseDelay + (Math.random() * variance * 2 - variance);
 
----
+    // Make AI slightly faster (10% advantage) to compensate for perfect execution
+    return Math.max(80, delay * 0.9);
+  }
 
-### Step 6: Modify Matchmaking Server for AI Fallback
+  /**
+   * Decide if AI should make an intentional mistake
+   */
+  shouldMakeMistake(): boolean {
+    // Combine base mistake rate with player's mistake rate
+    const totalRate = Math.min(0.8, this.baseMistakeRate + this.playerMetrics.mistakeRate);
+    return Math.random() < totalRate;
+  }
 
-**Files to modify:**
-- `packages/partykit/src/matchmaking.ts`
+  /**
+   * Find a reasonable (non-optimal) move
+   */
+  findReasonableMove(board: Board, piece: Tetromino): AIDecision {
+    // Use weaker weights than optimal
+    const reasonableWeights: AIWeights = {
+      aggregateHeight: -0.3,  // Don't care as much about height
+      completeLines: 6,       // Still prioritize line clears
+      holes: -4,              // Avoid holes but not obsessively
+      bumpiness: -0.2,        // Don't care much about smoothness
+    };
 
-**Implementation details:**
+    return findBestPlacement(board, piece, reasonableWeights);
+  }
 
-1. Modify `QueuedPlayer` interface (line 3):
-```typescript
-interface QueuedPlayer {
-  id: string;
-  connectionId: string;
-  joinedAt: number;
-  rank?: number; // ← Add this (already exists per research)
+  /**
+   * Make an intentional mistake
+   */
+  makeIntentionalMistake(board: Board, piece: Tetromino): AIDecision {
+    const mistakeType = Math.random();
+
+    if (mistakeType < 0.4) {
+      // Random placement (40% of mistakes)
+      return this.randomPlacement(board, piece);
+    } else if (mistakeType < 0.7) {
+      // Off-by-one error (30% of mistakes)
+      return this.offByOnePlacement(board, piece);
+    } else {
+      // Skip rotation (30% of mistakes)
+      return this.noRotationPlacement(board, piece);
+    }
+  }
+
+  private randomPlacement(board: Board, piece: Tetromino): AIDecision {
+    // Place piece at a random valid column
+    const validColumns: number[] = [];
+
+    for (let x = -2; x < board.width + 2; x++) {
+      const movedPiece = { ...piece, position: { x, y: piece.position.y } };
+      if (isValidPosition(board, movedPiece)) {
+        validColumns.push(x);
+      }
+    }
+
+    if (validColumns.length === 0) {
+      return this.findReasonableMove(board, piece);
+    }
+
+    const randomX = validColumns[Math.floor(Math.random() * validColumns.length)];
+    const movedPiece = { ...piece, position: { x: randomX, y: piece.position.y } };
+    const finalPosition = getHardDropPosition(board, movedPiece);
+
+    return {
+      moves: generateMoves(piece, finalPosition, piece.rotation),
+      targetPosition: finalPosition,
+      targetRotation: piece.rotation,
+      score: -1000,
+    };
+  }
+
+  private offByOnePlacement(board: Board, piece: Tetromino): AIDecision {
+    // Find best placement, then shift it 1 column left or right
+    const bestDecision = this.findReasonableMove(board, piece);
+    const offset = Math.random() < 0.5 ? -1 : 1;
+    const newX = bestDecision.targetPosition.x + offset;
+
+    // Validate the offset position
+    const offsetPiece = { ...piece, position: { x: newX, y: piece.position.y }, rotation: bestDecision.targetRotation };
+
+    for (let r = 0; r < bestDecision.targetRotation; r++) {
+      // Apply rotations (simplified - just use the rotation count)
+    }
+
+    if (isValidPosition(board, { ...offsetPiece, position: { x: newX, y: offsetPiece.position.y } })) {
+      const finalPosition = getHardDropPosition(board, { ...offsetPiece, position: { x: newX, y: offsetPiece.position.y } });
+      return {
+        moves: generateMoves(piece, finalPosition, bestDecision.targetRotation),
+        targetPosition: finalPosition,
+        targetRotation: bestDecision.targetRotation,
+        score: -500,
+      };
+    }
+
+    // If offset invalid, fall back to best move
+    return bestDecision;
+  }
+
+  private noRotationPlacement(board: Board, piece: Tetromino): AIDecision {
+    // Use piece without rotation
+    const noRotationWeights: AIWeights = {
+      aggregateHeight: -0.3,
+      completeLines: 6,
+      holes: -4,
+      bumpiness: -0.2,
+    };
+
+    // Only try rotation 0
+    let bestScore = -Infinity;
+    let bestPlacement: AIDecision | null = null;
+
+    for (let x = -2; x < board.width + 2; x++) {
+      const movedPiece = { ...piece, position: { x, y: piece.position.y }, rotation: 0 };
+
+      if (!isValidPosition(board, movedPiece)) {
+        continue;
+      }
+
+      const finalPosition = getHardDropPosition(board, movedPiece);
+      const evaluation = evaluateBoard(board);
+      const score = evaluation.completeLines * noRotationWeights.completeLines;
+
+      if (score > bestScore) {
+        bestScore = score;
+        bestPlacement = {
+          moves: generateMoves(piece, finalPosition, 0),
+          targetPosition: finalPosition,
+          targetRotation: 0,
+          score,
+        };
+      }
+    }
+
+    return bestPlacement || this.findReasonableMove(board, piece);
+  }
+
+  /**
+   * Main decision function - decides move quality based on metrics
+   */
+  findMove(board: Board, piece: Tetromino): AIDecision {
+    if (this.shouldMakeMistake()) {
+      return this.makeIntentionalMistake(board, piece);
+    }
+    return this.findReasonableMove(board, piece);
+  }
 }
 ```
 
-2. In `handleJoinQueue` method (line 29), store player rank if available:
+**Test:**
+- Build: `cd packages/game-core && pnpm build`
+- No test file yet (will add in next step)
+
+**Verify:**
+- TypeScript compiles
+- AdaptiveAI class exports correctly
+
+---
+
+### Step 3: Add Tests for Adaptive AI
+
+**Files to create:**
+- `packages/game-core/src/ai/__tests__/adaptiveAI.test.ts`
+
+**Implementation details:**
+Follow the pattern from `aiPlayer.test.ts`:
+
 ```typescript
-this.queue.push({
-  id: playerId,
-  connectionId: conn.id,
-  joinedAt: Date.now(),
-  rank: data.rank, // ← Add this
+import { describe, it, expect } from 'vitest';
+import { AdaptiveAI } from '../adaptiveAI';
+import { createInitialPlayerMetrics } from '../../types';
+import { createTetromino } from '../../tetrominos';
+import { createBoard } from '../../engine';
+
+describe('AdaptiveAI', () => {
+  it('should calculate move delay based on player metrics', () => {
+    const metrics = createInitialPlayerMetrics();
+    metrics.averageLockTime = 2000; // 2 seconds
+
+    const ai = new AdaptiveAI(metrics);
+    const delay = ai.decideMoveDelay();
+
+    // Should be within ±20% of base delay (2000ms), then reduced by 10%
+    // So: 2000 * 0.9 = 1800, with variance of ±360
+    expect(delay).toBeGreaterThanOrEqual(1440);
+    expect(delay).toBeLessThanOrEqual(2160);
+  });
+
+  it('should make mistakes based on player mistake rate', () => {
+    const metrics = createInitialPlayerMetrics();
+    metrics.mistakeRate = 0.5; // 50% player mistakes
+
+    const ai = new AdaptiveAI(metrics);
+
+    // Test 100 decisions, expect ~85% mistakes (35% base + 50% player)
+    let mistakeCount = 0;
+    for (let i = 0; i < 100; i++) {
+      if (ai.shouldMakeMistake()) {
+        mistakeCount++;
+      }
+    }
+
+    // Should be around 80-90 mistakes (allowing for randomness)
+    expect(mistakeCount).toBeGreaterThanOrEqual(70);
+    expect(mistakeCount).toBeLessThanOrEqual(95);
+  });
+
+  it('should find reasonable moves (not optimal)', () => {
+    const board = createBoard(10, 20);
+    const piece = createTetromino('I', 10);
+    const metrics = createInitialPlayerMetrics();
+
+    const ai = new AdaptiveAI(metrics);
+    const decision = ai.findReasonableMove(board, piece);
+
+    expect(decision).toBeDefined();
+    expect(decision.moves).toHaveLength(1); // Just hard drop on empty board
+    expect(decision.targetPosition).toBeDefined();
+  });
+
+  it('should make random placement mistakes', () => {
+    const board = createBoard(10, 20);
+    const piece = createTetromino('T', 10);
+    const metrics = createInitialPlayerMetrics();
+
+    const ai = new AdaptiveAI(metrics);
+    const decision = ai.makeIntentionalMistake(board, piece);
+
+    expect(decision).toBeDefined();
+    expect(decision.score).toBeLessThan(0); // Mistakes have negative score
+  });
 });
 ```
 
-3. Add new method `checkAIFallback` after `tryMatch` (line 90):
-```typescript
-checkAIFallback() {
-  const now = Date.now();
-  const AI_FALLBACK_TIMEOUT = 10000; // 10 seconds
-
-  for (const player of this.queue) {
-    if (now - player.joinedAt >= AI_FALLBACK_TIMEOUT) {
-      // Remove from queue
-      this.queue = this.queue.filter(p => p.id !== player.id);
-
-      // Generate AI opponent
-      const aiPersona = generateAIPersona(player.rank);
-      const roomId = `game_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-
-      console.log(`AI fallback: matching ${player.id} vs ${aiPersona.id}`);
-
-      // Send match_found with AI flag
-      const conn = [...this.room.getConnections()].find(c => c.id === player.connectionId);
-      if (conn) {
-        conn.send(JSON.stringify({
-          type: 'match_found',
-          roomId,
-          player1: player.id,
-          player2: aiPersona.id,
-          aiOpponent: aiPersona, // ← Include AI persona data
-        }));
-      }
-
-      break; // Process one at a time
-    }
-  }
-}
-```
-
-4. Import at top of file (line 1):
-```typescript
-import { generateAIPersona } from '@tetris-battle/game-core';
-```
-
-5. Modify `tryMatch` to call `checkAIFallback` (line 59):
-```typescript
-tryMatch() {
-  // Need at least 2 players
-  if (this.queue.length < 2) {
-    // Check for AI fallback
-    this.checkAIFallback();
-    return;
-  }
-
-  // existing matching logic...
-}
-```
-
-6. Add interval to periodically check AI fallback in constructor (line 13):
-```typescript
-constructor(readonly room: Party.Room) {
-  // Check for AI fallback every 2 seconds
-  setInterval(() => this.checkAIFallback(), 2000);
-}
-```
-
 **Test:**
-- Manual test: Start partykit dev server, connect one client, wait 11 seconds
-- Verify client receives match_found with aiOpponent field
+- Run: `cd packages/game-core && pnpm test -- adaptiveAI`
+- All 4 tests should pass
 
 **Verify:**
-- Partykit server builds without errors
-- No TypeScript errors
-- Console logs show "AI fallback" message after 10s
+- Tests pass
+- Coverage for key functions
 
 ---
 
-### Step 7: Implement AI Game Loop in Game Room Server
+### Step 4: Export Adaptive AI from game-core
+
+**Files to modify:**
+- `packages/game-core/src/ai/index.ts`
+- `packages/game-core/src/index.ts`
+
+**Implementation details:**
+
+In `packages/game-core/src/ai/index.ts`, add:
+```typescript
+export { AdaptiveAI } from './adaptiveAI';
+```
+
+In `packages/game-core/src/index.ts`, add to existing exports:
+```typescript
+export { AdaptiveAI } from './ai/adaptiveAI';
+export { createInitialPlayerMetrics } from './types';
+export type { PlayerMetrics } from './types';
+```
+
+**Test:**
+- Build all: `cd /Users/biubiu/projects/tetris-battle && pnpm build:all`
+
+**Verify:**
+- No build errors
+- Exports available in web package
+
+---
+
+### Step 5: Add Player Metrics Tracking to Game Server
 
 **Files to modify:**
 - `packages/partykit/src/game.ts`
 
 **Implementation details:**
 
-1. Import AI modules at top (line 1):
+1. At the top, import new types (around line 1-19):
 ```typescript
 import {
-  createInitialGameState,
-  movePiece,
-  rotatePiece,
-  lockPiece,
-  clearLines,
-  isValidPosition,
-  getHardDropPosition,
-  createTetromino,
-  getRandomTetromino,
-  findBestPlacement,
-  AI_DIFFICULTIES,
-  type AIPersona,
-  type GameState as CoreGameState,
-  type Tetromino,
-  type Board,
+  // ... existing imports
+  createInitialPlayerMetrics,
+  AdaptiveAI,
+  type PlayerMetrics,
 } from '@tetris-battle/game-core';
 ```
 
-2. Add fields to `GameRoomServer` class (line 18):
+2. Update `PlayerState` interface (around line 30-34):
+```typescript
+interface PlayerState {
+  playerId: string;
+  connectionId: string;
+  gameState: GameState | null;
+  metrics: PlayerMetrics;        // NEW
+  lastPieceLockTime: number;     // NEW
+}
+```
+
+3. In `GameRoomServer` class, add fields (around line 42-47):
 ```typescript
 export default class GameRoomServer implements Party.Server {
   players: Map<string, PlayerState> = new Map();
@@ -456,55 +411,356 @@ export default class GameRoomServer implements Party.Server {
   aiInterval: ReturnType<typeof setInterval> | null = null;
   aiMoveQueue: AIMove[] = [];
   aiLastMoveTime: number = 0;
+  adaptiveAI: AdaptiveAI | null = null;  // NEW
+  aiAbilityLoadout: string[] = [];       // NEW - AI's available abilities
+  aiLastAbilityUse: number = 0;          // NEW - timestamp of last ability
 ```
 
-3. Modify `handleJoinGame` to detect AI match (line 58):
+4. In `handleJoinGame` (around line 83-88), update player initialization:
 ```typescript
-handleJoinGame(playerId: string, conn: Party.Connection, aiOpponent?: AIPersona) {
-  this.players.set(playerId, {
-    playerId,
-    connectionId: conn.id,
-    gameState: null,
-  });
+this.players.set(playerId, {
+  playerId,
+  connectionId: conn.id,
+  gameState: null,
+  metrics: createInitialPlayerMetrics(),  // NEW
+  lastPieceLockTime: Date.now(),          // NEW
+});
+```
 
-  // If AI opponent provided, set it up
-  if (aiOpponent) {
-    this.aiPlayer = aiOpponent;
-    this.players.set(aiOpponent.id, {
-      playerId: aiOpponent.id,
-      connectionId: 'ai', // Fake connection ID
-      gameState: null,
-    });
-  }
+5. In `startAIGameLoop` (around line 129-141), initialize AdaptiveAI:
+```typescript
+startAIGameLoop() {
+  if (!this.aiPlayer) return;
 
-  console.log(`Player ${playerId} joined. Total players: ${this.players.size}`);
+  // Get human player for metrics
+  const humanPlayer = Array.from(this.players.values()).find(p => p.playerId !== this.aiPlayer!.id);
+  if (!humanPlayer) return;
 
-  // If we have 2 players, start game
-  if (this.players.size === 2 && this.roomStatus === 'waiting') {
-    this.roomStatus = 'playing';
+  // Initialize adaptive AI with player metrics
+  this.adaptiveAI = new AdaptiveAI(humanPlayer.metrics);
 
-    this.broadcast({
-      type: 'game_start',
-      players: Array.from(this.players.keys()),
-    });
+  // Initialize AI game state
+  this.aiGameState = createInitialGameState();
+  // ... rest of existing code
+```
 
-    // Start AI game loop if AI match
-    if (this.aiPlayer) {
-      this.startAIGameLoop();
+6. In the AI game loop (around line 150-153), use adaptive move delay:
+```typescript
+const now = Date.now();
+
+// Use adaptive move delay
+const moveDelay = this.adaptiveAI ? this.adaptiveAI.decideMoveDelay() : 300;
+
+if (now - this.aiLastMoveTime < moveDelay) {
+  return;
+}
+```
+
+7. In AI decision logic (around line 155-163), use adaptive AI:
+```typescript
+// If no moves queued, decide next placement
+if (this.aiMoveQueue.length === 0 && this.adaptiveAI) {
+  const decision = this.adaptiveAI.findMove(
+    this.aiGameState.board,
+    this.aiGameState.currentPiece
+  );
+  this.aiMoveQueue = decision.moves;
+}
+```
+
+**Test:**
+- Build partykit: `cd packages/partykit && pnpm build`
+
+**Verify:**
+- No TypeScript errors
+- Server compiles successfully
+
+---
+
+### Step 6: Update Player Metrics on Game State Updates
+
+**Files to modify:**
+- `packages/partykit/src/game.ts`
+
+**Implementation details:**
+
+In `handleGameStateUpdate` (around line 241-258), add metrics tracking:
+
+```typescript
+handleGameStateUpdate(playerId: string, state: GameState, sender: Party.Connection) {
+  const player = this.players.get(playerId);
+  if (!player) return;
+
+  const previousState = player.gameState;
+  player.gameState = state;
+
+  // Update player metrics if piece was locked (new piece spawned)
+  if (previousState && previousState.currentPiece && state.currentPiece) {
+    const pieceLocked = (
+      previousState.currentPiece.position.y !== state.currentPiece.position.y ||
+      previousState.currentPiece.type !== state.currentPiece.type
+    );
+
+    if (pieceLocked) {
+      const now = Date.now();
+      const lockTime = now - player.lastPieceLockTime;
+      player.lastPieceLockTime = now;
+
+      // Update metrics (rolling average)
+      const metrics = player.metrics;
+      metrics.pieceCount++;
+      metrics.totalLockTime += lockTime;
+      metrics.averageLockTime = metrics.totalLockTime / metrics.pieceCount;
+
+      // Calculate PPM (pieces per minute)
+      const elapsedMinutes = (now - metrics.lastUpdateTime) / 60000;
+      if (elapsedMinutes > 0) {
+        metrics.averagePPM = metrics.pieceCount / elapsedMinutes;
+      }
+
+      // Calculate average board height
+      const boardHeight = this.calculateBoardHeight(state.board);
+      if (metrics.pieceCount === 1) {
+        metrics.averageBoardHeight = boardHeight;
+      } else {
+        // Exponential moving average (favor recent data)
+        metrics.averageBoardHeight = metrics.averageBoardHeight * 0.9 + boardHeight * 0.1;
+      }
+
+      // Update adaptive AI with new metrics
+      if (this.adaptiveAI) {
+        this.adaptiveAI.updatePlayerMetrics(metrics);
+      }
     }
   }
+
+  // Broadcast to opponent (existing code)
+  const opponent = this.getOpponent(playerId);
+  if (opponent) {
+    const opponentConn = this.getConnection(opponent.connectionId);
+    if (opponentConn) {
+      opponentConn.send(JSON.stringify({
+        type: 'opponent_state_update',
+        state,
+      }));
+    }
+  }
+}
+```
+
+Add helper method in GameRoomServer class:
+
+```typescript
+calculateBoardHeight(board: any): number {
+  if (!board || !board.grid) return 0;
+
+  let maxHeight = 0;
+  for (let x = 0; x < board.width; x++) {
+    for (let y = 0; y < board.height; y++) {
+      if (board.grid[y][x] !== null) {
+        maxHeight = Math.max(maxHeight, board.height - y);
+        break;
+      }
+    }
+  }
+  return maxHeight;
+}
+```
+
+**Test:**
+- Build partykit: `cd packages/partykit && pnpm build`
+
+**Verify:**
+- No TypeScript errors
+- Metrics update logic compiles
+
+---
+
+### Step 7: Implement Ability Effects on AI Board
+
+**Files to modify:**
+- `packages/partykit/src/game.ts`
+
+**Implementation details:**
+
+Import ability effect functions at top (around line 1-19):
+```typescript
+import {
+  // ... existing imports
+  applyEarthquake,
+  applyClearRows,
+  applyBomb,
+  applyRandomSpawner,
+  applyRowRotate,
+  applyDeathCross,
+  applyGoldDigger,
+} from '@tetris-battle/game-core';
+```
+
+Replace `handleAbilityActivation` (around line 274-286) with:
+
+```typescript
+handleAbilityActivation(playerId: string, abilityType: string, targetPlayerId: string) {
+  const targetPlayer = this.players.get(targetPlayerId);
+  if (!targetPlayer) return;
+
+  // If target is AI, apply ability to AI board directly
+  if (this.aiPlayer && targetPlayerId === this.aiPlayer.id && this.aiGameState) {
+    this.applyAbilityToAI(abilityType);
+    return;
+  }
+
+  // If target is human player, send ability_received message
+  const targetConn = this.getConnection(targetPlayer.connectionId);
+  if (targetConn) {
+    targetConn.send(JSON.stringify({
+      type: 'ability_received',
+      abilityType,
+      fromPlayerId: playerId,
+    }));
+  }
+}
+
+applyAbilityToAI(abilityType: string) {
+  if (!this.aiGameState) return;
+
+  console.log(`Applying ability ${abilityType} to AI`);
+
+  // Store board before ability for verification
+  const boardBefore = JSON.stringify(this.aiGameState.board.grid);
+
+  switch (abilityType) {
+    case 'earthquake':
+      this.aiGameState.board = applyEarthquake(this.aiGameState.board);
+      break;
+
+    case 'clear_rows':
+      const { board: clearedBoard, rowsCleared } = applyClearRows(this.aiGameState.board, 5);
+      this.aiGameState.board = clearedBoard;
+      break;
+
+    case 'cross_firebomb':
+    case 'circle_bomb':
+      // These are player buffs, not debuffs - shouldn't target AI
+      console.warn(`Buff ability ${abilityType} sent to AI - ignoring`);
+      break;
+
+    case 'random_spawner':
+      this.aiGameState.board = applyRandomSpawner(this.aiGameState.board);
+      break;
+
+    case 'row_rotate':
+      this.aiGameState.board = applyRowRotate(this.aiGameState.board);
+      break;
+
+    case 'death_cross':
+      this.aiGameState.board = applyDeathCross(this.aiGameState.board);
+      break;
+
+    case 'gold_digger':
+      this.aiGameState.board = applyGoldDigger(this.aiGameState.board);
+      break;
+
+    // Time-based debuffs (handled client-side for human players)
+    case 'speed_up_opponent':
+    case 'reverse_controls':
+    case 'rotation_lock':
+    case 'blind_spot':
+    case 'screen_shake':
+    case 'shrink_ceiling':
+    case 'cascade_multiplier':
+      // For AI, we can apply these as instant effects or ignore
+      console.log(`Time-based ability ${abilityType} on AI - not implemented yet`);
+      break;
+
+    default:
+      console.warn(`Unknown ability type: ${abilityType}`);
+  }
+
+  // Clear AI move queue to force re-planning with new board state
+  this.aiMoveQueue = [];
+
+  // Check if board actually changed
+  const boardAfter = JSON.stringify(this.aiGameState.board.grid);
+  if (boardBefore !== boardAfter) {
+    console.log(`AI board modified by ${abilityType}`);
+  }
+
+  // Broadcast updated AI state to human player immediately
+  this.broadcastAIState();
+}
+
+broadcastAIState() {
+  if (!this.aiGameState || !this.aiPlayer) return;
+
+  const humanPlayer = Array.from(this.players.values()).find(p => p.playerId !== this.aiPlayer!.id);
+  if (!humanPlayer) return;
+
+  const conn = this.getConnection(humanPlayer.connectionId);
+  if (!conn) return;
+
+  conn.send(JSON.stringify({
+    type: 'opponent_state_update',
+    state: {
+      board: this.aiGameState.board.grid,
+      score: this.aiGameState.score,
+      stars: this.aiGameState.stars,
+      linesCleared: this.aiGameState.linesCleared,
+      comboCount: this.aiGameState.comboCount || 0,
+      isGameOver: this.aiGameState.isGameOver,
+      currentPiece: this.aiGameState.currentPiece,
+    },
+  }));
+}
+```
+
+**Test:**
+- Build partykit: `cd packages/partykit && pnpm build`
+
+**Verify:**
+- No TypeScript errors
+- All ability effect imports resolve
+
+---
+
+### Step 8: Implement AI Ability Usage - Decision Logic
+
+**Files to modify:**
+- `packages/partykit/src/game.ts`
+
+**Implementation details:**
+
+1. In `startAIGameLoop`, set up AI ability loadout (around line 129-141):
+
+```typescript
+startAIGameLoop() {
+  // ... existing initialization code
+
+  // Set AI ability loadout (match player's unlocked abilities)
+  // For now, use a simple set of abilities available to level 1+ players
+  this.aiAbilityLoadout = [
+    'earthquake',
+    'random_spawner',
+    'death_cross',
+    'row_rotate',
+    'gold_digger',
+  ];
+  this.aiLastAbilityUse = Date.now();
 
   // ... rest of existing code
 }
 ```
 
-4. Add `startAIGameLoop` method (after handleJoinGame):
-```typescript
-startAIGameLoop() {
-  if (!this.aiPlayer) return;
+2. In the AI game loop interval (around line 200-210, after piece lock), add ability decision:
 
-  // Initialize AI game state
-  this.aiGameState = createInitialGameState();
+```typescript
+case 'hard_drop':
+  // ... existing hard_drop logic
+
+  // After clearing lines, update AI stars
+  this.aiGameState.stars += linesCleared * 10; // Simplified star earning
+
+  // Spawn next piece
   this.aiGameState.currentPiece = createTetromino(
     this.aiGameState.nextPieces[0],
     this.aiGameState.board.width
@@ -512,407 +768,225 @@ startAIGameLoop() {
   this.aiGameState.nextPieces.shift();
   this.aiGameState.nextPieces.push(getRandomTetromino());
 
-  const config = AI_DIFFICULTIES[this.aiPlayer.difficulty];
-
-  this.aiInterval = setInterval(() => {
-    if (!this.aiGameState || !this.aiGameState.currentPiece || this.aiGameState.isGameOver) {
-      return;
-    }
-
-    const now = Date.now();
-
-    // Rate limit moves based on difficulty
-    if (now - this.aiLastMoveTime < config.moveDelay) {
-      return;
-    }
-
-    // If no moves queued, decide next placement
-    if (this.aiMoveQueue.length === 0) {
-      const decision = findBestPlacement(
-        this.aiGameState.board,
-        this.aiGameState.currentPiece,
-        config.weights
-      );
-      this.aiMoveQueue = decision.moves;
-    }
-
-    // Execute next move
-    const move = this.aiMoveQueue.shift();
-    if (!move) return;
-
-    let newPiece = this.aiGameState.currentPiece;
-
-    switch (move.type) {
-      case 'left':
-        newPiece = movePiece(newPiece, -1, 0);
-        break;
-      case 'right':
-        newPiece = movePiece(newPiece, 1, 0);
-        break;
-      case 'rotate_cw':
-        newPiece = rotatePiece(newPiece, true);
-        break;
-      case 'rotate_ccw':
-        newPiece = rotatePiece(newPiece, false);
-        break;
-      case 'hard_drop':
-        newPiece.position = getHardDropPosition(this.aiGameState.board, newPiece);
-        // Lock piece
-        this.aiGameState.board = lockPiece(this.aiGameState.board, newPiece);
-        const { board, linesCleared } = clearLines(this.aiGameState.board);
-        this.aiGameState.board = board;
-        this.aiGameState.linesCleared += linesCleared;
-        this.aiGameState.score += linesCleared * 100;
-
-        // Spawn next piece
-        this.aiGameState.currentPiece = createTetromino(
-          this.aiGameState.nextPieces[0],
-          this.aiGameState.board.width
-        );
-        this.aiGameState.nextPieces.shift();
-        this.aiGameState.nextPieces.push(getRandomTetromino());
-
-        // Check game over
-        if (!isValidPosition(this.aiGameState.board, this.aiGameState.currentPiece)) {
-          this.aiGameState.isGameOver = true;
-          this.handleGameOver(this.aiPlayer!.id);
-        }
-
-        break;
-    }
-
-    // Validate and update piece
-    if (move.type !== 'hard_drop') {
-      if (isValidPosition(this.aiGameState.board, newPiece)) {
-        this.aiGameState.currentPiece = newPiece;
-      }
-    }
-
-    this.aiLastMoveTime = now;
-
-    // Broadcast AI state to human opponent
-    const humanPlayer = Array.from(this.players.values()).find(p => p.playerId !== this.aiPlayer!.id);
-    if (humanPlayer) {
-      const conn = this.getConnection(humanPlayer.connectionId);
-      if (conn) {
-        conn.send(JSON.stringify({
-          type: 'opponent_state_update',
-          state: this.aiGameState,
-        }));
-      }
-    }
-  }, 50); // Check every 50ms, but moveDelay controls actual move rate
-}
-```
-
-5. Clean up AI interval in `onClose` (line 174):
-```typescript
-onClose(conn: Party.Connection) {
-  // Clear AI interval if exists
-  if (this.aiInterval) {
-    clearInterval(this.aiInterval);
-    this.aiInterval = null;
+  // Check game over
+  if (!isValidPosition(this.aiGameState.board, this.aiGameState.currentPiece)) {
+    this.aiGameState.isGameOver = true;
+    this.handleGameOver(this.aiPlayer!.id);
   }
 
-  // existing cleanup logic...
+  // AI ability usage decision (after locking piece)
+  this.aiConsiderUsingAbility();
+
+  break;
+```
+
+3. Add `aiConsiderUsingAbility` method to GameRoomServer class:
+
+```typescript
+aiConsiderUsingAbility() {
+  if (!this.aiGameState || !this.aiPlayer || this.aiAbilityLoadout.length === 0) {
+    return;
+  }
+
+  const now = Date.now();
+  const timeSinceLastAbility = now - this.aiLastAbilityUse;
+
+  // Cooldown: 10-30 seconds between abilities
+  const minCooldown = 10000;
+  const cooldownVariance = 20000;
+  const cooldown = minCooldown + Math.random() * cooldownVariance;
+
+  if (timeSinceLastAbility < cooldown) {
+    return;
+  }
+
+  // Need enough stars (30-80)
+  const abilityCost = 30 + Math.floor(Math.random() * 50);
+  if (this.aiGameState.stars < abilityCost) {
+    return;
+  }
+
+  // Get human player state
+  const humanPlayer = Array.from(this.players.values()).find(p => p.playerId !== this.aiPlayer!.id);
+  if (!humanPlayer || !humanPlayer.gameState) {
+    return;
+  }
+
+  // Decide: offensive (player is winning) or defensive (AI is losing)
+  const aiHeight = this.calculateBoardHeight(this.aiGameState.board);
+  const playerHeight = humanPlayer.gameState.board ? this.calculateBoardHeight(humanPlayer.gameState.board) : 0;
+
+  const useAbility = Math.random() < 0.3; // 30% chance to use ability when available
+  if (!useAbility) {
+    return;
+  }
+
+  // Pick random ability from loadout
+  const abilityType = this.aiAbilityLoadout[Math.floor(Math.random() * this.aiAbilityLoadout.length)];
+
+  console.log(`AI using ability: ${abilityType} (${this.aiGameState.stars} stars)`);
+
+  // Spend stars
+  this.aiGameState.stars -= abilityCost;
+  this.aiLastAbilityUse = now;
+
+  // Send ability to human player
+  const humanConn = this.getConnection(humanPlayer.connectionId);
+  if (humanConn) {
+    humanConn.send(JSON.stringify({
+      type: 'ability_received',
+      abilityType,
+      fromPlayerId: this.aiPlayer.id,
+    }));
+  }
 }
 ```
 
 **Test:**
-- Manual test: Start AI match, observe AI state updates in browser dev tools
-- Verify AI pieces move and lock automatically
+- Build partykit: `cd packages/partykit && pnpm build`
 
 **Verify:**
-- No TypeScript errors in partykit build
-- AI game loop runs and broadcasts states
-- Human player sees opponent board updating
-
----
-
-### Step 8: Modify Frontend Matchmaking UI
-
-**Files to modify:**
-- `packages/web/src/components/PartykitMatchmaking.tsx`
-
-**Implementation details:**
-
-1. Add state for queue timer (line 12):
-```typescript
-const [queuePosition, setQueuePosition] = useState<number>(-1);
-const [queueDuration, setQueueDuration] = useState<number>(0);
-const [dots, setDots] = useState('');
-```
-
-2. Add timer effect (after dots effect, line 26):
-```typescript
-useEffect(() => {
-  // Track queue duration
-  const start = Date.now();
-  const interval = setInterval(() => {
-    setQueueDuration(Math.floor((Date.now() - start) / 1000));
-  }, 1000);
-
-  return () => clearInterval(interval);
-}, []);
-```
-
-3. Modify message text (line 109-112):
-```typescript
-<p style={{ opacity: 0.8, marginBottom: 'clamp(25px, 6.25vw, 30px)', fontSize: 'clamp(14px, 3.5vw, 16px)', color: '#aaa', fontWeight: '600' }}>
-  {queueDuration >= 8
-    ? 'Expanding search...'
-    : queuePosition === 1
-    ? "You're next! Waiting for another player..."
-    : 'Searching for a worthy opponent...'}
-</p>
-```
-
-**Test:**
-- Manual test: Enter matchmaking, verify message changes after 8 seconds
-
-**Verify:**
-- "Expanding search..." appears after 8 seconds
-- UI functions normally
-
----
-
-### Step 9: Modify Post-Match Screen for AI Match Rewards
-
-**Files to modify:**
-- `packages/web/src/components/PostMatchScreen.tsx`
-
-**Implementation details:**
-
-1. Add `isAiMatch` prop to interface (line 4):
-```typescript
-interface PostMatchScreenProps {
-  outcome: 'win' | 'loss' | 'draw';
-  rewards: MatchRewards;
-  onContinue: () => void;
-  isAiMatch?: boolean; // ← Add this
-}
-```
-
-2. Update function signature (line 10):
-```typescript
-export function PostMatchScreen({ outcome, rewards, onContinue, isAiMatch = false }: PostMatchScreenProps) {
-```
-
-3. Modify coin display (line 86-95):
-```typescript
-<div style={{
-  fontSize: '20px',
-  color: '#ffaa00',
-  marginBottom: '10px',
-}}>
-  🪙 +{rewards.coins} Coins{isAiMatch ? ' (AI Match - 50%)' : ''}
-</div>
-```
-
-4. Modify XP display (line 116-125):
-```typescript
-<div style={{
-  fontSize: '20px',
-  color: '#00ffff',
-  marginBottom: '10px',
-}}>
-  ⭐ +{rewards.xp} XP{isAiMatch ? ' (AI Match - 50%)' : ''}
-</div>
-```
-
-**Test:**
-- Manual test: Complete AI match, verify reward text shows "(AI Match - 50%)"
-
-**Verify:**
-- Post-match screen displays correctly for both human and AI matches
 - No TypeScript errors
+- Ability decision logic compiles
 
 ---
 
-### Step 10: Modify Rewards System for AI Matches
+### Step 9: Update AI Persona to Remove Difficulty
 
 **Files to modify:**
-- `packages/web/src/lib/rewards.ts`
+- `packages/game-core/src/ai/aiPersona.ts`
 
 **Implementation details:**
 
-1. Add `isAiMatch` parameter to function signature (line 19):
-```typescript
-export async function awardMatchRewards(
-  userId: string,
-  outcome: 'win' | 'loss' | 'draw',
-  linesCleared: number,
-  abilitiesUsed: number,
-  matchDuration: number,
-  opponentId: string,
-  isAiMatch: boolean = false // ← Add this
-): Promise<MatchRewards | null> {
-```
+Change `generateAIPersona` function (around line 20-57):
 
-2. Apply AI match penalty to rewards (after totalCoins calculation, line 70):
 ```typescript
-let totalCoins = baseCoins + performanceBonus + streakBonus + firstWinBonus;
-let totalXp = baseXp + winBonus;
+export function generateAIPersona(targetRank?: number): AIPersona {
+  const name = BOT_NAMES[Math.floor(Math.random() * BOT_NAMES.length)];
 
-// Apply AI match penalty
-if (isAiMatch) {
-  totalCoins = Math.floor(totalCoins * 0.5);
-  totalXp = Math.floor(totalXp * 0.5);
+  // All AI uses 'medium' difficulty (will be overridden by adaptive AI)
+  // Rank still used for matchmaking
+  let rank: number;
+
+  if (targetRank) {
+    // Match rank to target within ±200
+    rank = targetRank + Math.floor(Math.random() * 400) - 200;
+    rank = Math.max(200, Math.min(2200, rank)); // Clamp to valid range
+  } else {
+    // Random rank
+    rank = 500 + Math.floor(Math.random() * 1500);
+  }
+
+  return {
+    id: `bot_${name}_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+    name,
+    difficulty: 'medium', // Always medium (ignored by adaptive AI)
+    rank,
+    isBot: true,
+  };
 }
 ```
 
-3. Set rankChange to 0 for AI matches (line 91):
-```typescript
-await progressionService.saveMatchResult({
-  id: crypto.randomUUID(),
-  userId,
-  opponentId,
-  outcome,
-  linesCleared,
-  abilitiesUsed,
-  coinsEarned: totalCoins,
-  xpEarned: totalXp,
-  rankChange: isAiMatch ? 0 : 0, // ← Already 0, but make explicit
-  rankAfter: profile.rank,
-  opponentRank: 1000,
-  duration: matchDuration,
-  timestamp: Date.now(),
-});
-```
-
 **Test:**
-- Unit test: Call awardMatchRewards with isAiMatch=true, verify coins/XP are 50%
-- Compare with isAiMatch=false for same outcome
+- Build game-core: `cd packages/game-core && pnpm build`
 
 **Verify:**
-- AI matches award 50% rewards
-- rankChange is 0 for AI matches
-- Match history records correct opponentId (starts with "bot_")
+- `generateAIPersona()` always returns 'medium' difficulty
+- Rank still varies appropriately
 
 ---
 
-### Step 11: Write AI Unit Tests
+### Step 10: Remove Difficulty from UI (if shown)
+
+**Files to check and potentially modify:**
+- `packages/web/src/components/PartykitMultiplayerGame.tsx`
+- `packages/web/src/components/MainMenu.tsx`
+
+**Implementation details:**
+
+Search for any UI showing "Easy/Medium/Hard" difficulty selection for AI matches. If found, remove or simplify to "Play vs AI".
+
+Check `packages/web/src/components/MainMenu.tsx` for any difficulty selector. If it exists, remove it.
+
+**Test:**
+- Build web: `cd packages/web && pnpm build`
+
+**Verify:**
+- No UI references to Easy/Medium/Hard difficulty
+
+---
+
+### Step 11: Add Integration Tests
 
 **Files to create:**
-- `packages/game-core/src/ai/__tests__/aiPlayer.test.ts`
-- `packages/game-core/src/ai/__tests__/aiDifficulty.test.ts`
-- `packages/game-core/src/ai/__tests__/aiPersona.test.ts`
+- `packages/game-core/src/ai/__tests__/integration.test.ts`
 
 **Implementation details:**
 
-Create comprehensive tests covering all spec verification criteria:
-
-**aiPlayer.test.ts:**
 ```typescript
 import { describe, it, expect } from 'vitest';
-import {
-  evaluateBoard,
-  findBestPlacement,
-  generateMoves,
-  createBoard,
-  createTetromino,
-  movePiece,
-  lockPiece,
-} from '@tetris-battle/game-core';
+import { AdaptiveAI } from '../adaptiveAI';
+import { createInitialPlayerMetrics } from '../../types';
+import { createTetromino } from '../../tetrominos';
+import { createBoard } from '../../engine';
 
-describe('AI Player', () => {
-  it('evaluates board metrics correctly', () => {
-    const board = createBoard();
-    // Place some blocks to create known state
-    // ... test aggregateHeight, holes, bumpiness
-  });
+describe('AI Integration Tests', () => {
+  it('should adapt to slow player', () => {
+    const slowMetrics = createInitialPlayerMetrics();
+    slowMetrics.averageLockTime = 5000; // 5 seconds per piece
+    slowMetrics.mistakeRate = 0.6;      // 60% mistakes
 
-  it('chooses placement that does not increase holes (hard difficulty)', () => {
-    // Create board with potential hole
-    // Run AI decision
-    // Verify chosen placement doesn't create hole
-  });
+    const ai = new AdaptiveAI(slowMetrics);
 
-  it('places I-piece flat on empty board (hard difficulty)', () => {
-    const board = createBoard();
-    const piece = createTetromino('I', 10);
-    const decision = findBestPlacement(board, piece, AI_DIFFICULTIES.hard.weights);
+    // Move delay should be ~4500ms (5000 * 0.9)
+    const delay = ai.decideMoveDelay();
+    expect(delay).toBeGreaterThan(3000);
+    expect(delay).toBeLessThan(6000);
 
-    // Verify rotation 0 or 2 (flat)
-    expect([0, 2]).toContain(decision.targetRotation);
-  });
-
-  it('generates correct move sequence', () => {
-    const piece = createTetromino('T', 10);
-    const target = { x: 7, y: 18 };
-    const moves = generateMoves(piece, target, 1);
-
-    // Verify moves lead to target
-    // ... apply moves and check final position
-  });
-});
-```
-
-**aiDifficulty.test.ts:**
-```typescript
-import { describe, it, expect } from 'vitest';
-import { AI_DIFFICULTIES, shouldMakeRandomMove } from '@tetris-battle/game-core';
-
-describe('AI Difficulty', () => {
-  it('easy AI produces worse boards than hard AI', () => {
-    // Simulate 100 pieces with each difficulty
-    // Measure final board quality
-    // Verify easy has more holes/height than hard
-  });
-
-  it('random move chance matches configuration', () => {
-    let randomCount = 0;
-    for (let i = 0; i < 1000; i++) {
-      if (shouldMakeRandomMove('easy')) randomCount++;
+    // Should make lots of mistakes
+    let mistakes = 0;
+    for (let i = 0; i < 100; i++) {
+      if (ai.shouldMakeMistake()) mistakes++;
     }
-
-    // Easy has 30% random chance
-    expect(randomCount).toBeGreaterThan(250);
-    expect(randomCount).toBeLessThan(350);
-  });
-});
-```
-
-**aiPersona.test.ts:**
-```typescript
-import { describe, it, expect } from 'vitest';
-import { generateAIPersona } from '@tetris-battle/game-core';
-
-describe('AI Persona', () => {
-  it('generates unique personas', () => {
-    const personas = Array.from({ length: 100 }, () => generateAIPersona());
-    const ids = personas.map(p => p.id);
-    const uniqueIds = new Set(ids);
-
-    expect(uniqueIds.size).toBe(100);
+    expect(mistakes).toBeGreaterThan(70); // > 70% mistake rate
   });
 
-  it('ranks fall within difficulty ranges', () => {
-    const personas = Array.from({ length: 100 }, () => generateAIPersona());
+  it('should adapt to fast player', () => {
+    const fastMetrics = createInitialPlayerMetrics();
+    fastMetrics.averageLockTime = 1000; // 1 second per piece
+    fastMetrics.mistakeRate = 0.1;      // 10% mistakes
 
-    personas.forEach(p => {
-      if (p.difficulty === 'easy') {
-        expect(p.rank).toBeGreaterThanOrEqual(200);
-        expect(p.rank).toBeLessThanOrEqual(600);
-      } else if (p.difficulty === 'medium') {
-        expect(p.rank).toBeGreaterThanOrEqual(700);
-        expect(p.rank).toBeLessThanOrEqual(1300);
-      } else {
-        expect(p.rank).toBeGreaterThanOrEqual(1400);
-        expect(p.rank).toBeLessThanOrEqual(2200);
-      }
-    });
+    const ai = new AdaptiveAI(fastMetrics);
+
+    // Move delay should be ~900ms (1000 * 0.9)
+    const delay = ai.decideMoveDelay();
+    expect(delay).toBeGreaterThan(500);
+    expect(delay).toBeLessThan(1500);
+
+    // Should make fewer mistakes
+    let mistakes = 0;
+    for (let i = 0; i < 100; i++) {
+      if (ai.shouldMakeMistake()) mistakes++;
+    }
+    expect(mistakes).toBeLessThan(60); // < 60% mistake rate (35% base + 10% player)
   });
 
-  it('all personas have isBot flag', () => {
-    const personas = Array.from({ length: 50 }, () => generateAIPersona());
-    expect(personas.every(p => p.isBot === true)).toBe(true);
-  });
+  it('should make valid moves even when making mistakes', () => {
+    const board = createBoard(10, 20);
+    const piece = createTetromino('T', 10);
+    const metrics = createInitialPlayerMetrics();
 
-  it('matches difficulty to target rank', () => {
-    const persona = generateAIPersona(1000);
-    expect(persona.difficulty).toBe('medium');
-    expect(Math.abs(persona.rank - 1000)).toBeLessThanOrEqual(300);
+    const ai = new AdaptiveAI(metrics);
+
+    // Run 10 decisions (mix of good and bad moves)
+    for (let i = 0; i < 10; i++) {
+      const decision = ai.findMove(board, piece);
+
+      expect(decision).toBeDefined();
+      expect(decision.moves).toBeDefined();
+      expect(decision.moves.length).toBeGreaterThan(0);
+      expect(decision.targetPosition).toBeDefined();
+    }
   });
 });
 ```
@@ -922,50 +996,35 @@ describe('AI Persona', () => {
 - All tests should pass
 
 **Verify:**
-- Test coverage includes all spec criteria
-- Build succeeds after tests
+- Integration tests pass
+- Adaptive AI works end-to-end
 
 ---
 
-### Step 12: Integration Testing and Manual Verification
+### Step 12: Final Build and Smoke Test
 
-**Files to verify:**
-- All modified files build without errors
-- Both game-core and partykit packages build
-- Frontend builds
+**Files to test:**
+- All packages
 
 **Implementation details:**
 
-Run build commands:
+Run full build:
 ```bash
-# Build game-core
-cd packages/game-core && pnpm build
-
-# Build web (which uses game-core)
-cd ../web && pnpm build
-
-# Test partykit (TypeScript check)
-cd ../partykit && npx tsc --noEmit
+cd /Users/biubiu/projects/tetris-battle
+pnpm build:all
 ```
 
-Manual smoke tests:
-1. Start dev server: `pnpm dev` (from root)
-2. Start Partykit: `cd packages/partykit && pnpm dev`
-3. Open browser, join matchmaking
-4. Wait 11+ seconds → should match with AI
-5. Observe AI opponent board updating
-6. Complete match → verify rewards show "AI Match - 50%"
-7. Check match history has opponentId starting with "bot_"
-
-**Test:**
-- Run all unit tests: `cd packages/game-core && pnpm test --run`
-- Verify all pass
+Run all tests:
+```bash
+cd packages/game-core
+pnpm test
+```
 
 **Verify:**
-- All 13 spec verification criteria are met (see Verification Mapping below)
+- All builds succeed
+- All tests pass
 - No TypeScript errors
-- No console errors during manual testing
-- AI matches function identically to human matches from UI perspective
+- No console warnings
 
 ---
 
@@ -973,49 +1032,16 @@ Manual smoke tests:
 
 | Spec Criterion | Covered by Step(s) |
 |---------------|-------------------|
-| 1. AI placement evaluation (no holes) | Step 2, Step 11 |
-| 2. AI placement (I-piece flat on empty board) | Step 2, Step 11 |
-| 3. AI move generation (correct sequence) | Step 2, Step 11 |
-| 4. Difficulty presets (easy vs hard board quality) | Step 3, Step 11 |
-| 5. Random move chance (30% for easy) | Step 3, Step 11 |
-| 6. Persona generation (unique names, rank ranges) | Step 4, Step 11 |
-| 7. Ability usage (medium/hard AI) | Step 7 (AI game loop) |
-| 8. Matchmaking timeout (11s → AI match) | Step 6, Step 12 |
-| 9. AI game loop (30s test) | Step 7, Step 12 |
-| 10. Ability interaction (AI receives ability) | Step 7 (handleAbilityActivation) |
-| 11. Match completion (bot_ prefix in history) | Step 10, Step 12 |
-| 12. Reward reduction (50% coins/XP) | Step 10, Step 12 |
-| 13. Rank unchanged (AI matches) | Step 10, Step 12 |
-| 14-16. Manual smoke tests | Step 12 |
-
----
+| "Win rate: 45-55% (tested over 100 games)" | Steps 2-3 (adaptive AI with mirroring) - NEEDS_MANUAL_TEST |
+| "All player abilities visibly affect AI board" | Step 7 (ability effects on AI) |
+| "AI uses 2-4 abilities per match on average" | Step 8 (AI ability usage) - NEEDS_MANUAL_TEST |
+| "AI feels like similar skill human opponent" | Steps 2-3, 5-6 (adaptive mirroring) - NEEDS_MANUAL_TEST |
+| "Player metrics tracked (PPM, lock time, board height)" | Step 6 (metrics tracking) |
+| "AI makes mistakes (30-40% base rate)" | Steps 2-3 (mistake logic) |
+| "Difficulty tiers removed" | Step 9 (remove difficulty) |
+| "AI earns and spends stars" | Step 8 (star management) |
 
 ## Build/Test Commands
-
-**Build all:**
-```bash
-pnpm build:all
-```
-
-**Test game-core:**
-```bash
-cd packages/game-core
-pnpm test          # Watch mode
-pnpm test --run    # Run once
-pnpm test -- ai    # Run AI tests only
-```
-
-**Type check partykit:**
-```bash
-cd packages/partykit
-npx tsc --noEmit
-```
-
-**Run dev servers:**
-```bash
-# Terminal 1: Frontend
-pnpm dev
-
-# Terminal 2: Partykit
-cd packages/partykit && pnpm dev
-```
+- Build all: `cd /Users/biubiu/projects/tetris-battle && pnpm build:all`
+- Test game-core: `cd /Users/biubiu/projects/tetris-battle/packages/game-core && pnpm test`
+- Run dev server: `cd /Users/biubiu/projects/tetris-battle && pnpm dev`

@@ -1,174 +1,71 @@
-# Research Summary for Spec 001: AI Players
+# Research Summary for Spec 003: AI Balancing and Ability System
 
 ## Project Structure
 - **Monorepo**: Yes, using pnpm workspaces
 - **Packages**:
-  - `packages/game-core` - Platform-agnostic game engine (TypeScript)
-  - `packages/web` - React frontend with Vite
-  - `packages/partykit` - WebSocket multiplayer server
-- **Build**: TypeScript compiler (`tsc`)
-  - game-core: `pnpm --filter game-core build` (tsc)
-  - web: `pnpm --filter web build` (tsc -b && vite build)
-- **Tests**: No test framework currently configured (need to add vitest/jest)
+  - `packages/game-core` - Core game logic, AI, abilities (TypeScript)
+  - `packages/partykit` - Multiplayer server (Partykit)
+  - `packages/web` - React frontend (Vite + React + TypeScript)
+- **Build**:
+  - Core: `pnpm --filter game-core build` (tsc)
+  - Web: `pnpm --filter web build` (vite)
+  - All: `pnpm build:all`
+- **Tests**:
+  - Framework: vitest (in game-core)
+  - Command: `pnpm --filter game-core test`
 
 ## Existing Patterns
 
 ### Imports
-All packages use ES modules:
+- Core packages use explicit imports: `import { X } from '@tetris-battle/game-core'`
+- Web packages use relative imports for local files: `import { X } from '../services/Y'`
+- Barrel exports in `packages/game-core/src/index.ts` expose public API
+
+### AI Architecture (Current)
+
+**File: `packages/game-core/src/ai/aiPlayer.ts`**
+- `findBestPlacement()` - Evaluates all possible piece placements using weights
+- `evaluateBoard()` - Calculates aggregateHeight, completeLines, holes, bumpiness
+- `scoreBoard()` - Applies weights to board evaluation (negative for bad, positive for good)
+
+**File: `packages/game-core/src/ai/aiDifficulty.ts`**
 ```typescript
-// Barrel exports pattern in game-core
-export * from './types';
-export * from './engine';
-export * from './abilities';
-
-// Cross-package imports in web
-import { createBoard, movePiece, rotatePiece } from '@tetris-battle/game-core';
-
-// Relative imports within package
-import type { GameState, Tetromino } from './types';
+export const AI_DIFFICULTIES: Record<AIDifficultyLevel, AIDifficultyConfig> = {
+  easy: {
+    weights: { aggregateHeight: -0.3, completeLines: 5, holes: -3, bumpiness: -0.2 },
+    moveDelay: 300,
+    randomMoveChance: 0.3,
+  },
+  medium: { moveDelay: 150, randomMoveChance: 0.1, ... },
+  hard: { moveDelay: 80, randomMoveChance: 0, ... },
+};
 ```
 
-### State Management
-No Zustand stores in game-core (pure functions only). Web uses Zustand:
-```typescript
-// packages/web/src/stores/gameStore.ts
-export const useGameStore = create<GameStore>((set) => ({
-  // state fields
-  // actions that call game-core functions
-}));
-```
+**File: `packages/partykit/src/game.ts`** (lines 129-239)
+- AI game loop runs in `setInterval()` every 50ms
+- Checks `moveDelay` to throttle moves based on difficulty
+- Uses `findBestPlacement()` to queue moves
+- Executes queued moves (left/right/rotate/hard_drop)
+- Broadcasts AI state to human opponent via `opponent_state_update` message
+- State sent includes: `{ board: grid, score, stars, linesCleared, comboCount, isGameOver, currentPiece }`
 
-### Game Engine (game-core)
-Pure functional approach - all engine functions are stateless:
-```typescript
-// Example from engine.ts:210
-export function getHardDropPosition(board: Board, piece: Tetromino): Position {
-  let dropPiece = { ...piece };
-  while (isValidPosition(board, movePiece(dropPiece, 0, 1))) {
-    dropPiece = movePiece(dropPiece, 0, 1);
-  }
-  return dropPiece.position;
-}
-```
+### Ability System
 
-Key engine functions available:
-- `isValidPosition(board, piece)` - collision detection
-- `movePiece(piece, dx, dy)` - returns new piece with updated position
-- `rotatePiece(piece, clockwise)` - returns rotated piece
-- `lockPiece(board, piece)` - returns new board with piece locked
-- `clearLines(board)` - returns { board, linesCleared }
-- `getHardDropPosition(board, piece)` - returns final drop position
+**File: `packages/game-core/src/abilityEffects.ts`**
+- Board modification functions: `applyEarthquake()`, `applyClearRows()`, `applyBomb()`, etc.
+- All functions take `board: Board` and return modified `Board`
+- Gravity helper: `applyGravity()` makes floating blocks fall after clearing
+- No current integration with AI - these only affect player boards
 
-### Server Messages (Partykit)
-JSON messages over WebSocket:
-```typescript
-// Matchmaking flow (packages/partykit/src/matchmaking.ts:20-26)
-onMessage(message: string, sender: Party.Connection) {
-  const data = JSON.parse(message);
-  if (data.type === 'join_queue') { /* ... */ }
-  else if (data.type === 'leave_queue') { /* ... */ }
-}
+**File: `packages/game-core/src/abilities.json`**
+- 18 abilities total (6 buffs, 12 debuffs)
+- Each has: `id`, `type`, `name`, `cost`, `duration?`, `category`, `unlockLevel`
+- Example: `"earthquake": { cost: 65, category: "debuff", duration: undefined }`
 
-// Game room messages (packages/partykit/src/game.ts:39-55)
-switch (data.type) {
-  case 'join_game': /* ... */
-  case 'game_state_update': /* ... */
-  case 'ability_activation': /* ... */
-  case 'game_over': /* ... */
-}
-```
-
-Message format pattern:
-```typescript
-// Client -> Server
-{ type: 'join_queue', playerId: string }
-{ type: 'game_state_update', playerId: string, state: GameState }
-{ type: 'ability_activation', playerId: string, abilityType: string, targetPlayerId: string }
-
-// Server -> Client
-{ type: 'match_found', roomId: string, player1: string, player2: string }
-{ type: 'opponent_state_update', state: GameState }
-{ type: 'ability_received', abilityType: string, fromPlayerId: string }
-```
-
-### Database (Progression)
-Uses Supabase (via packages/web/src/lib/supabase.ts). Key schemas from progression.ts:
-
-```typescript
-// UserProfile (progression.ts:4-17)
-interface UserProfile {
-  userId: string; // Clerk user ID
-  username: string;
-  level: number;
-  xp: number;
-  coins: number;
-  rank: number;
-  gamesPlayed: number;
-  // ...
-}
-
-// MatchResult (progression.ts:19-33)
-interface MatchResult {
-  id: string;
-  userId: string;
-  opponentId: string; // ← AI will use "bot_<name>" prefix
-  outcome: 'win' | 'loss' | 'draw';
-  linesCleared: number;
-  abilitiesUsed: number;
-  coinsEarned: number;
-  xpEarned: number;
-  rankChange: number;
-  // ...
-}
-```
-
-### Tests
-No tests exist in game-core yet. Need to:
-1. Add vitest as devDependency to game-core
-2. Create test setup following vitest conventions
-3. Place tests in `packages/game-core/src/ai/__tests__/`
-
-## Analogous Flow: Matchmaking → Game → Rewards
-
-### 1. Matchmaking (packages/partykit/src/matchmaking.ts:29-53)
-```typescript
-handleJoinQueue(playerId: string, conn: Party.Connection) {
-  this.queue.push({ id: playerId, connectionId: conn.id, joinedAt: Date.now() });
-  conn.send(JSON.stringify({ type: 'queue_joined', position: this.queue.length }));
-  this.tryMatch(); // ← Matches first 2 players in queue
-}
-
-tryMatch() {
-  if (this.queue.length < 2) return;
-  const player1 = this.queue.shift()!;
-  const player2 = this.queue.shift()!;
-  const roomId = `game_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-
-  // Send match_found to both players
-  conn1.send(JSON.stringify({ type: 'match_found', roomId, player1: player1.id, player2: player2.id }));
-  conn2.send(JSON.stringify({ type: 'match_found', roomId, player1: player1.id, player2: player2.id }));
-}
-```
-
-**AI Integration Point**: After 10 seconds in queue, create AI match instead of waiting for player2.
-
-### 2. Game Room (packages/partykit/src/game.ts)
-Players connect to room, send game state updates:
-```typescript
-handleGameStateUpdate(playerId: string, state: GameState, sender: Party.Connection) {
-  player.gameState = state;
-
-  // Broadcast to opponent
-  const opponent = this.getOpponent(playerId);
-  opponentConn.send(JSON.stringify({ type: 'opponent_state_update', state }));
-}
-```
-
-**AI Integration Point**: Server needs to run AI game loop and broadcast AI state updates using same message format.
-
-### 3. Abilities (packages/partykit/src/game.ts:121-133)
+**File: `packages/partykit/src/game.ts`** (lines 274-286)
 ```typescript
 handleAbilityActivation(playerId: string, abilityType: string, targetPlayerId: string) {
+  const targetPlayer = this.players.get(targetPlayerId);
   const targetConn = this.getConnection(targetPlayer.connectionId);
   targetConn.send(JSON.stringify({
     type: 'ability_received',
@@ -177,127 +74,189 @@ handleAbilityActivation(playerId: string, abilityType: string, targetPlayerId: s
   }));
 }
 ```
+- **Issue**: Ability is sent to client, but AI has `connectionId: 'ai'` (no real connection)
+- AI board state is managed server-side, not updated when ability received
 
-**AI Integration Point**: AI needs to receive abilities and apply effects to its game state. AI (medium/hard) should also use abilities.
+### State Management
 
-### 4. Rewards (packages/web/src/lib/rewards.ts:19-128)
+**File: `packages/game-core/src/types.ts`**
 ```typescript
-async function awardMatchRewards(userId, outcome, linesCleared, abilitiesUsed, matchDuration, opponentId) {
-  // Calculate coins/XP
-  const totalCoins = baseCoins + performanceBonus + streakBonus + firstWinBonus;
-  const totalXp = baseXp + winBonus;
+export interface GameState {
+  board: Board;
+  currentPiece: Tetromino | null;
+  nextPieces: TetrominoType[];
+  score: number;
+  stars: number;
+  level: number;
+  linesCleared: number;
+  isGameOver: boolean;
+  lastClearTime: number;
+  comboCount: number;
+  bombType: 'cross' | 'circle' | null;
+}
 
-  // Save match result
-  await progressionService.saveMatchResult({
-    userId,
-    opponentId, // ← For AI: "bot_TetrisBot_42"
-    outcome,
-    linesCleared,
-    abilitiesUsed,
-    coinsEarned: totalCoins,
-    xpEarned: totalXp,
-    rankChange: 0,
-    // ...
-  });
-
-  // Update user profile
-  await progressionService.updateUserProfile(userId, { coins: newCoins, xp: newXp, level: newLevel });
+export interface Board {
+  grid: CellValue[][];
+  width: number;
+  height: number;
 }
 ```
 
-**AI Integration Point**: Reduce rewards to 50% for AI matches, set rankChange to 0.
+**Star earning** (from types.ts lines 106-115):
+```typescript
+export const STAR_VALUES = {
+  single: 5,
+  double: 12,
+  triple: 25,
+  tetris: 50,
+  comboBonus: 1,
+};
+```
+
+### Server Message Patterns
+
+**Message Types** (from game.ts):
+- Client → Server: `'join_game'`, `'game_state_update'`, `'ability_activation'`, `'game_over'`
+- Server → Client: `'game_start'`, `'opponent_state_update'`, `'ability_received'`, `'game_finished'`
+
+**Example: game.ts:220-236** (Broadcasting AI state)
+```typescript
+conn.send(JSON.stringify({
+  type: 'opponent_state_update',
+  state: {
+    board: this.aiGameState.board.grid,
+    score: this.aiGameState.score,
+    stars: this.aiGameState.stars,
+    ...
+  },
+}));
+```
+
+### Tests
+
+**File: `packages/game-core/src/ai/__tests__/aiPlayer.test.ts`**
+- Uses vitest: `describe()`, `it()`, `expect()`
+- Tests `findBestPlacement()`, `evaluateBoard()`, `scoreBoard()`
+- Pattern: Create mock board → call function → assert result
+
+## Analogous Flow: Current AI Match
+
+1. **Matchmaking** (`packages/partykit/src/matchmaking.ts`)
+   - If queue time > 18s, server generates AI opponent via `generateAIPersona(playerRank)`
+   - Sends `match_found` with `aiOpponent: AIPersona` to client
+
+2. **Join Game** (`packages/partykit/src/game.ts:83-116`)
+   - Player calls `join_game` with `aiOpponent` parameter
+   - Server adds AI to `players` map with fake `connectionId: 'ai'`
+   - Calls `startAIGameLoop()` to begin AI simulation
+
+3. **AI Game Loop** (`packages/partykit/src/game.ts:129-239`)
+   - Every 50ms, checks if `moveDelay` elapsed
+   - If no moves queued, calls `findBestPlacement()` to calculate best move
+   - Executes queued moves on `aiGameState.board`
+   - Broadcasts updated state to human player via `opponent_state_update`
+
+4. **Ability Handling** (BROKEN)
+   - Player activates ability → server calls `handleAbilityActivation()`
+   - Server tries to send `ability_received` to AI connection (doesn't exist)
+   - AI board never modified, ability has no effect
 
 ## Integration Points
 
+### Files to Modify
+1. **`packages/game-core/src/ai/aiDifficulty.ts`**
+   - Remove difficulty tiers
+   - Add `PlayerMetrics` interface
+   - Add `AdaptiveAIConfig` with mirroring logic
+
+2. **`packages/game-core/src/ai/aiPlayer.ts`**
+   - Add `findReasonableMo ve()` (non-optimal placement)
+   - Add `makeIntentionalMistake()` (random/suboptimal placement)
+   - Add `shouldMakeMistake()` based on player metrics
+
+3. **`packages/partykit/src/game.ts`** (critical changes)
+   - Track player metrics (PPM, lock time, board height, mistake rate)
+   - Update AI move delay based on player speed
+   - **Handle ability effects on AI board** (lines 274-286)
+     - For AI target, apply ability to `this.aiGameState.board` directly
+     - Clear `aiMoveQueue` to force re-calculation
+     - Broadcast updated AI state immediately
+   - **AI ability usage**
+     - Track AI stars (earn from line clears)
+     - Decide when to use abilities (offensive vs defensive)
+     - Send `ability_received` to human player
+
+4. **`packages/game-core/src/abilityEffects.ts`**
+   - No changes needed (functions already work on Board objects)
+
+5. **`packages/game-core/src/ai/aiPersona.ts`**
+   - Remove difficulty field (or make it always 'adaptive')
+   - Keep rank for matchmaking purposes
+
 ### New Files to Create
-1. **packages/game-core/src/ai/aiPlayer.ts** - Core AI logic
-2. **packages/game-core/src/ai/aiDifficulty.ts** - Difficulty presets (easy/medium/hard)
-3. **packages/game-core/src/ai/aiPersona.ts** - Bot name/rank generation
-4. **packages/game-core/src/ai/index.ts** - Barrel export
-5. **packages/game-core/src/ai/__tests__/aiPlayer.test.ts** - AI tests
-6. **packages/game-core/src/ai/__tests__/aiDifficulty.test.ts** - Difficulty tests
+1. **`packages/game-core/src/ai/adaptiveAI.ts`**
+   - `PlayerMetrics` interface
+   - `AdaptiveAI` class with mirroring logic
+   - `decideMoveDelay()`, `shouldMakeMistake()`, `findAdaptiveMove()`
 
-### Existing Files to Modify
+2. **`packages/game-core/src/ai/__tests__/adaptiveAI.test.ts`**
+   - Test player metrics tracking
+   - Test mistake rate calculation
+   - Test move delay adaptation
 
-1. **packages/game-core/src/index.ts** (line 8, add):
-   ```typescript
-   export * from './ai';
-   ```
-
-2. **packages/partykit/src/matchmaking.ts**:
-   - Add timeout tracking to `QueuedPlayer` interface (line 3)
-   - Modify `handleJoinQueue` to track join time (line 29)
-   - Add `checkAIFallback` method to create AI matches after 10s
-   - Call `checkAIFallback` in `tryMatch` (line 59)
-
-3. **packages/partykit/src/game.ts**:
-   - Add `aiGameState` and `aiInterval` fields to class
-   - Add `startAIGameLoop` method to run AI logic
-   - Modify `handleJoinGame` to detect AI matches and start AI loop (line 58)
-   - Modify `handleAbilityActivation` to handle AI receiving abilities (line 121)
-   - Add AI state broadcast in game loop
-
-4. **packages/web/src/components/PartykitMatchmaking.tsx** (line 109-112):
-   - Add timer state to track queue duration
-   - Show "Expanding search..." after 8 seconds
-   - Keep existing "Finding Opponent..." message
-
-5. **packages/web/src/components/PostMatchScreen.tsx**:
-   - Add `isAiMatch: boolean` prop
-   - Modify reward display to show "(AI Match - 50%)" when applicable
-   - No changes to rank display (already shows +0 for no rank change)
-
-6. **packages/web/src/lib/rewards.ts** (awardMatchRewards function, line 26):
-   - Add `isAiMatch: boolean` parameter
-   - Multiply coins/XP by 0.5 if isAiMatch
-   - Set rankChange to 0 if isAiMatch
-
-7. **packages/game-core/package.json**:
-   - Add vitest devDependency
-   - Add test script
+3. **`packages/partykit/src/aiAbilityDecision.ts`** (or inline in game.ts)
+   - Logic for AI to decide when to use abilities
+   - Track board states, decide offensive vs defensive
 
 ## Key Files to Reference During Implementation
 
-### Phase 3 Reference Files
-- **packages/game-core/src/engine.ts** - All game engine functions
-- **packages/game-core/src/types.ts** - Type definitions
-- **packages/game-core/src/tetrominos.ts** - Piece shapes and types
-- **packages/partykit/src/matchmaking.ts** - Matchmaking flow
-- **packages/partykit/src/game.ts** - Game room message handling
-- **packages/game-core/src/progression.ts** - Rank/XP/coin values
+### Phase 1: Player Metrics Tracking
+- `packages/partykit/src/game.ts:241-258` (handleGameStateUpdate) - track player metrics here
+- `packages/game-core/src/types.ts` - add PlayerMetrics type
 
-### AI Implementation Notes
-1. AI evaluates moves by simulating each placement and scoring the resulting board
-2. Scoring weights are tunable per difficulty (aggregateHeight, holes, bumpiness, completeLines)
-3. AI returns MOVES (left/right/rotate/drop), not final board state
-4. AI game loop runs on Partykit server, not as a WebSocket client
-5. AI personas have `isBot: true` flag but it's not exposed to opponent client
+### Phase 2: AI Mirroring Logic
+- `packages/game-core/src/ai/aiPlayer.ts:112-174` (findBestPlacement) - reference for move finding
+- `packages/game-core/src/ai/aiDifficulty.ts` - replace with adaptive config
+- `packages/partykit/src/game.ts:142-163` (AI decision logic) - replace with adaptive
 
-## Test Framework Setup Needed
+### Phase 3: Ability Effects on AI
+- `packages/game-core/src/abilityEffects.ts` - all ability functions
+- `packages/partykit/src/game.ts:274-286` (handleAbilityActivation) - modify this
+- `packages/partykit/src/game.ts:218-237` (broadcastAIState) - ensure called after ability
 
-Add to packages/game-core/package.json:
-```json
-{
-  "devDependencies": {
-    "vitest": "^1.0.0",
-    "@types/node": "^20.0.0"
-  },
-  "scripts": {
-    "test": "vitest",
-    "test:watch": "vitest --watch",
-    "test:ui": "vitest --ui"
-  }
-}
-```
+### Phase 4: AI Ability Usage
+- `packages/partykit/src/game.ts:183-200` (AI line clear / star earning) - track stars
+- `packages/game-core/src/abilities.json` - AI ability loadout
+- `packages/partykit/src/game.ts:260-272` (handleGameEvent) - send AI ability to player
 
-Create vitest.config.ts in packages/game-core:
-```typescript
-import { defineConfig } from 'vitest/config';
+## Current Issues Identified
 
-export default defineConfig({
-  test: {
-    globals: true,
-    environment: 'node',
-  },
-});
-```
+1. **AI uses optimal move calculation** (aiPlayer.ts:112-174)
+   - Uses weighted board evaluation (height, holes, bumpiness)
+   - Always picks best scoring placement
+   - Too skilled for average players
+
+2. **Abilities don't affect AI** (game.ts:274-286)
+   - `handleAbilityActivation()` sends message to AI connection (which doesn't exist)
+   - Should directly modify `this.aiGameState.board` instead
+   - Need to clear `aiMoveQueue` to force re-planning
+
+3. **AI doesn't use abilities** (game.ts:129-239)
+   - AI loop has no ability decision logic
+   - AI doesn't track stars (needs to earn from line clears)
+   - No `ability_activation` calls from AI to player
+
+4. **Difficulty tiers** (aiDifficulty.ts:13-35)
+   - Hardcoded easy/medium/hard
+   - Doesn't adapt to player skill
+   - Spec wants single adaptive AI
+
+## Next Steps (Phase 2: Planning)
+
+Based on this research, Phase 2 should:
+1. Create prescriptive steps for removing difficulty system
+2. Design PlayerMetrics tracking (where to store, how to calculate rolling averages)
+3. Design AdaptiveAI class (mistake rate, delay mirroring, move quality)
+4. Map each ability type to its board modification function
+5. Design AI ability decision logic (when to use offensive vs defensive)
+6. Define test cases for each phase

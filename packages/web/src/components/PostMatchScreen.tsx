@@ -5,10 +5,10 @@ interface PostMatchScreenProps {
   outcome: 'win' | 'loss' | 'draw';
   rewards: MatchRewards;
   onContinue: () => void;
-  isAiMatch?: boolean; // Hidden from player, used internally only
+  isAiMatch?: boolean;
 }
 
-export function PostMatchScreen({ outcome, rewards, onContinue, isAiMatch: _isAiMatch = false }: PostMatchScreenProps) {
+export function PostMatchScreen({ outcome, rewards, onContinue, isAiMatch = false }: PostMatchScreenProps) {
   const [showRewards, setShowRewards] = useState(false);
 
   useEffect(() => {
@@ -91,7 +91,7 @@ export function PostMatchScreen({ outcome, rewards, onContinue, isAiMatch: _isAi
                 color: '#ffaa00',
                 marginBottom: '10px',
               }}>
-                🪙 +{rewards.coins} Coins
+                🪙 +{rewards.coins} Coins{isAiMatch ? ' (AI Match - 50%)' : ''}
               </div>
 
               <div style={{
@@ -121,7 +121,7 @@ export function PostMatchScreen({ outcome, rewards, onContinue, isAiMatch: _isAi
                 color: '#00ffff',
                 marginBottom: '10px',
               }}>
-                ⭐ +{rewards.xp} XP
+                ⭐ +{rewards.xp} XP{isAiMatch ? ' (AI Match - 50%)' : ''}
               </div>
 
               <div style={{
