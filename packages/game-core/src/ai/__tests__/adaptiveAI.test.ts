@@ -12,29 +12,28 @@ describe('AdaptiveAI', () => {
     const ai = new AdaptiveAI(metrics);
     const delay = ai.decideMoveDelay();
 
-    // Should be within ±20% of base delay (2000ms), then reduced by 10%
-    // So: 2000 * 0.9 = 1800, with variance of ±360
-    expect(delay).toBeGreaterThanOrEqual(1440);
-    expect(delay).toBeLessThanOrEqual(2160);
+    // Should be within ±20% of base delay (2000ms), then slowed by 10%
+    // So: 2000 * 1.1 = 2200, with variance of ±400
+    expect(delay).toBeGreaterThanOrEqual(1760);
+    expect(delay).toBeLessThanOrEqual(2640);
   });
 
-  it('should make mistakes based on player mistake rate', () => {
+  it('should make mistakes at base rate (~35%)', () => {
     const metrics = createInitialPlayerMetrics();
-    metrics.mistakeRate = 0.5; // 50% player mistakes
 
     const ai = new AdaptiveAI(metrics);
 
-    // Test 100 decisions, expect ~80% mistakes (35% base + 50% player, capped at 80%)
+    // Test 1000 decisions, expect ~35% mistakes (base rate)
     let mistakeCount = 0;
-    for (let i = 0; i < 100; i++) {
+    for (let i = 0; i < 1000; i++) {
       if (ai.shouldMakeMistake()) {
         mistakeCount++;
       }
     }
 
-    // Should be around 75-85 mistakes (allowing for randomness)
-    expect(mistakeCount).toBeGreaterThanOrEqual(70);
-    expect(mistakeCount).toBeLessThanOrEqual(90);
+    // Should be around 300-400 mistakes (35% ± tolerance)
+    expect(mistakeCount).toBeGreaterThanOrEqual(280);
+    expect(mistakeCount).toBeLessThanOrEqual(420);
   });
 
   it('should find reasonable moves (not optimal)', () => {

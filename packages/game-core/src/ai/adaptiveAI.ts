@@ -12,7 +12,7 @@ import { isValidPosition, getHardDropPosition, rotatePiece } from '../engine';
  */
 export class AdaptiveAI {
   playerMetrics: PlayerMetrics;
-  baseMistakeRate: number = 0.15; // 15% base mistake rate for balanced gameplay
+  baseMistakeRate: number = 0.35; // 35% base mistake rate for ~50/50 win rate
 
   constructor(playerMetrics: PlayerMetrics) {
     this.playerMetrics = playerMetrics;
@@ -33,8 +33,8 @@ export class AdaptiveAI {
     const variance = baseDelay * 0.2;
     const delay = baseDelay + (Math.random() * variance * 2 - variance);
 
-    // Make AI slightly faster (10% advantage) to compensate for perfect execution
-    return Math.max(80, delay * 0.9);
+    // Make AI slightly slower (10%) to account for human reaction time advantage
+    return Math.max(80, delay * 1.1);
   }
 
   /**

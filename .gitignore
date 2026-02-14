@@ -60,3 +60,4 @@ packages/web/public/audio_v*/
 packages/web/ios/
 packages/web/android/
 packages/web/test-*.html
+.spec-implementer/**/session-logs/

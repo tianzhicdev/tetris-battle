@@ -3,6 +3,7 @@
   "main": "src/server.ts",
   "parties": {
     "matchmaking": "src/matchmaking.ts",
-    "game": "src/game.ts"
+    "game": "src/game.ts",
+    "presence": "src/presence.ts"
   }
 }
