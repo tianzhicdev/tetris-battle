@@ -248,7 +248,7 @@ export function MultiplayerGame({ roomId, playerId, opponentId, theme, profile, 
         gameLoopRef.current = null;
       }
     };
-  }, [tick, gameState.isGameOver, isConnected, gameFinished]);
+  }, [isConnected, gameFinished]); // BUGFIX: Removed tick and gameState.isGameOver to prevent multiple game loops
 
   // Set up bomb explosion callback
   useEffect(() => {
