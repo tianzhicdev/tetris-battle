@@ -36,6 +36,8 @@ export default class MatchmakingServer implements Party.Server {
   }
 
   handleJoinQueue(playerId: string, rank: number | undefined, conn: Party.Connection) {
+    console.log(`[MATCHMAKING SERVER] Player ${playerId} joined with rank: ${rank}`);
+
     // Check if already in queue
     if (this.queue.find(p => p.id === playerId)) {
       conn.send(JSON.stringify({ type: 'already_in_queue' }));
@@ -113,6 +115,7 @@ export default class MatchmakingServer implements Party.Server {
 
       if (waitTime >= AI_FALLBACK_TIMEOUT) {
         console.log(`[AI FALLBACK] Triggering for player ${player.id}`);
+        console.log(`[AI FALLBACK] Creating AI for player rank: ${player.rank}`);
 
         // Remove from queue
         this.queue = this.queue.filter(p => p.id !== player.id);

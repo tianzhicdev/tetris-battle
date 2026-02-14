@@ -6,6 +6,8 @@ export class PartykitGameSync {
   private playerId: string;
   private roomId: string;
   private aiOpponent?: any;
+  private lastSyncTime: number = 0;
+  private minSyncInterval: number = 100; // Minimum 100ms between syncs
 
   constructor(roomId: string, playerId: string, host: string, aiOpponent?: any) {
     this.roomId = roomId;
@@ -95,6 +97,13 @@ export class PartykitGameSync {
     isGameOver: boolean,
     currentPiece?: any
   ): void {
+    // Debounce: Don't sync more than once per minSyncInterval
+    const now = Date.now();
+    if (now - this.lastSyncTime < this.minSyncInterval) {
+      return; // Skip this sync
+    }
+    this.lastSyncTime = now;
+
     this.send({
       type: 'game_state_update',
       playerId: this.playerId,
@@ -141,6 +150,13 @@ export class PartykitGameSync {
     if (this.socket.readyState === WebSocket.OPEN) {
       this.socket.send(JSON.stringify(data));
     }
+  }
+
+  getDebugInfo(): { lastSyncTime: number; minSyncInterval: number } {
+    return {
+      lastSyncTime: this.lastSyncTime,
+      minSyncInterval: this.minSyncInterval,
+    };
   }
 
   disconnect(): void {

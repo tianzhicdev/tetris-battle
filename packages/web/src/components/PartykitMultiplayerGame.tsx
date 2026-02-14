@@ -51,6 +51,7 @@ export function MultiplayerGame({ roomId, playerId, opponentId, theme, profile, 
   const opponentRendererRef = useRef<TetrisRenderer | null>(null);
   const gameSyncRef = useRef<PartykitGameSync | null>(null);
   const gameLoopRef = useRef<number | null>(null);
+  const lastSyncedStateRef = useRef<string>('');
 
   const [opponentState, setOpponentState] = useState<any | null>(null);
   const [isConnected, setIsConnected] = useState(false);
@@ -159,25 +160,53 @@ export function MultiplayerGame({ roomId, playerId, opponentId, theme, profile, 
     fetchOpponentProfile();
   }, [opponentId]);
 
-  // Sync game state to server
+  // Sync game state to server (only when OUR state changes, not opponent's)
   useEffect(() => {
-    if (gameSyncRef.current && isConnected) {
-      gameSyncRef.current.updateGameState(
-        gameState.board,
-        gameState.score,
-        gameState.stars,
-        gameState.linesCleared,
-        gameState.comboCount,
-        gameState.isGameOver,
-        gameState.currentPiece
-      );
-
-      // Check for game over
-      if (gameState.isGameOver && !gameFinished) {
-        gameSyncRef.current.gameOver();
-      }
+    if (!gameSyncRef.current || !isConnected) {
+      return;
     }
-  }, [gameState, isConnected, gameFinished]);
+
+    // Create a stable hash of the state we care about syncing
+    const currentStateHash = JSON.stringify({
+      board: gameState.board.grid,
+      score: gameState.score,
+      stars: gameState.stars,
+      linesCleared: gameState.linesCleared,
+      comboCount: gameState.comboCount,
+      isGameOver: gameState.isGameOver,
+    });
+
+    // Only sync if our own state has actually changed
+    if (currentStateHash === lastSyncedStateRef.current) {
+      return; // No change, skip sync
+    }
+
+    console.log('[SYNC] State changed, checking if sync needed', {
+      currentHash: currentStateHash.substring(0, 50),
+      lastHash: lastSyncedStateRef.current.substring(0, 50),
+      willSync: currentStateHash !== lastSyncedStateRef.current,
+    });
+
+    // Update sync timestamp
+    lastSyncedStateRef.current = currentStateHash;
+
+    // Sync to server
+    gameSyncRef.current.updateGameState(
+      gameState.board,
+      gameState.score,
+      gameState.stars,
+      gameState.linesCleared,
+      gameState.comboCount,
+      gameState.isGameOver,
+      gameState.currentPiece
+    );
+
+    // Check for game over
+    if (gameState.isGameOver && !gameFinished) {
+      gameSyncRef.current.gameOver();
+    }
+  }, [gameState.board.grid, gameState.score, gameState.stars, gameState.linesCleared,
+      gameState.comboCount, gameState.isGameOver, isConnected, gameFinished]);
 
   // Initialize renderers
   useEffect(() => {
@@ -207,13 +236,16 @@ export function MultiplayerGame({ roomId, playerId, opponentId, theme, profile, 
       gameLoopRef.current = window.setTimeout(loop, tickRate);
     };
 
-    if (!gameState.isGameOver && isConnected && !gameFinished) {
+    if (!gameState.isGameOver && isConnected && !gameFinished && !gameLoopRef.current) {
+      console.log('[GAME LOOP] Starting game loop');
       gameLoopRef.current = window.setTimeout(loop, BASE_TICK_RATE);
     }
 
     return () => {
       if (gameLoopRef.current) {
+        console.log('[GAME LOOP] Cleaning up game loop');
         clearTimeout(gameLoopRef.current);
+        gameLoopRef.current = null;
       }
     };
   }, [tick, gameState.isGameOver, isConnected, gameFinished]);

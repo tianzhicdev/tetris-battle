@@ -63,7 +63,31 @@ export default class GameRoomServer implements Party.Server {
   aiFreezeTimeout: ReturnType<typeof setTimeout> | null = null;
   aiLastClearTime: number = 0;
 
+  // Debug: Track message frequency
+  messageCounters: Map<string, { count: number; lastReset: number }> = new Map();
+
   constructor(readonly room: Party.Room) {}
+
+  private trackMessage(playerId: string, messageType: string): void {
+    const now = Date.now();
+    let counter = this.messageCounters.get(playerId);
+
+    if (!counter) {
+      counter = { count: 0, lastReset: now };
+      this.messageCounters.set(playerId, counter);
+    }
+
+    // Reset counter every second
+    if (now - counter.lastReset >= 1000) {
+      if (counter.count > 10) {
+        console.warn(`[GAME] Player ${playerId} sent ${counter.count} ${messageType} messages in 1 second (possible loop!)`);
+      }
+      counter.count = 0;
+      counter.lastReset = now;
+    }
+
+    counter.count++;
+  }
 
   onConnect(conn: Party.Connection, ctx: Party.ConnectionContext) {
     console.log(`Player connected to game room ${this.room.id}: ${conn.id}`);
@@ -125,6 +149,13 @@ export default class GameRoomServer implements Party.Server {
     // If we have 2 players, start game
     if (this.players.size === 2 && this.roomStatus === 'waiting') {
       this.roomStatus = 'playing';
+
+      console.log(`[GAME] Starting game with players:`, {
+        player1: Array.from(this.players.keys())[0],
+        player2: Array.from(this.players.keys())[1],
+        hasAI: !!this.aiPlayer,
+        roomId: this.room.id,
+      });
 
       this.broadcast({
         type: 'game_start',
@@ -284,6 +315,8 @@ export default class GameRoomServer implements Party.Server {
   }
 
   handleGameStateUpdate(playerId: string, state: GameState, sender: Party.Connection) {
+    this.trackMessage(playerId, 'game_state_update');
+
     const player = this.players.get(playerId);
     if (!player) return;
 

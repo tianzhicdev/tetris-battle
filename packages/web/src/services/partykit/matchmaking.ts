@@ -4,10 +4,12 @@ export class PartykitMatchmaking {
   private socket: PartySocket | null = null;
   private playerId: string;
   private host: string;
+  private rank: number;
 
-  constructor(playerId: string, host: string) {
+  constructor(playerId: string, host: string, rank: number) {
     this.playerId = playerId;
     this.host = host;
+    this.rank = rank;
   }
 
   connect(
@@ -54,9 +56,11 @@ export class PartykitMatchmaking {
 
   joinQueue(): void {
     if (this.socket && this.socket.readyState === WebSocket.OPEN) {
+      console.log('[MATCHMAKING] Sending join_queue with rank:', this.rank);
       this.socket.send(JSON.stringify({
         type: 'join_queue',
         playerId: this.playerId,
+        rank: this.rank,
       }));
     }
   }

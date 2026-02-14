@@ -230,6 +230,7 @@ function GameApp({ profile: initialProfile }: { profile: UserProfile }) {
       {mode === 'matchmaking' && (
         <Matchmaking
           playerId={playerId}
+          rank={profile.rank}
           onMatchFound={handleMatchFound}
           onCancel={handleCancelMatchmaking}
           theme={currentTheme}

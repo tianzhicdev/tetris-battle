@@ -3,18 +3,19 @@ import { PartykitMatchmaking } from '../services/partykit/matchmaking';
 
 interface MatchmakingProps {
   playerId: string;
+  rank: number;
   onMatchFound: (roomId: string, player1Id: string, player2Id: string, aiOpponent?: any) => void;
   onCancel: () => void;
   theme: any;
 }
 
-export function Matchmaking({ playerId, onMatchFound, onCancel, theme }: MatchmakingProps) {
+export function Matchmaking({ playerId, rank, onMatchFound, onCancel, theme }: MatchmakingProps) {
   const [queuePosition, setQueuePosition] = useState<number>(-1);
   const [queueDuration, setQueueDuration] = useState<number>(0);
   const [dots, setDots] = useState('');
   const [matchmaking] = useState(() => {
     const host = import.meta.env.VITE_PARTYKIT_HOST || 'localhost:1999';
-    return new PartykitMatchmaking(playerId, host);
+    return new PartykitMatchmaking(playerId, host, rank);
   });
 
   useEffect(() => {
