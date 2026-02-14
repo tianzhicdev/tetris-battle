@@ -10,7 +10,6 @@ import {
   createTetromino,
   getRandomTetromino,
   findBestPlacement,
-  calculateStars,
   createInitialPlayerMetrics,
   AdaptiveAI,
   applyEarthquake,
@@ -19,11 +18,7 @@ import {
   applyRowRotate,
   applyDeathCross,
   applyGoldDigger,
-  applyAddJunkRows,
-  applyScrambleBoard,
-  applyGravityFlip,
-  applyCrossBomb,
-  applyCircleBomb,
+  calculateStars,
   STAR_VALUES,
   type AIPersona,
   type GameState as CoreGameState,
@@ -61,8 +56,6 @@ export default class GameRoomServer implements Party.Server {
   aiInterval: ReturnType<typeof setInterval> | null = null;
   aiMoveQueue: AIMove[] = [];
   aiLastMoveTime: number = 0;
-  aiLastGravityTime: number = 0;
-  aiHasPlannedCurrentPiece: boolean = false; // Prevent re-planning mid-piece
   adaptiveAI: AdaptiveAI | null = null;
   aiAbilityLoadout: string[] = [];
   aiLastAbilityUse: number = 0;
@@ -196,26 +189,51 @@ export default class GameRoomServer implements Party.Server {
 
       const now = Date.now();
 
-      // Apply gravity (piece falls down naturally like human players)
-      const GRAVITY_INTERVAL = 1000; // Same as human players: 1 second
-      if (now - this.aiLastGravityTime >= GRAVITY_INTERVAL) {
-        this.aiLastGravityTime = now;
+      // Use adaptive move delay - controls speed
+      const moveDelay = this.adaptiveAI ? this.adaptiveAI.decideMoveDelay() : 300;
 
-        // Try to move piece down
-        const pieceBelowMe = movePiece(this.aiGameState.currentPiece, 0, 1);
-        if (isValidPosition(this.aiGameState.board, pieceBelowMe)) {
-          this.aiGameState.currentPiece = pieceBelowMe;
-          // Broadcast state after gravity
-          this.broadcastAIState();
-        } else {
-          // Piece hit bottom - lock it
-          this.aiGameState.board = lockPiece(this.aiGameState.board, this.aiGameState.currentPiece);
+      if (now - this.aiLastMoveTime < moveDelay) {
+        return;
+      }
+
+      // If no moves queued, decide next placement using adaptive AI
+      if (this.aiMoveQueue.length === 0 && this.adaptiveAI) {
+        const decision = this.adaptiveAI.findMove(
+          this.aiGameState.board,
+          this.aiGameState.currentPiece
+        );
+        this.aiMoveQueue = decision.moves;
+      }
+
+      // Execute next move (ONE move per tick - visible movement!)
+      const move = this.aiMoveQueue.shift();
+      if (!move) return;
+
+      let newPiece = this.aiGameState.currentPiece;
+
+      switch (move.type) {
+        case 'left':
+          newPiece = movePiece(newPiece, -1, 0);
+          break;
+        case 'right':
+          newPiece = movePiece(newPiece, 1, 0);
+          break;
+        case 'rotate_cw':
+          newPiece = rotatePiece(newPiece, true);
+          break;
+        case 'rotate_ccw':
+          newPiece = rotatePiece(newPiece, false);
+          break;
+        case 'hard_drop':
+          newPiece.position = getHardDropPosition(this.aiGameState.board, newPiece);
+          // Lock piece
+          this.aiGameState.board = lockPiece(this.aiGameState.board, newPiece);
           const { board, linesCleared } = clearLines(this.aiGameState.board);
           this.aiGameState.board = board;
           this.aiGameState.linesCleared += linesCleared;
           this.aiGameState.score += linesCleared * 100;
 
-          // Proper star calculation with combo tracking
+          // Update AI stars (proper calculation with combo)
           if (linesCleared > 0) {
             const comboWindow = STAR_VALUES.comboWindow;
             if (now - this.aiLastClearTime < comboWindow) {
@@ -248,93 +266,19 @@ export default class GameRoomServer implements Party.Server {
           // AI ability usage after locking piece
           this.aiConsiderUsingAbility();
 
-          // Clear move queue and planning flag (start fresh for new piece)
-          this.aiMoveQueue = [];
-          this.aiHasPlannedCurrentPiece = false;
-
-          // Broadcast updated state
-          this.broadcastAIState();
-          return;
-        }
+          break;
       }
 
-      // Execute all moves instantly (no delay) - AI positions pieces like humans
-      // Plan once per piece: decide placement only if we haven't planned yet
-      if (!this.aiHasPlannedCurrentPiece && this.aiMoveQueue.length === 0 && this.adaptiveAI) {
-        const decision = this.adaptiveAI.findMove(
-          this.aiGameState.board,
-          this.aiGameState.currentPiece
-        );
-        this.aiMoveQueue = decision.moves;
-        this.aiHasPlannedCurrentPiece = true; // Lock in the plan
-      }
-
-      // Execute ALL queued moves instantly (positioning is instant, gravity handles falling)
-      while (this.aiMoveQueue.length > 0) {
-        const move = this.aiMoveQueue.shift();
-        if (!move) break;
-
-        let newPiece = this.aiGameState.currentPiece;
-
-        switch (move.type) {
-          case 'left':
-            newPiece = movePiece(newPiece, -1, 0);
-            break;
-          case 'right':
-            newPiece = movePiece(newPiece, 1, 0);
-            break;
-          case 'rotate_cw':
-            newPiece = rotatePiece(newPiece, true);
-            break;
-          case 'rotate_ccw':
-            newPiece = rotatePiece(newPiece, false);
-            break;
-          case 'hard_drop':
-            // Hard drop: lock piece immediately like human players
-            const droppedPosition = getHardDropPosition(this.aiGameState.board, this.aiGameState.currentPiece);
-            this.aiGameState.currentPiece = { ...this.aiGameState.currentPiece, position: droppedPosition };
-
-            // Lock piece and clear lines
-            this.aiGameState.board = lockPiece(this.aiGameState.board, this.aiGameState.currentPiece);
-            const { board, linesCleared } = clearLines(this.aiGameState.board);
-            this.aiGameState.board = board;
-            this.aiGameState.linesCleared += linesCleared;
-            this.aiGameState.score += linesCleared * 100;
-            this.aiGameState.stars += linesCleared * 10;
-
-            // Spawn next piece
-            this.aiGameState.currentPiece = createTetromino(
-              this.aiGameState.nextPieces[0],
-              this.aiGameState.board.width
-            );
-            this.aiGameState.nextPieces.shift();
-            this.aiGameState.nextPieces.push(getRandomTetromino());
-
-            // Check game over
-            if (!isValidPosition(this.aiGameState.board, this.aiGameState.currentPiece)) {
-              this.aiGameState.isGameOver = true;
-              this.handleGameOver(this.aiPlayer!.id);
-            }
-
-            // AI ability usage after locking piece
-            this.aiConsiderUsingAbility();
-
-            // Clear move queue and reset planning flag for next piece
-            this.aiMoveQueue = [];
-            this.aiHasPlannedCurrentPiece = false;
-
-            // Broadcast updated state
-            this.broadcastAIState();
-            return; // Exit the while loop - piece is locked
-        }
-
-        // Validate and update piece (for non-hard_drop moves)
+      // Validate and update piece
+      if (move.type !== 'hard_drop') {
         if (isValidPosition(this.aiGameState.board, newPiece)) {
           this.aiGameState.currentPiece = newPiece;
         }
       }
 
-      // Broadcast AI state after all moves executed
+      this.aiLastMoveTime = now;
+
+      // Broadcast AI state after move
       this.broadcastAIState();
     }, 50); // Check every 50ms, but moveDelay controls actual move rate
   }
@@ -547,9 +491,8 @@ export default class GameRoomServer implements Party.Server {
         console.warn(`Unknown ability type: ${abilityType}`);
     }
 
-    // Clear AI move queue and reset planning flag to force re-planning with new board state
+    // Clear AI move queue to force re-planning with new board state
     this.aiMoveQueue = [];
-    this.aiHasPlannedCurrentPiece = false;
 
     // Broadcast updated AI state to human player immediately
     this.broadcastAIState();
