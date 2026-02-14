@@ -55,6 +55,7 @@ export default class GameRoomServer implements Party.Server {
   aiInterval: ReturnType<typeof setInterval> | null = null;
   aiMoveQueue: AIMove[] = [];
   aiLastMoveTime: number = 0;
+  aiLastGravityTime: number = 0;
   adaptiveAI: AdaptiveAI | null = null;
   aiAbilityLoadout: string[] = [];
   aiLastAbilityUse: number = 0;
@@ -182,7 +183,53 @@ export default class GameRoomServer implements Party.Server {
 
       const now = Date.now();
 
-      // Use adaptive move delay
+      // Apply gravity (piece falls down naturally like human players)
+      const GRAVITY_INTERVAL = 1000; // Same as human players: 1 second
+      if (now - this.aiLastGravityTime >= GRAVITY_INTERVAL) {
+        this.aiLastGravityTime = now;
+
+        // Try to move piece down
+        const pieceBelowMe = movePiece(this.aiGameState.currentPiece, 0, 1);
+        if (isValidPosition(this.aiGameState.board, pieceBelowMe)) {
+          this.aiGameState.currentPiece = pieceBelowMe;
+          // Broadcast state after gravity
+          this.broadcastAIState();
+        } else {
+          // Piece hit bottom - lock it
+          this.aiGameState.board = lockPiece(this.aiGameState.board, this.aiGameState.currentPiece);
+          const { board, linesCleared } = clearLines(this.aiGameState.board);
+          this.aiGameState.board = board;
+          this.aiGameState.linesCleared += linesCleared;
+          this.aiGameState.score += linesCleared * 100;
+          this.aiGameState.stars += linesCleared * 10;
+
+          // Spawn next piece
+          this.aiGameState.currentPiece = createTetromino(
+            this.aiGameState.nextPieces[0],
+            this.aiGameState.board.width
+          );
+          this.aiGameState.nextPieces.shift();
+          this.aiGameState.nextPieces.push(getRandomTetromino());
+
+          // Check game over
+          if (!isValidPosition(this.aiGameState.board, this.aiGameState.currentPiece)) {
+            this.aiGameState.isGameOver = true;
+            this.handleGameOver(this.aiPlayer!.id);
+          }
+
+          // AI ability usage after locking piece
+          this.aiConsiderUsingAbility();
+
+          // Clear move queue (start fresh for new piece)
+          this.aiMoveQueue = [];
+
+          // Broadcast updated state
+          this.broadcastAIState();
+          return;
+        }
+      }
+
+      // Use adaptive move delay for AI actions
       const moveDelay = this.adaptiveAI ? this.adaptiveAI.decideMoveDelay() : 300;
 
       if (now - this.aiLastMoveTime < moveDelay) {
@@ -198,7 +245,7 @@ export default class GameRoomServer implements Party.Server {
         this.aiMoveQueue = decision.moves;
       }
 
-      // Execute next move
+      // Execute next move (only left/right/rotate - not hard_drop anymore)
       const move = this.aiMoveQueue.shift();
       if (!move) return;
 
@@ -218,38 +265,11 @@ export default class GameRoomServer implements Party.Server {
           newPiece = rotatePiece(newPiece, false);
           break;
         case 'hard_drop':
-          newPiece.position = getHardDropPosition(this.aiGameState.board, newPiece);
-          // Lock piece
-          this.aiGameState.board = lockPiece(this.aiGameState.board, newPiece);
-          const { board, linesCleared } = clearLines(this.aiGameState.board);
-          this.aiGameState.board = board;
-          this.aiGameState.linesCleared += linesCleared;
-          this.aiGameState.score += linesCleared * 100;
-
-          // Update AI stars (simplified: 10 stars per line)
-          this.aiGameState.stars += linesCleared * 10;
-
-          // Spawn next piece
-          this.aiGameState.currentPiece = createTetromino(
-            this.aiGameState.nextPieces[0],
-            this.aiGameState.board.width
-          );
-          this.aiGameState.nextPieces.shift();
-          this.aiGameState.nextPieces.push(getRandomTetromino());
-
-          // Check game over
-          if (!isValidPosition(this.aiGameState.board, this.aiGameState.currentPiece)) {
-            this.aiGameState.isGameOver = true;
-            this.handleGameOver(this.aiPlayer!.id);
-          }
-
-          // AI ability usage decision (after locking piece)
-          this.aiConsiderUsingAbility();
-
+          // Skip hard_drop - gravity will handle locking naturally
           break;
       }
 
-      // Validate and update piece
+      // Validate and update piece (only for left/right/rotate)
       if (move.type !== 'hard_drop') {
         if (isValidPosition(this.aiGameState.board, newPiece)) {
           this.aiGameState.currentPiece = newPiece;
@@ -258,25 +278,8 @@ export default class GameRoomServer implements Party.Server {
 
       this.aiLastMoveTime = now;
 
-      // Broadcast AI state to human opponent
-      const humanPlayer = Array.from(this.players.values()).find(p => p.playerId !== this.aiPlayer!.id);
-      if (humanPlayer) {
-        const conn = this.getConnection(humanPlayer.connectionId);
-        if (conn) {
-          conn.send(JSON.stringify({
-            type: 'opponent_state_update',
-            state: {
-              board: this.aiGameState.board.grid, // Send just the grid, not the Board object
-              score: this.aiGameState.score,
-              stars: this.aiGameState.stars,
-              linesCleared: this.aiGameState.linesCleared,
-              comboCount: this.aiGameState.comboCount || 0,
-              isGameOver: this.aiGameState.isGameOver,
-              currentPiece: this.aiGameState.currentPiece,
-            },
-          }));
-        }
-      }
+      // Broadcast AI state after move
+      this.broadcastAIState();
     }, 50); // Check every 50ms, but moveDelay controls actual move rate
   }
 

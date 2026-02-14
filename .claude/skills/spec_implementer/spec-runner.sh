@@ -14,9 +14,15 @@ set -euo pipefail
 
 SPEC_FILE="${1:?Usage: ./spec-runner.sh <spec-file> [--max-runs N]}"
 MAX_RUNS="${3:-8}"
-WORK_LOG=".spec-implementer/work-log.md"
-VERIFICATION=".spec-implementer/verification.md"
-LOG_DIR=".spec-implementer/session-logs"
+
+# Extract spec name from file path (e.g., "specs/001-ai-players.md" -> "001-ai-players")
+SPEC_NAME=$(basename "$SPEC_FILE" .md)
+
+# Create unique directory for this spec
+SPEC_DIR=".spec-implementer/${SPEC_NAME}"
+WORK_LOG="${SPEC_DIR}/work-log.md"
+VERIFICATION="${SPEC_DIR}/verification.md"
+LOG_DIR="${SPEC_DIR}/session-logs"
 RUN_COUNT=0
 
 # Colors
@@ -67,14 +73,15 @@ build_prompt() {
     cat <<EOF
 Use the spec-implementer skill to implement ${SPEC_FILE}.
 Follow all 4 phases. Do not stop until Phase 4 verification is complete.
-If you run low on context, update .spec-implementer/work-log.md with your
+Store all progress in ${SPEC_DIR}/ (work-log.md, plan.md, etc.).
+If you run low on context, update ${WORK_LOG} with your
 exact progress before stopping so the next session can resume.
 EOF
   else
     # Resume run — pick up where we left off
     cat <<EOF
-Resume the spec-implementer skill. Read .spec-implementer/work-log.md and
-.spec-implementer/plan.md to see exactly where you left off.
+Resume the spec-implementer skill. Read ${WORK_LOG} and
+${SPEC_DIR}/plan.md to see exactly where you left off.
 Current phase: ${phase}
 Current step: $(get_current_step)
 Continue from where you stopped. Follow the remaining steps in the plan.

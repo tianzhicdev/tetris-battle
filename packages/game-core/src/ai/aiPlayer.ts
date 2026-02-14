@@ -201,8 +201,7 @@ export function generateMoves(
     }
   }
 
-  // Add hard drop at the end
-  moves.push({ type: 'hard_drop' });
+  // No hard drop - gravity will handle piece falling naturally
 
   return moves;
 }
