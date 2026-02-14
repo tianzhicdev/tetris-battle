@@ -263,11 +263,45 @@ export default class GameRoomServer implements Party.Server {
             newPiece = rotatePiece(newPiece, false);
             break;
           case 'hard_drop':
-            // Skip hard_drop - gravity will handle locking naturally
-            continue;
+            // Hard drop: lock piece immediately like human players
+            const droppedPosition = getHardDropPosition(this.aiGameState.board, this.aiGameState.currentPiece);
+            this.aiGameState.currentPiece = { ...this.aiGameState.currentPiece, position: droppedPosition };
+
+            // Lock piece and clear lines
+            this.aiGameState.board = lockPiece(this.aiGameState.board, this.aiGameState.currentPiece);
+            const { board, linesCleared } = clearLines(this.aiGameState.board);
+            this.aiGameState.board = board;
+            this.aiGameState.linesCleared += linesCleared;
+            this.aiGameState.score += linesCleared * 100;
+            this.aiGameState.stars += linesCleared * 10;
+
+            // Spawn next piece
+            this.aiGameState.currentPiece = createTetromino(
+              this.aiGameState.nextPieces[0],
+              this.aiGameState.board.width
+            );
+            this.aiGameState.nextPieces.shift();
+            this.aiGameState.nextPieces.push(getRandomTetromino());
+
+            // Check game over
+            if (!isValidPosition(this.aiGameState.board, this.aiGameState.currentPiece)) {
+              this.aiGameState.isGameOver = true;
+              this.handleGameOver(this.aiPlayer!.id);
+            }
+
+            // AI ability usage after locking piece
+            this.aiConsiderUsingAbility();
+
+            // Clear move queue and reset planning flag for next piece
+            this.aiMoveQueue = [];
+            this.aiHasPlannedCurrentPiece = false;
+
+            // Broadcast updated state
+            this.broadcastAIState();
+            return; // Exit the while loop - piece is locked
         }
 
-        // Validate and update piece
+        // Validate and update piece (for non-hard_drop moves)
         if (isValidPosition(this.aiGameState.board, newPiece)) {
           this.aiGameState.currentPiece = newPiece;
         }

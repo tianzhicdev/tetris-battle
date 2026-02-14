@@ -201,7 +201,8 @@ export function generateMoves(
     }
   }
 
-  // No hard drop - gravity will handle piece falling naturally
+  // Add hard drop to lock piece immediately (like human players)
+  moves.push({ type: 'hard_drop' });
 
   return moves;
 }
