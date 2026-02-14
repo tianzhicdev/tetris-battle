@@ -155,13 +155,13 @@ export default class GameRoomServer implements Party.Server {
     // Initialize adaptive AI with player metrics
     this.adaptiveAI = new AdaptiveAI(humanPlayer.metrics);
 
-    // Set AI ability loadout (simple set for level 1+ players)
+    // Set AI ability loadout (balanced debuffs only - no overpowered abilities)
     this.aiAbilityLoadout = [
-      'earthquake',
-      'random_spawner',
-      'death_cross',
-      'row_rotate',
-      'gold_digger',
+      'earthquake',        // Moderate: Shift rows
+      'random_spawner',    // Moderate: Add garbage blocks
+      'row_rotate',        // Moderate: Rotate rows
+      'speed_up_opponent', // Strong: 3x fall speed
+      'screen_shake',      // Weak: Visual distraction
     ];
     this.aiLastAbilityUse = Date.now();
 
@@ -229,13 +229,7 @@ export default class GameRoomServer implements Party.Server {
         }
       }
 
-      // Use adaptive move delay for AI actions
-      const moveDelay = this.adaptiveAI ? this.adaptiveAI.decideMoveDelay() : 300;
-
-      if (now - this.aiLastMoveTime < moveDelay) {
-        return;
-      }
-
+      // Execute all moves instantly (no delay) - AI positions pieces like humans
       // If no moves queued, decide next placement using adaptive AI
       if (this.aiMoveQueue.length === 0 && this.adaptiveAI) {
         const decision = this.adaptiveAI.findMove(
@@ -245,40 +239,38 @@ export default class GameRoomServer implements Party.Server {
         this.aiMoveQueue = decision.moves;
       }
 
-      // Execute next move (only left/right/rotate - not hard_drop anymore)
-      const move = this.aiMoveQueue.shift();
-      if (!move) return;
+      // Execute ALL queued moves instantly (positioning is instant, gravity handles falling)
+      while (this.aiMoveQueue.length > 0) {
+        const move = this.aiMoveQueue.shift();
+        if (!move) break;
 
-      let newPiece = this.aiGameState.currentPiece;
+        let newPiece = this.aiGameState.currentPiece;
 
-      switch (move.type) {
-        case 'left':
-          newPiece = movePiece(newPiece, -1, 0);
-          break;
-        case 'right':
-          newPiece = movePiece(newPiece, 1, 0);
-          break;
-        case 'rotate_cw':
-          newPiece = rotatePiece(newPiece, true);
-          break;
-        case 'rotate_ccw':
-          newPiece = rotatePiece(newPiece, false);
-          break;
-        case 'hard_drop':
-          // Skip hard_drop - gravity will handle locking naturally
-          break;
-      }
+        switch (move.type) {
+          case 'left':
+            newPiece = movePiece(newPiece, -1, 0);
+            break;
+          case 'right':
+            newPiece = movePiece(newPiece, 1, 0);
+            break;
+          case 'rotate_cw':
+            newPiece = rotatePiece(newPiece, true);
+            break;
+          case 'rotate_ccw':
+            newPiece = rotatePiece(newPiece, false);
+            break;
+          case 'hard_drop':
+            // Skip hard_drop - gravity will handle locking naturally
+            continue;
+        }
 
-      // Validate and update piece (only for left/right/rotate)
-      if (move.type !== 'hard_drop') {
+        // Validate and update piece
         if (isValidPosition(this.aiGameState.board, newPiece)) {
           this.aiGameState.currentPiece = newPiece;
         }
       }
 
-      this.aiLastMoveTime = now;
-
-      // Broadcast AI state after move
+      // Broadcast AI state after all moves executed
       this.broadcastAIState();
     }, 50); // Check every 50ms, but moveDelay controls actual move rate
   }
