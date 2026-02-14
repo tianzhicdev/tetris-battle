@@ -69,8 +69,11 @@ export default class MatchmakingServer implements Party.Server {
   }
 
   tryMatch() {
+    console.log(`[MATCHMAKING] tryMatch called - Queue size: ${this.queue.length}`);
+
     // Need at least 2 players
     if (this.queue.length < 2) {
+      console.log('[MATCHMAKING] Not enough players for match, checking AI fallback');
       // Check if anyone has been waiting long enough for AI fallback
       this.checkAIFallback();
       return;
@@ -87,7 +90,7 @@ export default class MatchmakingServer implements Party.Server {
     // Generate room ID
     const roomId = `game_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 
-    console.log(`Matched ${player1.id} vs ${player2.id} in room ${roomId}`);
+    console.log(`[HUMAN MATCH] Matched ${player1.id} vs ${player2.id} in room ${roomId}`);
 
     // Create match message
     const matchMessage = JSON.stringify({
@@ -98,11 +101,24 @@ export default class MatchmakingServer implements Party.Server {
     });
 
     // Send to both players
-    const conn1 = [...this.room.getConnections()].find(c => c.id === player1.connectionId);
-    if (conn1) conn1.send(matchMessage);
+    const allConnections = [...this.room.getConnections()];
+    console.log(`[HUMAN MATCH] Total connections: ${allConnections.length}`);
 
-    const conn2 = [...this.room.getConnections()].find(c => c.id === player2.connectionId);
-    if (conn2) conn2.send(matchMessage);
+    const conn1 = allConnections.find(c => c.id === player1.connectionId);
+    if (conn1) {
+      console.log(`[HUMAN MATCH] Sending match to player1: ${player1.id}`);
+      conn1.send(matchMessage);
+    } else {
+      console.log(`[HUMAN MATCH] ERROR: Connection not found for player1: ${player1.id}`);
+    }
+
+    const conn2 = allConnections.find(c => c.id === player2.connectionId);
+    if (conn2) {
+      console.log(`[HUMAN MATCH] Sending match to player2: ${player2.id}`);
+      conn2.send(matchMessage);
+    } else {
+      console.log(`[HUMAN MATCH] ERROR: Connection not found for player2: ${player2.id}`);
+    }
   }
 
   checkAIFallback() {
