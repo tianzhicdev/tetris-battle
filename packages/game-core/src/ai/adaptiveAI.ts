@@ -12,7 +12,7 @@ import { isValidPosition, getHardDropPosition, rotatePiece } from '../engine';
  */
 export class AdaptiveAI {
   playerMetrics: PlayerMetrics;
-  baseMistakeRate: number = 0.35; // 35% base mistake rate
+  baseMistakeRate: number = 0.15; // 15% base mistake rate for balanced gameplay
 
   constructor(playerMetrics: PlayerMetrics) {
     this.playerMetrics = playerMetrics;
@@ -41,9 +41,9 @@ export class AdaptiveAI {
    * Decide if AI should make an intentional mistake
    */
   shouldMakeMistake(): boolean {
-    // Combine base mistake rate with player's mistake rate
-    const totalRate = Math.min(0.8, this.baseMistakeRate + this.playerMetrics.mistakeRate);
-    return Math.random() < totalRate;
+    // Use base mistake rate (don't stack with player mistakes)
+    // Player metrics mainly affect move delay, not mistake rate
+    return Math.random() < this.baseMistakeRate;
   }
 
   /**

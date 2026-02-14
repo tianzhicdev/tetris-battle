@@ -539,15 +539,28 @@ export default class GameRoomServer implements Party.Server {
 
   handleGameOver(playerId: string) {
     const player = this.players.get(playerId);
-    if (!player || !player.gameState) return;
+    if (!player) return;
 
-    player.gameState.isGameOver = true;
+    // Mark as game over (handle both AI and human players)
+    if (this.aiPlayer && playerId === this.aiPlayer.id) {
+      // AI lost - aiGameState already marked as game over
+      console.log('[GAME OVER] AI lost');
+    } else if (player.gameState) {
+      // Human player lost
+      player.gameState.isGameOver = true;
+      console.log('[GAME OVER] Human player lost');
+    } else {
+      console.warn('[GAME OVER] Player has no game state:', playerId);
+      return;
+    }
 
     // Determine winner
     const opponent = this.getOpponent(playerId);
     if (opponent) {
       this.winnerId = opponent.playerId;
       this.roomStatus = 'finished';
+
+      console.log(`[GAME OVER] Winner: ${this.winnerId}, Loser: ${playerId}`);
 
       this.broadcast({
         type: 'game_finished',
