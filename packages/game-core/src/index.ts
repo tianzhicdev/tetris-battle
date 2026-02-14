@@ -5,3 +5,4 @@ export * from './engine';
 export * from './abilities';
 export * from './abilityEffects';
 export * from './progression';
+export * from './ai';

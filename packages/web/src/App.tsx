@@ -14,6 +14,7 @@ interface GameMatch {
   roomId: string;
   player1Id: string;
   player2Id: string;
+  aiOpponent?: any;
 }
 
 function GameApp({ profile: initialProfile }: { profile: UserProfile }) {
@@ -55,8 +56,8 @@ function GameApp({ profile: initialProfile }: { profile: UserProfile }) {
     }
   };
 
-  const handleMatchFound = (roomId: string, player1Id: string, player2Id: string) => {
-    setGameMatch({ roomId, player1Id, player2Id });
+  const handleMatchFound = (roomId: string, player1Id: string, player2Id: string, aiOpponent?: any) => {
+    setGameMatch({ roomId, player1Id, player2Id, aiOpponent });
     setMode('multiplayer');
   };
 
@@ -106,6 +107,7 @@ function GameApp({ profile: initialProfile }: { profile: UserProfile }) {
         theme={currentTheme}
         profile={profile}
         onExit={handleExitGame}
+        aiOpponent={gameMatch.aiOpponent}
       />
     );
   }

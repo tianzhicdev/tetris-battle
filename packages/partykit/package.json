@@ -8,6 +8,7 @@
     "deploy": "partykit deploy"
   },
   "dependencies": {
+    "@tetris-battle/game-core": "workspace:*",
     "partykit": "^0.0.111"
   },
   "devDependencies": {

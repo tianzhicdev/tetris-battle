@@ -5,10 +5,12 @@ export class PartykitGameSync {
   private socket: PartySocket;
   private playerId: string;
   private roomId: string;
+  private aiOpponent?: any;
 
-  constructor(roomId: string, playerId: string, host: string) {
+  constructor(roomId: string, playerId: string, host: string, aiOpponent?: any) {
     this.roomId = roomId;
     this.playerId = playerId;
+    this.aiOpponent = aiOpponent;
 
     this.socket = new PartySocket({
       host,
@@ -25,7 +27,7 @@ export class PartykitGameSync {
   ): void {
     this.socket.addEventListener('open', () => {
       console.log(`Connected to game room: ${this.roomId}`);
-      this.joinGame();
+      this.joinGame(this.aiOpponent);
     });
 
     this.socket.addEventListener('message', (event) => {
@@ -76,10 +78,11 @@ export class PartykitGameSync {
     });
   }
 
-  joinGame(): void {
+  joinGame(aiOpponent?: any): void {
     this.send({
       type: 'join_game',
       playerId: this.playerId,
+      aiOpponent,
     });
   }
 

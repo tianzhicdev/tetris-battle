@@ -5,9 +5,10 @@ interface PostMatchScreenProps {
   outcome: 'win' | 'loss' | 'draw';
   rewards: MatchRewards;
   onContinue: () => void;
+  isAiMatch?: boolean; // Hidden from player, used internally only
 }
 
-export function PostMatchScreen({ outcome, rewards, onContinue }: PostMatchScreenProps) {
+export function PostMatchScreen({ outcome, rewards, onContinue, isAiMatch: _isAiMatch = false }: PostMatchScreenProps) {
   const [showRewards, setShowRewards] = useState(false);
 
   useEffect(() => {

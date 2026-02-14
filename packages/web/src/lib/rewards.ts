@@ -22,7 +22,8 @@ export async function awardMatchRewards(
   linesCleared: number,
   abilitiesUsed: number,
   matchDuration: number,
-  opponentId: string
+  opponentId: string,
+  isAiMatch: boolean = false
 ): Promise<MatchRewards | null> {
   try {
     const profile = await progressionService.getUserProfile(userId);
@@ -67,7 +68,7 @@ export async function awardMatchRewards(
       }
     }
 
-    const totalCoins = baseCoins + performanceBonus + streakBonus + firstWinBonus;
+    let totalCoins = baseCoins + performanceBonus + streakBonus + firstWinBonus;
 
     // Calculate XP
     let baseXp = XP_VALUES.matchComplete;
@@ -76,7 +77,13 @@ export async function awardMatchRewards(
       winBonus = XP_VALUES.matchWin;
     }
 
-    const totalXp = baseXp + winBonus;
+    let totalXp = baseXp + winBonus;
+
+    // Apply AI match penalty (50% rewards for bot matches)
+    if (isAiMatch) {
+      totalCoins = Math.floor(totalCoins * 0.5);
+      totalXp = Math.floor(totalXp * 0.5);
+    }
 
     // Save match result
     await progressionService.saveMatchResult({
@@ -88,7 +95,7 @@ export async function awardMatchRewards(
       abilitiesUsed,
       coinsEarned: totalCoins,
       xpEarned: totalXp,
-      rankChange: 0, // Legacy function, Rank calculated elsewhere
+      rankChange: 0, // Always 0 in this function (AI and human matches). Rank calculated in separate ELO system
       rankAfter: profile.rank,
       opponentRank: 1000, // Default, not used in legacy function
       duration: matchDuration,

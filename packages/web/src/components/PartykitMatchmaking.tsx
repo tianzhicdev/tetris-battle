@@ -3,13 +3,14 @@ import { PartykitMatchmaking } from '../services/partykit/matchmaking';
 
 interface MatchmakingProps {
   playerId: string;
-  onMatchFound: (roomId: string, player1Id: string, player2Id: string) => void;
+  onMatchFound: (roomId: string, player1Id: string, player2Id: string, aiOpponent?: any) => void;
   onCancel: () => void;
   theme: any;
 }
 
 export function Matchmaking({ playerId, onMatchFound, onCancel, theme }: MatchmakingProps) {
   const [queuePosition, setQueuePosition] = useState<number>(-1);
+  const [queueDuration, setQueueDuration] = useState<number>(0);
   const [dots, setDots] = useState('');
   const [matchmaking] = useState(() => {
     const host = import.meta.env.VITE_PARTYKIT_HOST || 'localhost:1999';
@@ -26,10 +27,20 @@ export function Matchmaking({ playerId, onMatchFound, onCancel, theme }: Matchma
   }, []);
 
   useEffect(() => {
+    // Track queue duration
+    const start = Date.now();
+    const interval = setInterval(() => {
+      setQueueDuration(Math.floor((Date.now() - start) / 1000));
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, []);
+
+  useEffect(() => {
     matchmaking.connect(
-      (roomId, player1, player2) => {
-        console.log('Match found:', roomId, player1, player2);
-        onMatchFound(roomId, player1, player2);
+      (roomId, player1, player2, aiOpponent) => {
+        console.log('Match found:', roomId, player1, player2, aiOpponent ? '(AI Match)' : '');
+        onMatchFound(roomId, player1, player2, aiOpponent);
       },
       (position) => {
         setQueuePosition(position);
@@ -107,7 +118,9 @@ export function Matchmaking({ playerId, onMatchFound, onCancel, theme }: Matchma
         )}
 
         <p style={{ opacity: 0.8, marginBottom: 'clamp(25px, 6.25vw, 30px)', fontSize: 'clamp(14px, 3.5vw, 16px)', color: '#aaa', fontWeight: '600' }}>
-          {queuePosition === 1
+          {queueDuration >= 18
+            ? 'Expanding search...'
+            : queuePosition === 1
             ? "You're next! Waiting for another player..."
             : 'Searching for a worthy opponent...'}
         </p>

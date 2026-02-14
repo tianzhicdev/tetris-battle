@@ -11,7 +11,7 @@ export class PartykitMatchmaking {
   }
 
   connect(
-    onMatchFound: (roomId: string, player1: string, player2: string) => void,
+    onMatchFound: (roomId: string, player1: string, player2: string, aiOpponent?: any) => void,
     onQueueUpdate?: (position: number) => void
   ): void {
     // Connect to matchmaking party
@@ -32,7 +32,7 @@ export class PartykitMatchmaking {
           break;
 
         case 'match_found':
-          onMatchFound(data.roomId, data.player1, data.player2);
+          onMatchFound(data.roomId, data.player1, data.player2, data.aiOpponent);
           this.disconnect();
           break;
 

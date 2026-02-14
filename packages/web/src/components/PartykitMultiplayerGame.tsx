@@ -41,9 +41,10 @@ interface MultiplayerGameProps {
   theme: Theme;
   profile: UserProfile;
   onExit: () => void;
+  aiOpponent?: any;
 }
 
-export function MultiplayerGame({ roomId, playerId, opponentId, theme, profile, onExit }: MultiplayerGameProps) {
+export function MultiplayerGame({ roomId, playerId, opponentId, theme, profile, onExit, aiOpponent }: MultiplayerGameProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const opponentCanvasRef = useRef<HTMLCanvasElement>(null);
   const rendererRef = useRef<TetrisRenderer | null>(null);
@@ -110,7 +111,7 @@ export function MultiplayerGame({ roomId, playerId, opponentId, theme, profile, 
   // Initialize game sync
   useEffect(() => {
     const host = import.meta.env.VITE_PARTYKIT_HOST || 'localhost:1999';
-    const sync = new PartykitGameSync(roomId, playerId, host);
+    const sync = new PartykitGameSync(roomId, playerId, host, aiOpponent);
     gameSyncRef.current = sync;
 
     sync.connect(
