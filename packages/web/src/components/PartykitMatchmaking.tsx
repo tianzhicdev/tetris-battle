@@ -57,32 +57,38 @@ export function Matchmaking({ playerId, onMatchFound, onCancel, theme }: Matchma
         minHeight: '100vh',
         backgroundColor: theme.backgroundColor,
         color: theme.textColor,
-        fontFamily: 'monospace',
+        fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+        padding: 'clamp(20px, 5vw, 40px)',
       }}
     >
       <div
         style={{
-          backgroundColor: theme.uiBackgroundColor,
-          padding: '40px',
-          borderRadius: '10px',
+          background: 'rgba(10, 10, 30, 0.95)',
+          backdropFilter: 'blur(30px)',
+          border: '1px solid rgba(0, 212, 255, 0.3)',
+          borderRadius: 'clamp(12px, 3vw, 16px)',
+          boxShadow: '0 8px 32px rgba(0, 0, 0, 0.6), inset 0 1px 0 rgba(255, 255, 255, 0.1)',
+          padding: 'clamp(30px, 7.5vw, 40px)',
           textAlign: 'center',
-          minWidth: '400px',
+          minWidth: 'min(400px, 100%)',
+          maxWidth: '500px',
         }}
       >
-        <h2 style={{ marginBottom: '30px', fontSize: '2rem' }}>
+        <h2 style={{ marginBottom: 'clamp(25px, 6.25vw, 30px)', fontSize: 'clamp(24px, 6vw, 32px)', fontWeight: '700', color: '#00d4ff', textShadow: '0 0 15px rgba(0, 212, 255, 0.6)' }}>
           Finding Opponent{dots}
         </h2>
 
         {/* Animated spinner */}
         <div
           style={{
-            width: '80px',
-            height: '80px',
-            margin: '30px auto',
-            border: `8px solid ${theme.gridColor}`,
-            borderTop: `8px solid ${theme.colors.I}`,
+            width: 'clamp(60px, 15vw, 80px)',
+            height: 'clamp(60px, 15vw, 80px)',
+            margin: 'clamp(25px, 6.25vw, 30px) auto',
+            border: '6px solid rgba(255, 255, 255, 0.1)',
+            borderTop: '6px solid #00d4ff',
             borderRadius: '50%',
             animation: 'spin 1s linear infinite',
+            boxShadow: '0 0 20px rgba(0, 212, 255, 0.3)',
           }}
         />
         <style>
@@ -95,12 +101,12 @@ export function Matchmaking({ playerId, onMatchFound, onCancel, theme }: Matchma
         </style>
 
         {queuePosition > 0 && (
-          <p style={{ fontSize: '18px', marginBottom: '20px' }}>
+          <p style={{ fontSize: 'clamp(16px, 4vw, 18px)', marginBottom: 'clamp(15px, 3.75vw, 20px)', color: '#00ff88', fontWeight: '700', textShadow: '0 0 10px rgba(0, 255, 136, 0.5)' }}>
             Queue Position: #{queuePosition}
           </p>
         )}
 
-        <p style={{ opacity: 0.7, marginBottom: '30px' }}>
+        <p style={{ opacity: 0.8, marginBottom: 'clamp(25px, 6.25vw, 30px)', fontSize: 'clamp(14px, 3.5vw, 16px)', color: '#aaa', fontWeight: '600' }}>
           {queuePosition === 1
             ? "You're next! Waiting for another player..."
             : 'Searching for a worthy opponent...'}
@@ -109,14 +115,19 @@ export function Matchmaking({ playerId, onMatchFound, onCancel, theme }: Matchma
         <button
           onClick={handleCancel}
           style={{
-            padding: '15px 40px',
-            fontSize: '18px',
-            backgroundColor: theme.colors.Z,
-            color: '#ffffff',
-            border: 'none',
-            borderRadius: '5px',
+            padding: 'clamp(12px, 3vw, 15px) clamp(30px, 7.5vw, 40px)',
+            fontSize: 'clamp(16px, 4vw, 18px)',
+            background: 'rgba(10, 10, 30, 0.6)',
+            backdropFilter: 'blur(20px)',
+            color: '#ff6e6e',
+            border: '1px solid rgba(255, 110, 110, 0.4)',
+            borderRadius: 'clamp(6px, 1.5vw, 8px)',
             cursor: 'pointer',
-            fontFamily: 'monospace',
+            fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+            fontWeight: '700',
+            boxShadow: '0 4px 15px rgba(255, 110, 110, 0.2)',
+            transition: 'all 0.2s ease',
+            textShadow: '0 0 10px rgba(255, 110, 110, 0.5)',
           }}
         >
           Cancel

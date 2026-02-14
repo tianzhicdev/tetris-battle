@@ -4,7 +4,7 @@ import { TetrisGame } from './components/TetrisGame';
 import { Matchmaking } from './components/PartykitMatchmaking';
 import { MultiplayerGame } from './components/PartykitMultiplayerGame';
 import { AuthWrapper } from './components/AuthWrapper';
-import { THEMES } from './themes';
+import { DEFAULT_THEME } from './themes';
 import { progressionService } from './lib/supabase';
 import type { UserProfile } from '@tetris-battle/game-core';
 
@@ -18,7 +18,7 @@ interface GameMatch {
 
 function GameApp({ profile: initialProfile }: { profile: UserProfile }) {
   const [mode, setMode] = useState<GameMode>('menu');
-  const [currentTheme, setCurrentTheme] = useState(THEMES[1]); // Default to Retro
+  const [currentTheme, setCurrentTheme] = useState(DEFAULT_THEME); // Default to Glass
   const [gameMatch, setGameMatch] = useState<GameMatch | null>(null);
   const [profile, setProfile] = useState<UserProfile>(initialProfile);
 
@@ -28,14 +28,22 @@ function GameApp({ profile: initialProfile }: { profile: UserProfile }) {
   // Reload profile when returning to menu
   useEffect(() => {
     if (mode === 'menu') {
-      reloadProfile();
+      // Small delay to ensure database writes complete
+      setTimeout(() => {
+        reloadProfile();
+      }, 500);
     }
   }, [mode]);
 
   const reloadProfile = async () => {
+    console.log('[APP] Reloading profile...', profile.userId);
     const updated = await progressionService.getUserProfile(profile.userId);
+    console.log('[APP] Profile loaded:', updated);
     if (updated) {
       setProfile(updated);
+      console.log('[APP] Profile state updated');
+    } else {
+      console.error('[APP] Failed to load profile');
     }
   };
 
@@ -96,6 +104,7 @@ function GameApp({ profile: initialProfile }: { profile: UserProfile }) {
         playerId={playerId}
         opponentId={opponentId}
         theme={currentTheme}
+        profile={profile}
         onExit={handleExitGame}
       />
     );

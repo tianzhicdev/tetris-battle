@@ -15,7 +15,6 @@ export function AbilityCarousel({ currentStars, onActivate, theme }: AbilityCaro
     refreshAbilities,
     canActivate,
     useAbility,
-    getCooldownRemaining,
     isTestMode,
   } = useAbilityStore();
 
@@ -58,31 +57,25 @@ export function AbilityCarousel({ currentStars, onActivate, theme }: AbilityCaro
       >
         {availableAbilities.map((ability, index) => {
           const canUse = canActivate(ability.id, currentStars);
-          const cooldown = getCooldownRemaining(ability.id);
-          const isOnCooldown = cooldown > 0;
 
           return (
             <button
               key={ability.id}
               onClick={() => handleActivate(ability)}
-              disabled={!canUse || isOnCooldown}
+              disabled={!canUse}
               style={{
                 padding: '8px',
-                backgroundColor: canUse && !isOnCooldown
+                backgroundColor: canUse
                   ? ability.category === 'buff'
                     ? theme.colors.T  // Purple for buffs
-                    : ability.category === 'debuff'
-                    ? theme.colors.Z  // Red for debuffs
-                    : ability.category === 'defense'
-                    ? theme.colors.I  // Blue for defense
-                    : theme.colors.O  // Gold for ultra
+                    : theme.colors.Z  // Red for debuffs
                   : '#3a3a3a',
                 color: '#ffffff',
                 border: 'none',
                 borderRadius: '4px',
-                cursor: canUse && !isOnCooldown ? 'pointer' : 'not-allowed',
+                cursor: canUse ? 'pointer' : 'not-allowed',
                 textAlign: 'left',
-                opacity: canUse && !isOnCooldown ? 1 : 0.5,
+                opacity: canUse ? 1 : 0.5,
                 transition: 'opacity 0.2s',
                 position: 'relative',
               }}
@@ -100,47 +93,15 @@ export function AbilityCarousel({ currentStars, onActivate, theme }: AbilityCaro
                   <div style={{ fontSize: '13px', fontWeight: 'bold' }}>
                     {ability.cost} ⭐
                   </div>
-                  {isOnCooldown && (
-                    <div style={{ fontSize: '10px', opacity: 0.8 }}>
-                      {Math.ceil(cooldown / 1000)}s
-                    </div>
-                  )}
                 </div>
               </div>
-
-              {/* Cooldown overlay */}
-              {isOnCooldown && (
-                <div
-                  style={{
-                    position: 'absolute',
-                    bottom: 0,
-                    left: 0,
-                    right: 0,
-                    height: '2px',
-                    backgroundColor: theme.colors.I,
-                    transformOrigin: 'left',
-                    animation: `shrink ${ability.cooldown}ms linear`,
-                  }}
-                />
-              )}
             </button>
           );
         })}
       </div>
 
-      <style>
-        {`
-          @keyframes shrink {
-            from { transform: scaleX(1); }
-            to { transform: scaleX(0); }
-          }
-        `}
-      </style>
-
       <div style={{ marginTop: '8px', fontSize: '10px', opacity: 0.7, textAlign: 'center' }}>
-        {isTestMode
-          ? 'Click to activate (no cooldowns in test mode)'
-          : 'Press 1, 2, or 3 to activate'}
+        Press 1, 2, or 3 to activate
       </div>
     </div>
   );

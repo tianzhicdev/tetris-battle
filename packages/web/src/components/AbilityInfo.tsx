@@ -47,7 +47,7 @@ export function AbilityInfo({ onClose }: AbilityInfoProps) {
             fontSize: '12px',
             color: 'rgba(255,255,255,0.6)',
           }}>
-            {ability.cost} ★ • {ability.powerRating}/10
+            {ability.cost} ★
           </div>
         </div>
         <div style={{

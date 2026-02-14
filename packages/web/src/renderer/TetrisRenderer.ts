@@ -1,6 +1,7 @@
 import type { Board, Tetromino } from '@tetris-battle/game-core';
 import type { Theme } from '../themes';
 import { DEFAULT_THEME } from '../themes';
+import { BlockAnimationManager } from './BlockAnimationManager';
 
 export interface RenderOptions {
   theme?: Theme;
@@ -14,12 +15,14 @@ export class TetrisRenderer {
   private ctx: CanvasRenderingContext2D;
   private blockSize: number;
   private theme: Theme;
+  public animationManager: BlockAnimationManager;
 
   constructor(canvas: HTMLCanvasElement, blockSize: number = 30, theme?: Theme) {
     this.canvas = canvas;
     this.ctx = canvas.getContext('2d')!;
     this.blockSize = blockSize;
     this.theme = theme || DEFAULT_THEME;
+    this.animationManager = new BlockAnimationManager();
   }
 
   setTheme(theme: Theme): void {
@@ -71,6 +74,53 @@ export class TetrisRenderer {
         }
       }
     }
+  }
+
+  drawAnimations(): void {
+    const activeAnimations = this.animationManager.getActiveAnimations();
+
+    activeAnimations.forEach(anim => {
+      const progress = this.animationManager.getAnimationProgress(anim);
+      const px = anim.x * this.blockSize;
+      const py = anim.y * this.blockSize;
+
+      this.ctx.save();
+
+      switch (anim.type) {
+        case 'fade-out':
+        case 'fade-in':
+        case 'flash': {
+          const alpha = this.animationManager.getFadeAlpha(anim, progress);
+          this.ctx.globalAlpha = alpha;
+
+          // Draw colored overlay
+          const color = anim.color || '#ffffff';
+          this.ctx.fillStyle = color;
+          this.ctx.fillRect(px, py, this.blockSize, this.blockSize);
+          break;
+        }
+
+        case 'explode': {
+          const scale = this.animationManager.getExplosionScale(progress);
+          const alpha = 1 - progress; // Fade out as it expands
+
+          this.ctx.globalAlpha = alpha;
+          this.ctx.fillStyle = anim.color || '#ff4444';
+
+          // Draw expanding circle
+          const centerX = px + this.blockSize / 2;
+          const centerY = py + this.blockSize / 2;
+          const radius = (this.blockSize / 2) * scale;
+
+          this.ctx.beginPath();
+          this.ctx.arc(centerX, centerY, radius, 0, Math.PI * 2);
+          this.ctx.fill();
+          break;
+        }
+      }
+
+      this.ctx.restore();
+    });
   }
 
   drawPiece(piece: Tetromino, ghost: boolean = false, isBomb: boolean = false): void {
@@ -244,6 +294,9 @@ export class TetrisRenderer {
 
     // Draw locked blocks
     this.drawBoard(board);
+
+    // Draw animations on top of locked blocks
+    this.drawAnimations();
 
     // Draw ghost piece (preview of where piece will land)
     if (showGhost && ghostPiece) {

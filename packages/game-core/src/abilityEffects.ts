@@ -90,43 +90,39 @@ export function applyClearRows(board: Board, numRows: number = 5): { board: Boar
 // DEBUFF EFFECTS (Opponent Disruption)
 
 export function applyWeirdShapes(piece: Tetromino): Tetromino {
-  // Create a random 5x5 shape with 5-8 filled blocks
-  const numBlocks = Math.floor(Math.random() * 4) + 5; // 5-8 blocks
-  const positions = new Set<string>();
+  // Predefined hollowed shapes: square, triangle, circle
+  const shapes = [
+    // Hollowed square
+    [
+      [1, 1, 1, 1],
+      [1, 0, 0, 1],
+      [1, 0, 0, 1],
+      [1, 1, 1, 1],
+    ],
+    // Hollowed triangle (pointing up)
+    [
+      [0, 1, 1, 0],
+      [1, 0, 0, 1],
+      [1, 0, 0, 1],
+      [1, 1, 1, 1],
+    ],
+    // Hollowed circle (diamond shape)
+    [
+      [0, 1, 1, 0],
+      [1, 0, 0, 1],
+      [1, 0, 0, 1],
+      [0, 1, 1, 0],
+    ],
+  ];
 
-  // Start from center and add random adjacent blocks
-  positions.add('2,2'); // Center of 5x5 grid
-
-  while (positions.size < numBlocks) {
-    // Pick a random existing position and try to add an adjacent block
-    const posArray = Array.from(positions);
-    const randomPos = posArray[Math.floor(Math.random() * posArray.length)];
-    const [y, x] = randomPos.split(',').map(Number);
-
-    // Try random adjacent direction
-    const directions = [[-1, 0], [1, 0], [0, -1], [0, 1]];
-    const [dy, dx] = directions[Math.floor(Math.random() * directions.length)];
-    const newY = y + dy;
-    const newX = x + dx;
-
-    // Check bounds
-    if (newY >= 0 && newY < 5 && newX >= 0 && newX < 5) {
-      positions.add(`${newY},${newX}`);
-    }
-  }
-
-  // Convert positions to 5x5 shape array
-  const shape: number[][] = Array(5).fill(0).map(() => Array(5).fill(0));
-  positions.forEach(pos => {
-    const [y, x] = pos.split(',').map(Number);
-    shape[y][x] = 1;
-  });
+  // Randomly select one of the predefined shapes
+  const randomShape = shapes[Math.floor(Math.random() * shapes.length)];
 
   return {
     ...piece,
-    shape,
+    shape: randomShape,
     rotation: 0,
-    position: { x: 2, y: 0 }, // Centered spawn position for bigger piece
+    position: { x: 3, y: 0 }, // Centered spawn position for bigger piece
   };
 }
 
@@ -200,6 +196,157 @@ export function applyColumnBomb(board: Board): Board {
   }
 
   return { ...board, grid: newGrid };
+}
+
+export function applyDeathCross(board: Board): Board {
+  // Diagonal lines from bottom corners toggle blocks: filled->empty, empty->filled
+  const newGrid = board.grid.map(row => [...row]);
+  const types: CellValue[] = ['I', 'O', 'T', 'S', 'Z', 'L', 'J'];
+
+  // Diagonal from bottom-left to top-right
+  for (let i = 0; i < Math.min(board.width, board.height); i++) {
+    const x = i;
+    const y = board.height - 1 - i;
+    if (y >= 0) {
+      if (newGrid[y][x]) {
+        // Filled -> empty
+        newGrid[y][x] = null;
+      } else {
+        // Empty -> filled
+        newGrid[y][x] = types[Math.floor(Math.random() * types.length)];
+      }
+    }
+  }
+
+  // Diagonal from bottom-right to top-left
+  for (let i = 0; i < Math.min(board.width, board.height); i++) {
+    const x = board.width - 1 - i;
+    const y = board.height - 1 - i;
+    if (y >= 0 && x >= 0) {
+      if (newGrid[y][x]) {
+        // Filled -> empty
+        newGrid[y][x] = null;
+      } else {
+        // Empty -> filled
+        newGrid[y][x] = types[Math.floor(Math.random() * types.length)];
+      }
+    }
+  }
+
+  return { ...board, grid: newGrid };
+}
+
+export function applyGoldDigger(board: Board): Board {
+  // Remove 1-3 random blocks from FILLED cells only (opposite of random spawner)
+  const newGrid = board.grid.map(row => [...row]);
+  const numBlocks = Math.floor(Math.random() * 3) + 1;
+
+  // Find all filled cells
+  const filledCells: { x: number; y: number }[] = [];
+  for (let y = 5; y < board.height; y++) { // Don't affect top 5 rows
+    for (let x = 0; x < board.width; x++) {
+      if (newGrid[y][x]) {
+        filledCells.push({ x, y });
+      }
+    }
+  }
+
+  // Randomly remove blocks
+  for (let i = 0; i < numBlocks && filledCells.length > 0; i++) {
+    const randomIndex = Math.floor(Math.random() * filledCells.length);
+    const { x, y } = filledCells[randomIndex];
+    newGrid[y][x] = null;
+    filledCells.splice(randomIndex, 1);
+  }
+
+  // Apply gravity so blocks fall into the gaps
+  return applyGravity({ ...board, grid: newGrid });
+}
+
+export function applyRowRotate(board: Board): Board {
+  // Each row rotates 1-8 positions randomly left or right
+  const newGrid = board.grid.map(row => [...row]);
+
+  for (let y = 0; y < board.height; y++) {
+    const positions = Math.floor(Math.random() * 8) + 1; // 1-8 positions
+    const direction = Math.random() > 0.5 ? 1 : -1; // 1 = right, -1 = left
+    const rotatedRow: CellValue[] = Array(board.width).fill(null);
+
+    for (let x = 0; x < board.width; x++) {
+      const newX = (x + direction * positions + board.width) % board.width;
+      rotatedRow[newX] = newGrid[y][x];
+    }
+
+    newGrid[y] = rotatedRow;
+  }
+
+  return { ...board, grid: newGrid };
+}
+
+export function applyFillHoles(board: Board): Board {
+  // Fill all empty spaces that are surrounded by blocks
+  const newGrid = board.grid.map(row => [...row]);
+  const types: CellValue[] = ['I', 'O', 'T', 'S', 'Z', 'L', 'J'];
+
+  // Use flood fill to find enclosed spaces
+  const visited = Array(board.height).fill(null).map(() => Array(board.width).fill(false));
+
+  // Check each empty cell to see if it's surrounded
+  for (let y = 0; y < board.height; y++) {
+    for (let x = 0; x < board.width; x++) {
+      if (!newGrid[y][x] && !visited[y][x]) {
+        // Found an empty cell, check if it's enclosed
+        const enclosed = isEnclosed(newGrid, x, y, visited);
+        if (enclosed.isEnclosed) {
+          // Fill all cells in this enclosed region
+          enclosed.cells.forEach(({ x: cx, y: cy }) => {
+            newGrid[cy][cx] = types[Math.floor(Math.random() * types.length)];
+          });
+        }
+      }
+    }
+  }
+
+  return { ...board, grid: newGrid };
+}
+
+function isEnclosed(grid: CellValue[][], startX: number, startY: number, visited: boolean[][]): { isEnclosed: boolean; cells: { x: number; y: number }[] } {
+  const height = grid.length;
+  const width = grid[0].length;
+  const cells: { x: number; y: number }[] = [];
+  const queue: { x: number; y: number }[] = [{ x: startX, y: startY }];
+  let touchesBorder = false;
+
+  while (queue.length > 0) {
+    const { x, y } = queue.shift()!;
+
+    // Skip if already visited or out of bounds
+    if (x < 0 || x >= width || y < 0 || y >= height) {
+      touchesBorder = true;
+      continue;
+    }
+
+    if (visited[y][x]) continue;
+
+    // If this cell is filled, it's a boundary
+    if (grid[y][x]) continue;
+
+    visited[y][x] = true;
+    cells.push({ x, y });
+
+    // Check if touching border
+    if (x === 0 || x === width - 1 || y === 0 || y === height - 1) {
+      touchesBorder = true;
+    }
+
+    // Add neighbors to queue
+    queue.push({ x: x + 1, y });
+    queue.push({ x: x - 1, y });
+    queue.push({ x, y: y + 1 });
+    queue.push({ x, y: y - 1 });
+  }
+
+  return { isEnclosed: !touchesBorder && cells.length > 0, cells };
 }
 
 // UTILITY FUNCTIONS

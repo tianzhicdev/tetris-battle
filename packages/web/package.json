@@ -10,6 +10,12 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@capacitor/app": "^8.0.1",
+    "@capacitor/cli": "^8.1.0",
+    "@capacitor/core": "^8.1.0",
+    "@capacitor/haptics": "^8.0.0",
+    "@capacitor/ios": "^8.1.0",
+    "@capacitor/status-bar": "^8.0.1",
     "@clerk/clerk-react": "^5.60.0",
     "@supabase/supabase-js": "^2.95.3",
     "@tetris-battle/game-core": "workspace:*",

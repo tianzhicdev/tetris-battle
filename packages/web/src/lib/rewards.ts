@@ -88,6 +88,9 @@ export async function awardMatchRewards(
       abilitiesUsed,
       coinsEarned: totalCoins,
       xpEarned: totalXp,
+      rankChange: 0, // Legacy function, Rank calculated elsewhere
+      rankAfter: profile.rank,
+      opponentRank: 1000, // Default, not used in legacy function
       duration: matchDuration,
       timestamp: Date.now(),
     });

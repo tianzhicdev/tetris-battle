@@ -4,6 +4,7 @@ interface QueuedPlayer {
   id: string;
   connectionId: string;
   joinedAt: number;
+  elo?: number; // Optional: for future Elo-based matching when population is higher
 }
 
 export default class MatchmakingServer implements Party.Server {
@@ -59,7 +60,11 @@ export default class MatchmakingServer implements Party.Server {
     // Need at least 2 players
     if (this.queue.length < 2) return;
 
-    // Get first two players
+    // MATCHMAKING STRATEGY: Prioritize speed over Elo matching
+    // For low-population games, instant matches are more important than perfect skill matching
+    // Match first two players in queue regardless of Elo difference
+    // This prevents long wait times and abandoned queues
+    // Future enhancement: When population is high (queue > 10 players), implement Elo-based matching
     const player1 = this.queue.shift()!;
     const player2 = this.queue.shift()!;
 
@@ -68,7 +73,7 @@ export default class MatchmakingServer implements Party.Server {
 
     console.log(`Matched ${player1.id} vs ${player2.id} in room ${roomId}`);
 
-    // Notify both players
+    // Create match message
     const matchMessage = JSON.stringify({
       type: 'match_found',
       roomId,
@@ -76,11 +81,11 @@ export default class MatchmakingServer implements Party.Server {
       player2: player2.id,
     });
 
-    // Get connections and send match notification
+    // Send to both players
     const conn1 = [...this.room.getConnections()].find(c => c.id === player1.connectionId);
-    const conn2 = [...this.room.getConnections()].find(c => c.id === player2.connectionId);
-
     if (conn1) conn1.send(matchMessage);
+
+    const conn2 = [...this.room.getConnections()].find(c => c.id === player2.connectionId);
     if (conn2) conn2.send(matchMessage);
   }
 

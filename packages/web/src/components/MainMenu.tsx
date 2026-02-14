@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { UserButton } from '@clerk/clerk-react';
 import { getLevelStage } from '@tetris-battle/game-core';
 import type { UserProfile } from '@tetris-battle/game-core';
 import { AbilityShop } from './AbilityShop';
@@ -58,27 +59,45 @@ export function MainMenu({ onSelectMode, theme, profile, onProfileUpdate }: Main
         gap: '8px',
         flexWrap: 'wrap',
       }}>
-        <div style={mergeGlass(glassSuccess(), {
-          padding: '8px 12px',
-          borderRadius: '8px',
-          minWidth: 'fit-content',
-        })}>
-          <div style={{ fontSize: '11px', color: '#aaa', marginBottom: '2px' }}>
-            {stage.toUpperCase()}
+        <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+          <div style={mergeGlass(glassSuccess(), {
+            padding: '8px 12px',
+            borderRadius: '8px',
+            minWidth: 'fit-content',
+          })}>
+            <div style={{ fontSize: '11px', color: '#aaa', marginBottom: '2px' }}>
+              {stage.toUpperCase()}
+            </div>
+            <div style={{ fontSize: '16px', color: '#00ff9d', fontWeight: 'bold', textShadow: '0 0 10px rgba(0, 255, 157, 0.5)' }}>
+              Lv {profile.level}
+            </div>
           </div>
-          <div style={{ fontSize: '16px', color: '#00ff9d', fontWeight: 'bold', textShadow: '0 0 10px rgba(0, 255, 157, 0.5)' }}>
-            Lv {profile.level}
+
+          <div style={mergeGlass(glassGold(), {
+            padding: '8px 12px',
+            borderRadius: '8px',
+            minWidth: 'fit-content',
+          })}>
+            <div style={{ fontSize: '18px', color: '#ffd700', fontWeight: 'bold', textShadow: '0 0 10px rgba(255, 215, 0, 0.5)' }}>
+              🪙 {profile.coins}
+            </div>
           </div>
         </div>
 
-        <div style={mergeGlass(glassGold(), {
-          padding: '8px 12px',
-          borderRadius: '8px',
-          minWidth: 'fit-content',
+        <div style={mergeGlass(glassBlue(), {
+          padding: '4px',
+          borderRadius: '50%',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
         })}>
-          <div style={{ fontSize: '18px', color: '#ffd700', fontWeight: 'bold', textShadow: '0 0 10px rgba(255, 215, 0, 0.5)' }}>
-            🪙 {profile.coins}
-          </div>
+          <UserButton
+            appearance={{
+              elements: {
+                avatarBox: "width: 36px; height: 36px;",
+              },
+            }}
+          />
         </div>
       </div>
 
@@ -99,49 +118,21 @@ export function MainMenu({ onSelectMode, theme, profile, onProfileUpdate }: Main
         <button
           onClick={() => {
             audioManager.playSfx('button_click');
-            onSelectMode('solo');
-          }}
-          className="glass-button"
-          style={mergeGlass(glassBlue(), {
-            padding: '16px 40px',
-            fontSize: 'clamp(18px, 5vw, 24px)',
-            color: '#ffffff',
-            cursor: 'pointer',
-            fontFamily: 'monospace',
-            fontWeight: 'bold',
-            transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-            width: '100%',
-            minHeight: '60px',
-            borderRadius: '12px',
-            textShadow: '0 0 15px rgba(0, 212, 255, 0.8)',
-          })}
-          onMouseDown={(e) => e.currentTarget.style.transform = 'scale(0.95)'}
-          onMouseUp={(e) => e.currentTarget.style.transform = 'scale(1)'}
-          onMouseLeave={(e) => e.currentTarget.style.transform = 'scale(1)'}
-          onTouchStart={(e) => e.currentTarget.style.transform = 'scale(0.95)'}
-          onTouchEnd={(e) => e.currentTarget.style.transform = 'scale(1)'}
-        >
-          SOLO PLAY
-        </button>
-
-        <button
-          onClick={() => {
-            audioManager.playSfx('button_click');
             onSelectMode('multiplayer');
           }}
           className="glass-button"
           style={mergeGlass(glassPurple(), {
-            padding: '16px 40px',
-            fontSize: 'clamp(18px, 5vw, 24px)',
+            padding: '20px 50px',
+            fontSize: 'clamp(20px, 6vw, 28px)',
             color: '#ffffff',
             cursor: 'pointer',
             fontFamily: 'monospace',
             fontWeight: 'bold',
             transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
             width: '100%',
-            minHeight: '60px',
-            borderRadius: '12px',
-            textShadow: '0 0 15px rgba(201, 66, 255, 0.8)',
+            minHeight: '80px',
+            borderRadius: '16px',
+            textShadow: '0 0 20px rgba(201, 66, 255, 0.8)',
           })}
           onMouseDown={(e) => e.currentTarget.style.transform = 'scale(0.95)'}
           onMouseUp={(e) => e.currentTarget.style.transform = 'scale(1)'}
@@ -149,7 +140,7 @@ export function MainMenu({ onSelectMode, theme, profile, onProfileUpdate }: Main
           onTouchStart={(e) => e.currentTarget.style.transform = 'scale(0.95)'}
           onTouchEnd={(e) => e.currentTarget.style.transform = 'scale(1)'}
         >
-          MULTIPLAYER
+          PLAY NOW
         </button>
       </div>
 
@@ -160,19 +151,19 @@ export function MainMenu({ onSelectMode, theme, profile, onProfileUpdate }: Main
             audioManager.playSfx('button_click');
             setShowProfile(true);
           }}
-          style={{
+          style={mergeGlass(glassBlue(), {
             padding: '12px 20px',
             fontSize: '14px',
-            backgroundColor: '#00ffff',
-            color: '#000',
-            border: 'none',
-            borderRadius: '6px',
+            color: '#00d4ff',
             cursor: 'pointer',
             fontFamily: 'monospace',
             fontWeight: 'bold',
             minWidth: '90px',
             touchAction: 'manipulation',
-          }}
+            borderRadius: '8px',
+            textShadow: '0 0 10px rgba(0, 212, 255, 0.5)',
+            transition: 'all 0.2s ease',
+          })}
         >
           Profile
         </button>
@@ -182,19 +173,19 @@ export function MainMenu({ onSelectMode, theme, profile, onProfileUpdate }: Main
             audioManager.playSfx('button_click');
             setShowShop(true);
           }}
-          style={{
+          style={mergeGlass(glassGold(), {
             padding: '12px 20px',
             fontSize: '14px',
-            backgroundColor: '#ffaa00',
-            color: '#000',
-            border: 'none',
-            borderRadius: '6px',
+            color: '#ffd700',
             cursor: 'pointer',
             fontFamily: 'monospace',
             fontWeight: 'bold',
             minWidth: '90px',
             touchAction: 'manipulation',
-          }}
+            borderRadius: '8px',
+            textShadow: '0 0 10px rgba(255, 215, 0, 0.5)',
+            transition: 'all 0.2s ease',
+          })}
         >
           Shop
         </button>
@@ -204,19 +195,19 @@ export function MainMenu({ onSelectMode, theme, profile, onProfileUpdate }: Main
             audioManager.playSfx('button_click');
             setShowLoadout(true);
           }}
-          style={{
+          style={mergeGlass(glassSuccess(), {
             padding: '12px 20px',
             fontSize: '14px',
-            backgroundColor: '#00ff00',
-            color: '#000',
-            border: 'none',
-            borderRadius: '6px',
+            color: '#00ff88',
             cursor: 'pointer',
             fontFamily: 'monospace',
             fontWeight: 'bold',
             minWidth: '90px',
             touchAction: 'manipulation',
-          }}
+            borderRadius: '8px',
+            textShadow: '0 0 10px rgba(0, 255, 136, 0.5)',
+            transition: 'all 0.2s ease',
+          })}
         >
           Loadout
         </button>
@@ -226,19 +217,19 @@ export function MainMenu({ onSelectMode, theme, profile, onProfileUpdate }: Main
             audioManager.playSfx('button_click');
             setShowAbilityInfo(true);
           }}
-          style={{
+          style={mergeGlass(glassPurple(), {
             padding: '12px 20px',
             fontSize: '14px',
-            backgroundColor: '#ff00ff',
-            color: '#fff',
-            border: 'none',
-            borderRadius: '6px',
+            color: '#ff00ff',
             cursor: 'pointer',
             fontFamily: 'monospace',
             fontWeight: 'bold',
             minWidth: '90px',
             touchAction: 'manipulation',
-          }}
+            borderRadius: '8px',
+            textShadow: '0 0 10px rgba(255, 0, 255, 0.5)',
+            transition: 'all 0.2s ease',
+          })}
         >
           Abilities
         </button>

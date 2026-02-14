@@ -56,25 +56,30 @@ export function UsernameSetup({ userId, onComplete }: UsernameSetupProps) {
       left: 0,
       right: 0,
       bottom: 0,
-      background: 'rgba(0, 0, 0, 0.8)',
+      background: 'linear-gradient(135deg, #0a0e27 0%, #1a1433 100%)',
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'center',
       zIndex: 1000,
     }}>
       <div style={{
-        background: '#1a1a1a',
-        padding: '40px',
-        borderRadius: '12px',
-        border: '2px solid #00ff00',
-        maxWidth: '400px',
+        background: 'rgba(10, 10, 30, 0.6)',
+        backdropFilter: 'blur(20px)',
+        border: '1px solid rgba(0, 212, 255, 0.3)',
+        borderRadius: '20px',
+        padding: '48px',
+        boxShadow: '0 8px 32px rgba(0, 0, 0, 0.6), inset 0 1px 0 rgba(255, 255, 255, 0.1)',
+        maxWidth: '500px',
         width: '90%',
       }}>
         <h2 style={{
-          color: '#00ff00',
+          color: '#00d4ff',
           marginTop: 0,
-          marginBottom: '20px',
+          marginBottom: '32px',
           textAlign: 'center',
+          fontSize: '28px',
+          fontWeight: '700',
+          textShadow: '0 0 20px rgba(0, 212, 255, 0.6)',
         }}>
           Choose Your Username
         </h2>
@@ -88,22 +93,36 @@ export function UsernameSetup({ userId, onComplete }: UsernameSetupProps) {
             autoFocus
             style={{
               width: '100%',
-              padding: '12px',
+              padding: '16px',
               fontSize: '16px',
-              background: '#000',
-              border: '2px solid #00ff00',
-              borderRadius: '6px',
-              color: '#00ff00',
-              marginBottom: '12px',
-              fontFamily: 'monospace',
+              background: 'rgba(0, 0, 0, 0.4)',
+              border: '1px solid rgba(0, 212, 255, 0.3)',
+              borderRadius: '12px',
+              color: '#ffffff',
+              marginBottom: '16px',
+              outline: 'none',
+              transition: 'border-color 0.2s, box-shadow 0.2s',
+            }}
+            onFocus={(e) => {
+              e.currentTarget.style.borderColor = 'rgba(0, 212, 255, 0.6)';
+              e.currentTarget.style.boxShadow = '0 0 20px rgba(0, 212, 255, 0.3)';
+            }}
+            onBlur={(e) => {
+              e.currentTarget.style.borderColor = 'rgba(0, 212, 255, 0.3)';
+              e.currentTarget.style.boxShadow = 'none';
             }}
           />
 
           {error && (
             <div style={{
-              color: '#ff0000',
-              marginBottom: '12px',
+              color: '#ff006e',
+              marginBottom: '16px',
               fontSize: '14px',
+              padding: '12px',
+              background: 'rgba(255, 0, 110, 0.1)',
+              border: '1px solid rgba(255, 0, 110, 0.3)',
+              borderRadius: '8px',
+              textAlign: 'center',
             }}>
               {error}
             </div>
@@ -114,15 +133,28 @@ export function UsernameSetup({ userId, onComplete }: UsernameSetupProps) {
             disabled={loading}
             style={{
               width: '100%',
-              padding: '12px',
-              fontSize: '16px',
-              background: '#00ff00',
+              padding: '16px',
+              fontSize: '18px',
+              background: loading ? 'rgba(0, 212, 255, 0.5)' : 'linear-gradient(135deg, #00d4ff 0%, #00ff88 100%)',
               border: 'none',
-              borderRadius: '6px',
+              borderRadius: '12px',
               color: '#000',
-              fontWeight: 'bold',
+              fontWeight: '700',
               cursor: loading ? 'not-allowed' : 'pointer',
-              opacity: loading ? 0.6 : 1,
+              boxShadow: loading ? 'none' : '0 4px 15px rgba(0, 212, 255, 0.4)',
+              transition: 'transform 0.2s, box-shadow 0.2s',
+            }}
+            onMouseEnter={(e) => {
+              if (!loading) {
+                e.currentTarget.style.transform = 'translateY(-2px)';
+                e.currentTarget.style.boxShadow = '0 6px 20px rgba(0, 212, 255, 0.6)';
+              }
+            }}
+            onMouseLeave={(e) => {
+              if (!loading) {
+                e.currentTarget.style.transform = 'translateY(0)';
+                e.currentTarget.style.boxShadow = '0 4px 15px rgba(0, 212, 255, 0.4)';
+              }
             }}
           >
             {loading ? 'Creating...' : 'Start Playing'}
@@ -130,12 +162,13 @@ export function UsernameSetup({ userId, onComplete }: UsernameSetupProps) {
         </form>
 
         <div style={{
-          marginTop: '20px',
-          fontSize: '12px',
-          color: '#888',
+          marginTop: '24px',
+          fontSize: '13px',
+          color: 'rgba(255, 255, 255, 0.5)',
           textAlign: 'center',
+          lineHeight: '1.6',
         }}>
-          3-20 characters | Letters, numbers, and underscores only
+          3-20 characters • Letters, numbers, and underscores only
         </div>
       </div>
     </div>

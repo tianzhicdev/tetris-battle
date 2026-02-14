@@ -55,3 +55,8 @@ __pycache__/
 packages/web/public/audio_backup/
 packages/web/public/audio_v*/
 .env.secrets
+
+# Capacitor (iOS/Android native projects - generated, can be recreated)
+packages/web/ios/
+packages/web/android/
+packages/web/test-*.html

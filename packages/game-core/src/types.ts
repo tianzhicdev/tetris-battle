@@ -38,13 +38,14 @@ export interface GameState {
 
 // Abilities
 export type AbilityType =
-  // Buffs (5)
+  // Buffs (6)
   | 'cross_firebomb'
   | 'circle_bomb'
   | 'clear_rows'
   | 'cascade_multiplier'
   | 'mini_blocks'
-  // Debuffs (8)
+  | 'fill_holes'
+  // Debuffs (12)
   | 'speed_up_opponent'
   | 'weird_shapes'
   | 'random_spawner'
@@ -53,7 +54,10 @@ export type AbilityType =
   | 'reverse_controls'
   | 'earthquake'
   | 'screen_shake'
-  | 'shrink_ceiling';
+  | 'shrink_ceiling'
+  | 'death_cross'
+  | 'gold_digger'
+  | 'row_rotate';
 
 export interface Ability {
   id: string;
@@ -63,10 +67,9 @@ export interface Ability {
   description: string;
   cost: number;
   duration?: number; // in milliseconds, undefined for instant
-  cooldown: number;
-  powerRating: number;
-  category: 'buff' | 'debuff' | 'defense' | 'ultra';
-  icon: string; // emoji icon for UI
+  category: 'buff' | 'debuff';
+  unlockLevel: number;
+  unlockCost: number; // Coins needed to purchase
 }
 
 export interface ActiveAbility {
@@ -106,7 +109,7 @@ export const STAR_VALUES = {
   triple: 25,
   tetris: 50,
   comboBonus: 1,
-  startingPool: 20,
+  startingPool: 100,
   maxCapacity: 500,
   comboWindow: 3000, // 3 seconds
 } as const;

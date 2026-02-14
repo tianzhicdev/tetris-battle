@@ -61,39 +61,71 @@ export function AuthWrapper({ children }: AuthWrapperProps) {
           flexDirection: 'column',
           alignItems: 'center',
           justifyContent: 'center',
-          background: '#000',
-          color: '#00ff00',
+          background: 'linear-gradient(135deg, #0a0e27 0%, #1a1433 100%)',
         }}>
-          <h1 style={{
-            fontSize: '48px',
-            marginBottom: '40px',
-            fontFamily: 'monospace',
-          }}>
-            TETRIS BATTLE
-          </h1>
-
           <div style={{
-            padding: '20px 40px',
-            background: '#00ff00',
-            color: '#000',
-            fontSize: '18px',
-            fontWeight: 'bold',
-            borderRadius: '8px',
-            cursor: 'pointer',
+            background: 'rgba(10, 10, 30, 0.6)',
+            backdropFilter: 'blur(20px)',
+            border: '1px solid rgba(0, 212, 255, 0.3)',
+            borderRadius: '24px',
+            padding: '60px 80px',
+            boxShadow: '0 8px 32px rgba(0, 0, 0, 0.6), inset 0 1px 0 rgba(255, 255, 255, 0.1)',
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            maxWidth: '500px',
+            width: '90%',
           }}>
+            <h1 style={{
+              fontSize: 'clamp(36px, 8vw, 56px)',
+              marginBottom: '40px',
+              fontWeight: '800',
+              background: 'linear-gradient(135deg, #00d4ff 0%, #00ff88 100%)',
+              WebkitBackgroundClip: 'text',
+              WebkitTextFillColor: 'transparent',
+              textAlign: 'center',
+              letterSpacing: '2px',
+              textShadow: '0 0 40px rgba(0, 212, 255, 0.5)',
+            }}>
+              TETRIS BATTLE
+            </h1>
+
             <SignInButton mode="modal">
-              Sign In / Sign Up
+              <button style={{
+                padding: '16px 48px',
+                background: 'linear-gradient(135deg, #00d4ff 0%, #00ff88 100%)',
+                color: '#000',
+                fontSize: '18px',
+                fontWeight: '700',
+                borderRadius: '12px',
+                cursor: 'pointer',
+                border: 'none',
+                boxShadow: '0 4px 15px rgba(0, 212, 255, 0.4)',
+                transition: 'transform 0.2s, box-shadow 0.2s',
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.transform = 'translateY(-2px)';
+                e.currentTarget.style.boxShadow = '0 6px 20px rgba(0, 212, 255, 0.6)';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.transform = 'translateY(0)';
+                e.currentTarget.style.boxShadow = '0 4px 15px rgba(0, 212, 255, 0.4)';
+              }}>
+                Sign In / Sign Up
+              </button>
             </SignInButton>
-          </div>
 
-          <div style={{
-            marginTop: '40px',
-            fontSize: '14px',
-            color: '#888',
-            textAlign: 'center',
-            maxWidth: '400px',
-          }}>
-            Sign in with Google or Apple to start playing and track your progress
+            <div style={{
+              marginTop: '32px',
+              fontSize: '14px',
+              color: 'rgba(255, 255, 255, 0.6)',
+              textAlign: 'center',
+              lineHeight: '1.6',
+            }}>
+              Sign in with Google, Apple, or Email
+              <br />
+              to start playing and track your progress
+            </div>
           </div>
         </div>
       </SignedOut>
@@ -106,11 +138,16 @@ export function AuthWrapper({ children }: AuthWrapperProps) {
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            background: '#000',
-            color: '#00ff00',
-            fontSize: '24px',
+            background: 'linear-gradient(135deg, #0a0e27 0%, #1a1433 100%)',
           }}>
-            Loading...
+            <div style={{
+              fontSize: '24px',
+              color: '#00d4ff',
+              fontWeight: '600',
+              textShadow: '0 0 20px rgba(0, 212, 255, 0.6)',
+            }}>
+              Loading...
+            </div>
           </div>
         ) : needsUsername && user ? (
           <UsernameSetup userId={user.id} onComplete={handleUsernameComplete} />

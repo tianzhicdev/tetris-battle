@@ -64,9 +64,10 @@ export default class GameRoomServer implements Party.Server {
 
     console.log(`Player ${playerId} joined. Total players: ${this.players.size}`);
 
-    // If we have 2 players, start the game
+    // If we have 2 players, start game
     if (this.players.size === 2 && this.roomStatus === 'waiting') {
       this.roomStatus = 'playing';
+
       this.broadcast({
         type: 'game_start',
         players: Array.from(this.players.keys()),

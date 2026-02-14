@@ -1,5 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
 import type { UserProfile, MatchResult } from '@tetris-battle/game-core';
+import { STARTER_ABILITIES } from '@tetris-battle/game-core';
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
@@ -74,22 +75,40 @@ export class ProgressionService {
       return null;
     }
 
-    return data as UserProfile;
+    const profile = data as UserProfile;
+
+    // Fix for existing users: if loadout is empty/missing, set it to starter abilities
+    if (!profile.loadout || profile.loadout.length === 0) {
+      console.log('[SUPABASE] Profile has empty loadout, setting to starter abilities');
+      const starterAbilities = [...STARTER_ABILITIES];
+      profile.loadout = starterAbilities;
+      profile.unlockedAbilities = starterAbilities;
+
+      // Update the profile in database
+      await this.updateUserProfile(userId, {
+        loadout: starterAbilities,
+        unlockedAbilities: starterAbilities,
+      });
+    }
+
+    return profile;
   }
 
   async createUserProfile(userId: string, username: string): Promise<UserProfile | null> {
-    
-
     const now = Date.now();
+    const starterAbilities = [...STARTER_ABILITIES] as string[];
+
     const profile: UserProfile = {
       userId,
       username,
       level: 1,
       xp: 0,
       coins: 0,
-      elo: 1000,
-      unlockedAbilities: ['screen_shake', 'speed_up_opponent', 'mini_blocks'],
-      loadout: ['screen_shake', 'speed_up_opponent', 'mini_blocks'],
+      rank: 1000,
+      gamesPlayed: 0,
+      lastActiveAt: now,
+      unlockedAbilities: starterAbilities,
+      loadout: starterAbilities, // All 6 starter abilities in loadout by default
       createdAt: now,
       updatedAt: now,
     };

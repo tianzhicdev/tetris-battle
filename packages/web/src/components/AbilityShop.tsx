@@ -43,19 +43,22 @@ export function AbilityShop({ profile, onClose, onProfileUpdate }: AbilityShopPr
       left: 0,
       right: 0,
       bottom: 0,
-      background: 'rgba(0, 0, 0, 0.9)',
+      background: 'rgba(0, 0, 0, 0.92)',
+      backdropFilter: 'blur(10px)',
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'center',
       zIndex: 1000,
-      fontFamily: 'monospace',
-      padding: '10px',
+      fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+      padding: 'clamp(10px, 2vw, 20px)',
     }}>
       <div style={{
-        background: '#1a1a1a',
-        border: '3px solid #00ff00',
-        borderRadius: '12px',
-        maxWidth: '900px',
+        background: 'rgba(10, 10, 30, 0.95)',
+        backdropFilter: 'blur(30px)',
+        border: '1px solid rgba(0, 255, 136, 0.3)',
+        borderRadius: 'clamp(12px, 3vw, 16px)',
+        boxShadow: '0 8px 32px rgba(0, 0, 0, 0.6), inset 0 1px 0 rgba(255, 255, 255, 0.1)',
+        maxWidth: 'min(900px, 100%)',
         width: '100%',
         maxHeight: '95vh',
         display: 'flex',
@@ -64,33 +67,53 @@ export function AbilityShop({ profile, onClose, onProfileUpdate }: AbilityShopPr
       }}>
         {/* Header */}
         <div style={{
-          padding: '20px',
-          borderBottom: '2px solid #00ff00',
+          padding: 'clamp(15px, 4vw, 20px)',
+          borderBottom: '1px solid rgba(0, 255, 136, 0.3)',
           display: 'flex',
           justifyContent: 'space-between',
           alignItems: 'center',
+          flexWrap: 'wrap',
+          gap: 'clamp(10px, 2vw, 15px)',
         }}>
-          <h2 style={{ margin: 0, color: '#00ff00', fontSize: '28px' }}>
-            Ability Shop
+          <h2 style={{
+            margin: 0,
+            color: '#00ff88',
+            fontSize: 'clamp(20px, 5vw, 28px)',
+            fontWeight: '700',
+            textShadow: '0 0 15px rgba(0, 255, 136, 0.6)',
+          }}>
+            ABILITY SHOP
           </h2>
 
-          <div style={{ display: 'flex', gap: '20px', alignItems: 'center' }}>
-            <div style={{ color: '#ffaa00', fontSize: '20px' }}>
-              🪙 {profile.coins}
+          <div style={{ display: 'flex', gap: 'clamp(12px, 3vw, 20px)', alignItems: 'center' }}>
+            <div style={{
+              background: 'rgba(255, 170, 0, 0.1)',
+              border: '1px solid rgba(255, 170, 0, 0.3)',
+              borderRadius: 'clamp(6px, 1.5vw, 8px)',
+              padding: 'clamp(6px, 1.5vw, 8px) clamp(12px, 3vw, 16px)',
+              color: '#ffd700',
+              fontSize: 'clamp(16px, 4vw, 20px)',
+              fontWeight: '700',
+              boxShadow: '0 0 15px rgba(255, 170, 0, 0.2)',
+            }}>
+              {profile.coins} 🪙
             </div>
             <button
               onClick={onClose}
               style={{
-                background: '#ff0000',
+                background: 'rgba(10, 10, 30, 0.6)',
+                backdropFilter: 'blur(20px)',
                 color: '#fff',
-                border: 'none',
-                padding: '8px 16px',
-                borderRadius: '4px',
+                border: '1px solid rgba(255, 255, 255, 0.2)',
+                padding: 'clamp(6px, 1.5vw, 8px) clamp(12px, 3vw, 16px)',
+                borderRadius: 'clamp(6px, 1.5vw, 8px)',
                 cursor: 'pointer',
-                fontSize: '16px',
+                fontSize: 'clamp(14px, 3.5vw, 16px)',
+                fontWeight: '600',
+                boxShadow: '0 4px 15px rgba(0, 0, 0, 0.3)',
               }}
             >
-              Close
+              ✕
             </button>
           </div>
         </div>
@@ -99,7 +122,7 @@ export function AbilityShop({ profile, onClose, onProfileUpdate }: AbilityShopPr
         <div style={{
           flex: 1,
           overflowY: 'auto',
-          padding: '20px',
+          padding: 'clamp(15px, 4vw, 20px)',
         }}>
           {stages.map(stage => {
             const stageAbilities = ABILITY_UNLOCKS.filter(
@@ -111,11 +134,13 @@ export function AbilityShop({ profile, onClose, onProfileUpdate }: AbilityShopPr
             const isLocked = profile.level < stage.minLevel;
 
             return (
-              <div key={stage.name} style={{ marginBottom: '30px' }}>
+              <div key={stage.name} style={{ marginBottom: 'clamp(20px, 5vw, 30px)' }}>
                 <h3 style={{
-                  color: isLocked ? '#666' : '#00ffff',
-                  marginBottom: '15px',
-                  fontSize: '20px',
+                  color: isLocked ? '#666' : '#00d4ff',
+                  marginBottom: 'clamp(10px, 2.5vw, 15px)',
+                  fontSize: 'clamp(16px, 4vw, 20px)',
+                  fontWeight: '700',
+                  textShadow: isLocked ? 'none' : '0 0 10px rgba(0, 212, 255, 0.5)',
                 }}>
                   {stage.name} (Levels {stage.levels}) {isLocked && '🔒'}
                 </h3>
@@ -123,7 +148,7 @@ export function AbilityShop({ profile, onClose, onProfileUpdate }: AbilityShopPr
                 <div style={{
                   display: 'grid',
                   gridTemplateColumns: 'repeat(auto-fill, minmax(min(250px, 100%), 1fr))',
-                  gap: '12px',
+                  gap: 'clamp(10px, 2.5vw, 12px)',
                 }}>
                   {stageAbilities.map(unlock => {
                     const ability = Object.values(ABILITIES).find((a: any) => a.type === unlock.abilityId);
@@ -138,35 +163,48 @@ export function AbilityShop({ profile, onClose, onProfileUpdate }: AbilityShopPr
                         key={unlock.abilityId}
                         onClick={() => setSelectedAbility(unlock.abilityId)}
                         style={{
-                          background: selectedAbility === unlock.abilityId ? '#2a2a2a' : '#1a1a1a',
-                          border: `2px solid ${isUnlocked ? '#00ff00' : '#666'}`,
-                          borderRadius: '8px',
-                          padding: '12px',
+                          background: selectedAbility === unlock.abilityId
+                            ? 'rgba(10, 10, 30, 0.8)'
+                            : 'rgba(10, 10, 30, 0.6)',
+                          backdropFilter: 'blur(20px)',
+                          border: `1px solid ${isUnlocked ? 'rgba(0, 255, 136, 0.5)' : 'rgba(255, 255, 255, 0.15)'}`,
+                          borderRadius: 'clamp(6px, 1.5vw, 8px)',
+                          padding: 'clamp(10px, 2.5vw, 12px)',
                           cursor: 'pointer',
                           opacity: isLocked ? 0.5 : 1,
+                          boxShadow: selectedAbility === unlock.abilityId
+                            ? '0 4px 20px rgba(0, 255, 136, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.1)'
+                            : '0 2px 10px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.05)',
+                          transition: 'all 0.2s ease',
                         }}
                       >
                         <div style={{
                           display: 'flex',
                           justifyContent: 'space-between',
-                          marginBottom: '8px',
+                          marginBottom: 'clamp(6px, 1.5vw, 8px)',
+                          gap: 'clamp(6px, 1.5vw, 8px)',
                         }}>
                           <div style={{
-                            color: '#00ff00',
-                            fontWeight: 'bold',
-                            fontSize: '14px',
+                            color: '#00ff88',
+                            fontWeight: '700',
+                            fontSize: 'clamp(13px, 3.25vw, 14px)',
+                            textShadow: isUnlocked ? '0 0 10px rgba(0, 255, 136, 0.5)' : 'none',
                           }}>
                             {ability.name}
                           </div>
 
                           {isUnlocked && inLoadout && (
                             <div style={{
-                              background: '#00ff00',
-                              color: '#000',
-                              padding: '2px 6px',
-                              borderRadius: '4px',
-                              fontSize: '10px',
-                              fontWeight: 'bold',
+                              background: 'rgba(0, 255, 136, 0.2)',
+                              backdropFilter: 'blur(10px)',
+                              color: '#00ff88',
+                              border: '1px solid rgba(0, 255, 136, 0.4)',
+                              padding: 'clamp(2px, 0.5vw, 3px) clamp(6px, 1.5vw, 8px)',
+                              borderRadius: 'clamp(3px, 0.75vw, 4px)',
+                              fontSize: 'clamp(9px, 2.25vw, 10px)',
+                              fontWeight: '700',
+                              boxShadow: '0 0 10px rgba(0, 255, 136, 0.3)',
+                              whiteSpace: 'nowrap',
                             }}>
                               EQUIPPED
                             </div>
@@ -174,9 +212,9 @@ export function AbilityShop({ profile, onClose, onProfileUpdate }: AbilityShopPr
                         </div>
 
                         <div style={{
-                          fontSize: '11px',
+                          fontSize: 'clamp(10px, 2.5vw, 11px)',
                           color: '#aaa',
-                          marginBottom: '10px',
+                          marginBottom: 'clamp(8px, 2vw, 10px)',
                           lineHeight: '1.4',
                         }}>
                           {ability.description}
@@ -186,19 +224,22 @@ export function AbilityShop({ profile, onClose, onProfileUpdate }: AbilityShopPr
                           display: 'flex',
                           justifyContent: 'space-between',
                           alignItems: 'center',
+                          gap: 'clamp(8px, 2vw, 10px)',
                         }}>
                           {isUnlocked ? (
                             <div style={{
-                              color: '#00ff00',
-                              fontSize: '12px',
-                              fontWeight: 'bold',
+                              color: '#00ff88',
+                              fontSize: 'clamp(11px, 2.75vw, 12px)',
+                              fontWeight: '700',
+                              textShadow: '0 0 8px rgba(0, 255, 136, 0.4)',
                             }}>
                               UNLOCKED ✓
                             </div>
                           ) : (
                             <div style={{
-                              color: '#ffaa00',
-                              fontSize: '14px',
+                              color: '#ffd700',
+                              fontSize: 'clamp(13px, 3.25vw, 14px)',
+                              fontWeight: '600',
                             }}>
                               🪙 {unlock.cost}
                             </div>
@@ -212,14 +253,17 @@ export function AbilityShop({ profile, onClose, onProfileUpdate }: AbilityShopPr
                               }}
                               disabled={unlocking}
                               style={{
-                                background: '#00ff00',
-                                color: '#000',
-                                border: 'none',
-                                padding: '4px 12px',
-                                borderRadius: '4px',
+                                background: 'rgba(0, 255, 136, 0.2)',
+                                backdropFilter: 'blur(10px)',
+                                color: '#00ff88',
+                                border: '1px solid rgba(0, 255, 136, 0.4)',
+                                padding: 'clamp(4px, 1vw, 6px) clamp(10px, 2.5vw, 12px)',
+                                borderRadius: 'clamp(4px, 1vw, 5px)',
                                 cursor: unlocking ? 'wait' : 'pointer',
-                                fontSize: '12px',
-                                fontWeight: 'bold',
+                                fontSize: 'clamp(11px, 2.75vw, 12px)',
+                                fontWeight: '700',
+                                boxShadow: '0 2px 10px rgba(0, 255, 136, 0.3)',
+                                transition: 'all 0.2s ease',
                               }}
                             >
                               {unlocking ? 'Unlocking...' : 'Unlock'}
@@ -228,8 +272,9 @@ export function AbilityShop({ profile, onClose, onProfileUpdate }: AbilityShopPr
 
                           {!isUnlocked && !canUnlock && profile.level >= unlock.level && (
                             <div style={{
-                              color: '#ff0000',
-                              fontSize: '11px',
+                              color: '#ff6e6e',
+                              fontSize: 'clamp(10px, 2.5vw, 11px)',
+                              fontWeight: '600',
                             }}>
                               Not enough coins
                             </div>
@@ -237,8 +282,9 @@ export function AbilityShop({ profile, onClose, onProfileUpdate }: AbilityShopPr
 
                           {!isUnlocked && profile.level < unlock.level && (
                             <div style={{
-                              color: '#666',
-                              fontSize: '11px',
+                              color: '#888',
+                              fontSize: 'clamp(10px, 2.5vw, 11px)',
+                              fontWeight: '600',
                             }}>
                               Level {unlock.level} required
                             </div>

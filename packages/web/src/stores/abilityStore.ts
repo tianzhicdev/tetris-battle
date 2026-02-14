@@ -1,18 +1,18 @@
 import { create } from 'zustand';
 import type { Ability } from '@tetris-battle/game-core';
-import { ABILITIES, getRandomAbilities, canActivateAbility } from '@tetris-battle/game-core';
+import { ABILITIES, getRandomAbilities } from '@tetris-battle/game-core';
 
 interface AbilityState {
   availableAbilities: Ability[];
-  lastAbilityUse: Map<string, number>;
   lastRefreshTime: number;
   isTestMode: boolean;
+  loadout: string[]; // Player's selected abilities
 
   // Actions
+  setLoadout: (loadout: string[]) => void;
   refreshAbilities: () => void;
   canActivate: (abilityId: string, currentStars: number) => boolean;
   useAbility: (abilityId: string) => void;
-  getCooldownRemaining: (abilityId: string) => number;
 }
 
 const REFRESH_INTERVAL = 10000; // 10 seconds
@@ -31,13 +31,36 @@ const getInitialAbilities = (): Ability[] => {
 
 export const useAbilityStore = create<AbilityState>((set, get) => ({
   availableAbilities: getInitialAbilities(),
-  lastAbilityUse: new Map(),
   lastRefreshTime: Date.now(),
   isTestMode,
+  loadout: [],
+
+  setLoadout: (loadout: string[]) => {
+    console.log('[ABILITY STORE] Setting loadout:', loadout);
+
+    // Safety check: if loadout is empty or invalid, don't update
+    if (!loadout || loadout.length === 0) {
+      console.warn('[ABILITY STORE] Empty loadout received, ignoring');
+      return;
+    }
+
+    // Get abilities from loadout
+    const abilities = loadout
+      .map(id => ABILITIES[id as keyof typeof ABILITIES])
+      .filter(Boolean) as Ability[];
+
+    console.log('[ABILITY STORE] Loadout abilities:', abilities);
+
+    set({
+      loadout,
+      availableAbilities: abilities.length > 0 ? abilities : getRandomAbilities(3),
+    });
+  },
 
   refreshAbilities: () => {
-    // Don't refresh in test mode - all abilities always available
-    if (isTestMode) return;
+    // Don't refresh if we have a loadout set or in test mode
+    const { loadout } = get();
+    if (isTestMode || loadout.length > 0) return;
 
     const now = Date.now();
     const { lastRefreshTime } = get();
@@ -54,41 +77,11 @@ export const useAbilityStore = create<AbilityState>((set, get) => ({
     const ability = ABILITIES[abilityId as keyof typeof ABILITIES];
     if (!ability) return false;
 
-    // In test mode, ignore cooldowns - only check star cost
-    if (isTestMode) {
-      return currentStars >= ability.cost;
-    }
-
-    const { lastAbilityUse } = get();
-    const lastUse = lastAbilityUse.get(abilityId);
-
-    return canActivateAbility(ability, currentStars, lastUse, Date.now());
+    // Only check star cost (no cooldowns)
+    return currentStars >= ability.cost;
   },
 
-  useAbility: (abilityId: string) => {
-    // In test mode, don't track usage times (no cooldowns)
-    if (isTestMode) return;
-
-    const { lastAbilityUse } = get();
-    const newMap = new Map(lastAbilityUse);
-    newMap.set(abilityId, Date.now());
-
-    set({ lastAbilityUse: newMap });
-  },
-
-  getCooldownRemaining: (abilityId: string) => {
-    // No cooldowns in test mode
-    if (isTestMode) return 0;
-
-    const ability = ABILITIES[abilityId as keyof typeof ABILITIES];
-    if (!ability) return 0;
-
-    const { lastAbilityUse } = get();
-    const lastUse = lastAbilityUse.get(abilityId);
-
-    if (!lastUse) return 0;
-
-    const elapsed = Date.now() - lastUse;
-    return Math.max(0, ability.cooldown - elapsed);
+  useAbility: (_abilityId: string) => {
+    // No cooldowns to track
   },
 }));

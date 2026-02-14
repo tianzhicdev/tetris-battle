@@ -1,4 +1,5 @@
 // Progression system types and constants
+import abilitiesConfig from './abilities.json';
 
 export interface UserProfile {
   userId: string; // Clerk user ID
@@ -6,7 +7,9 @@ export interface UserProfile {
   level: number;
   xp: number;
   coins: number;
-  elo: number;
+  rank: number;
+  gamesPlayed: number; // Total ranked games played
+  lastActiveAt: number; // Timestamp of last game
   unlockedAbilities: string[]; // ability IDs
   loadout: string[]; // ability IDs (max 3-6 based on level)
   createdAt: number;
@@ -22,6 +25,9 @@ export interface MatchResult {
   abilitiesUsed: number;
   coinsEarned: number;
   xpEarned: number;
+  rankChange: number; // Can be negative
+  rankAfter: number;
+  opponentRank: number;
   duration: number; // seconds
   timestamp: number;
 }
@@ -130,11 +136,9 @@ export function getLevelStage(level: number): Stage {
   return 'rookie';
 }
 
-export function getLoadoutSlots(level: number): number {
-  if (level >= 22) return 6;
-  if (level >= 12) return 5;
-  if (level >= 6) return 4;
-  return 3;
+export function getLoadoutSlots(_level?: number): number {
+  // Everyone gets 6 loadout slots from the start
+  return 6;
 }
 
 export function getXpForNextLevel(currentLevel: number): number {
@@ -157,12 +161,10 @@ export function calculateLevel(xp: number): number {
   return level;
 }
 
-// Starter abilities (free at level 1)
-export const STARTER_ABILITIES = [
-  'screen_shake',
-  'speed_up_opponent',
-  'mini_blocks',
-] as const;
+// Starter abilities (free at level 1) - loaded from JSON
+export const STARTER_ABILITIES = Object.entries(abilitiesConfig.abilities)
+  .filter(([_, ability]) => ability.unlockLevel === 1 && ability.unlockCost === 0)
+  .map(([id, _]) => id);
 
 // Ability unlock mapping
 export interface AbilityUnlock {
@@ -171,37 +173,14 @@ export interface AbilityUnlock {
   cost: number;
 }
 
-// Config-driven ability unlocks - organized by progression tier
-// This makes it easy to add, remove, or reorganize abilities
-export const ABILITY_UNLOCKS: AbilityUnlock[] = [
-  // === ROOKIE TIER (Level 1-5) ===
-  // Free starter abilities - balanced mix of simple debuffs and one buff
-  { abilityId: 'screen_shake', level: 1, cost: 0 },      // Debuff: Visual distraction
-  { abilityId: 'speed_up_opponent', level: 1, cost: 0 }, // Debuff: Increases piece speed
-  { abilityId: 'mini_blocks', level: 1, cost: 0 },       // Buff: Makes your pieces smaller
-
-  // Early purchasable abilities - low-cost debuffs
-  { abilityId: 'reverse_controls', level: 1, cost: 150 }, // Debuff: Swap left/right
-  { abilityId: 'blind_spot', level: 3, cost: 200 },       // Debuff: Hide bottom rows
-
-  // === CONTENDER TIER (Level 6-10) ===
-  // Introduce offensive buffs and stronger debuffs
-  { abilityId: 'cross_firebomb', level: 6, cost: 300 },  // Buff: Cross explosion
-  { abilityId: 'circle_bomb', level: 6, cost: 350 },     // Buff: Radial explosion
-  { abilityId: 'rotation_lock', level: 7, cost: 400 },   // Debuff: Disable rotation
-  { abilityId: 'shrink_ceiling', level: 8, cost: 350 },  // Debuff: Reduce play area
-
-  // === CHALLENGER TIER (Level 11-15) ===
-  // Powerful clearing and disruption abilities
-  { abilityId: 'clear_rows', level: 11, cost: 500 },     // Buff: Clear 5 bottom rows
-  { abilityId: 'random_spawner', level: 12, cost: 450 }, // Debuff: Spawn garbage blocks
-  { abilityId: 'earthquake', level: 13, cost: 550 },     // Debuff: Shift all rows
-
-  // === VETERAN TIER (Level 16-20) ===
-  // Advanced strategic abilities
-  { abilityId: 'cascade_multiplier', level: 16, cost: 800 }, // Buff: Double star earnings
-  { abilityId: 'weird_shapes', level: 17, cost: 700 },       // Debuff: Large random pieces
-];
+// Config-driven ability unlocks - loaded from JSON
+export const ABILITY_UNLOCKS: AbilityUnlock[] = Object.entries(abilitiesConfig.abilities)
+  .map(([id, ability]) => ({
+    abilityId: id,
+    level: ability.unlockLevel,
+    cost: ability.unlockCost,
+  }))
+  .sort((a, b) => a.level - b.level || a.cost - b.cost);
 
 // Ability unlock distribution by tier (for balance checking)
 export const UNLOCK_DISTRIBUTION = {
@@ -227,4 +206,120 @@ export function canUnlockAbility(abilityId: string, level: number, coins: number
   if (!unlock) return false;
 
   return level >= unlock.level && coins >= unlock.cost;
+}
+
+// ============================================
+// RANK RATING SYSTEM
+// ============================================
+
+// Rank constants
+export const RANK_CONFIG = {
+  startingRank: 1000,
+  placementGames: 10, // First 10 games are placement matches
+  placementKFactor: 50, // High volatility during placement
+  normalKFactor: 16, // Standard K-factor after placement
+  skillFloor: 800, // Rank below which loss protection applies
+  skillFloorProtection: 0.5, // Reduce losses by 50% below skill floor
+  activityDecayDays: 14, // Days before decay starts
+  activityDecayRate: 5, // Points per day toward mean (1000)
+} as const;
+
+/**
+ * Calculate expected win probability using Elo formula
+ * @param playerRank - Player's current Rank rating
+ * @param opponentRank - Opponent's current Rank rating
+ * @returns Expected win probability (0 to 1)
+ */
+export function calculateExpectedScore(playerRank: number, opponentRank: number): number {
+  return 1 / (1 + Math.pow(10, (opponentRank - playerRank) / 400));
+}
+
+/**
+ * Calculate Rank change after a match
+ * @param playerRank - Player's current Rank
+ * @param opponentRank - Opponent's Rank
+ * @param outcome - 'win' (1), 'loss' (0), or 'draw' (0.5)
+ * @param gamesPlayed - Total games played by player (for placement detection)
+ * @returns Rank change (can be negative)
+ */
+export function calculateRankChange(
+  playerRank: number,
+  opponentRank: number,
+  outcome: 'win' | 'loss' | 'draw',
+  gamesPlayed: number
+): number {
+  // Determine K-factor based on placement status
+  const isPlacement = gamesPlayed < RANK_CONFIG.placementGames;
+  let kFactor = isPlacement ? RANK_CONFIG.placementKFactor : RANK_CONFIG.normalKFactor;
+
+  // Calculate expected score
+  const expected = calculateExpectedScore(playerRank, opponentRank);
+
+  // Convert outcome to actual score
+  const actual = outcome === 'win' ? 1 : outcome === 'draw' ? 0.5 : 0;
+
+  // Calculate base Rank change
+  let rankChange = Math.round(kFactor * (actual - expected));
+
+  // Apply skill floor protection (reduce losses for low-rated players)
+  if (playerRank < RANK_CONFIG.skillFloor && rankChange < 0) {
+    rankChange = Math.round(rankChange * RANK_CONFIG.skillFloorProtection);
+  }
+
+  return rankChange;
+}
+
+/**
+ * Calculate Rank decay for inactive players
+ * @param currentRank - Player's current Rank
+ * @param lastActiveAt - Timestamp of last game
+ * @returns New Rank after decay
+ */
+export function calculateRankDecay(currentRank: number, lastActiveAt: number): number {
+  const now = Date.now();
+  const daysSinceActive = (now - lastActiveAt) / (1000 * 60 * 60 * 24);
+
+  // No decay if active within threshold
+  if (daysSinceActive < RANK_CONFIG.activityDecayDays) {
+    return currentRank;
+  }
+
+  // Calculate days of decay
+  const decayDays = Math.floor(daysSinceActive - RANK_CONFIG.activityDecayDays);
+
+  // Drift toward mean (1000) at decay rate per day
+  const targetRank = RANK_CONFIG.startingRank;
+  const decayAmount = decayDays * RANK_CONFIG.activityDecayRate;
+
+  if (currentRank > targetRank) {
+    // Drift down
+    return Math.max(targetRank, currentRank - decayAmount);
+  } else if (currentRank < targetRank) {
+    // Drift up
+    return Math.min(targetRank, currentRank + decayAmount);
+  }
+
+  return currentRank;
+}
+
+/**
+ * Get rank tier based on rating
+ */
+export type RankTier = 'bronze' | 'silver' | 'gold' | 'platinum' | 'diamond' | 'master' | 'grandmaster';
+
+export function getRankTier(rank: number): RankTier {
+  if (rank >= 2000) return 'grandmaster';
+  if (rank >= 1600) return 'master';
+  if (rank >= 1400) return 'diamond';
+  if (rank >= 1200) return 'platinum';
+  if (rank >= 1000) return 'gold';
+  if (rank >= 800) return 'silver';
+  return 'bronze';
+}
+
+/**
+ * Check if player is in placement matches
+ */
+export function isInPlacement(gamesPlayed: number): boolean {
+  return gamesPlayed < RANK_CONFIG.placementGames;
 }

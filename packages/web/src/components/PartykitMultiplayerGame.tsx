@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useGameStore } from '../stores/gameStore';
 import { useAbilityStore } from '../stores/abilityStore';
@@ -16,22 +16,34 @@ import {
   applyClearRows,
   applyRandomSpawner,
   applyEarthquake,
+  applyDeathCross,
+  applyGoldDigger,
+  applyRowRotate,
+  applyFillHoles,
+  COIN_VALUES,
+  XP_VALUES,
+  calculateLevel,
+  getAvailableAbilities,
+  calculateRankChange,
+  isInPlacement,
 } from '@tetris-battle/game-core';
-import type { Ability } from '@tetris-battle/game-core';
+import type { Ability, UserProfile, MatchResult } from '@tetris-battle/game-core';
+import { progressionService } from '../lib/supabase';
 import type { Theme } from '../themes';
 import { audioManager } from '../services/audioManager';
 import { haptics } from '../utils/haptics';
-import { buttonVariants, springs, scoreVariants } from '../utils/animations';
+import { buttonVariants, springs, scoreVariants, overlayVariants, modalVariants } from '../utils/animations';
 
 interface MultiplayerGameProps {
   roomId: string;
   playerId: string;
   opponentId: string;
   theme: Theme;
+  profile: UserProfile;
   onExit: () => void;
 }
 
-export function MultiplayerGame({ roomId, playerId, opponentId, theme, onExit }: MultiplayerGameProps) {
+export function MultiplayerGame({ roomId, playerId, opponentId, theme, profile, onExit }: MultiplayerGameProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const opponentCanvasRef = useRef<HTMLCanvasElement>(null);
   const rendererRef = useRef<TetrisRenderer | null>(null);
@@ -51,8 +63,21 @@ export function MultiplayerGame({ roomId, playerId, opponentId, theme, onExit }:
   const [flashEffect, setFlashEffect] = useState<{ color: string } | null>(null);
   const [particles, setParticles] = useState<{ x: number; y: number; id: number } | null>(null);
   const [abilityNotification, setAbilityNotification] = useState<{ name: string; description: string; category: 'buff' | 'debuff' } | null>(null);
+  const [matchRewards, setMatchRewards] = useState<{
+    coinsEarned: number;
+    xpEarned: number;
+    rankChange: number;
+    rankAfter: number;
+    leveledUp: boolean;
+    newLevel: number;
+    newAbilities: string[];
+    isPlacement: boolean;
+  } | null>(null);
+  const [abilitiesUsedCount, setAbilitiesUsedCount] = useState(0);
+  const [opponentProfile, setOpponentProfile] = useState<UserProfile | null>(null);
+  const matchStartTimeRef = useRef<number>(Date.now());
 
-  const { availableAbilities } = useAbilityStore();
+  const { availableAbilities, setLoadout } = useAbilityStore();
 
   const {
     gameState,
@@ -75,6 +100,12 @@ export function MultiplayerGame({ roomId, playerId, opponentId, theme, onExit }:
     setShrinkCeilingRows,
     setOnBombExplode,
   } = useGameStore();
+
+  // Set player's loadout
+  useEffect(() => {
+    console.log('[GAME] Setting player loadout:', profile.loadout);
+    setLoadout(profile.loadout);
+  }, [profile.loadout, setLoadout]);
 
   // Initialize game sync
   useEffect(() => {
@@ -115,6 +146,17 @@ export function MultiplayerGame({ roomId, playerId, opponentId, theme, onExit }:
       audioManager.stopMusic(true);
     };
   }, [roomId, playerId, onExit, initGame]);
+
+  // Fetch opponent's profile for Rank calculation
+  useEffect(() => {
+    const fetchOpponentProfile = async () => {
+      const profile = await progressionService.getUserProfile(opponentId);
+      if (profile) {
+        setOpponentProfile(profile);
+      }
+    };
+    fetchOpponentProfile();
+  }, [opponentId]);
 
   // Sync game state to server
   useEffect(() => {
@@ -289,6 +331,9 @@ export function MultiplayerGame({ roomId, playerId, opponentId, theme, onExit }:
   const handleAbilityActivate = (ability: Ability) => {
     console.log('Activating ability:', ability.name);
 
+    // Track ability usage
+    setAbilitiesUsedCount(prev => prev + 1);
+
     // Deduct stars first
     deductStars(ability.cost);
 
@@ -307,8 +352,8 @@ export function MultiplayerGame({ roomId, playerId, opponentId, theme, onExit }:
       audioManager.playSfx('ability_debuff_activate');
     }
 
-    if (ability.category === 'buff' || ability.category === 'defense' || ability.category === 'ultra') {
-      // Apply buff/defense/ultra to self (or handle ultra effects)
+    if (ability.category === 'buff') {
+      // Apply buff to self
       if (ability.duration) {
         effectManager.activateEffect(ability.type, ability.duration);
         updateActiveEffects();
@@ -331,9 +376,25 @@ export function MultiplayerGame({ roomId, playerId, opponentId, theme, onExit }:
         }
 
         case 'clear_rows': {
+          // Animate bottom 5 rows being cleared
+          const rowsToAnimate: Array<{ x: number; y: number }> = [];
+          for (let y = gameState.board.height - 5; y < gameState.board.height; y++) {
+            for (let x = 0; x < gameState.board.width; x++) {
+              if (gameState.board.grid[y]?.[x]) {
+                rowsToAnimate.push({ x, y });
+              }
+            }
+          }
+
+          if (rendererRef.current) {
+            rendererRef.current.animationManager.animateBlocksDisappearing(rowsToAnimate, '#00ff88');
+          }
+
           // Clear bottom 5 rows
-          const { board: clearedBoard } = applyClearRows(gameState.board, 5);
-          updateBoard(clearedBoard);
+          setTimeout(() => {
+            const { board: clearedBoard } = applyClearRows(gameState.board, 5);
+            updateBoard(clearedBoard);
+          }, 200);
           break;
         }
 
@@ -341,6 +402,28 @@ export function MultiplayerGame({ roomId, playerId, opponentId, theme, onExit }:
           // Activate mini blocks - next 5 pieces will be 2-cell dominoes
           setMiniBlocksRemaining(5);
           console.log('Mini Blocks activated - next 5 pieces will be small');
+          break;
+        }
+
+        case 'fill_holes': {
+          // Find empty enclosed spaces that will be filled
+          const holesToFill: Array<{ x: number; y: number }> = [];
+          for (let y = 0; y < gameState.board.height; y++) {
+            for (let x = 0; x < gameState.board.width; x++) {
+              if (!gameState.board.grid[y][x]) {
+                // This is a simplified check - actual fill_holes has more complex logic
+                holesToFill.push({ x, y });
+              }
+            }
+          }
+
+          if (rendererRef.current && holesToFill.length > 0) {
+            rendererRef.current.animationManager.animateBlocksAppearing(holesToFill, '#00d4ff');
+          }
+
+          // Fill all enclosed empty spaces
+          const filledBoard = applyFillHoles(gameState.board);
+          updateBoard(filledBoard);
           break;
         }
 
@@ -376,16 +459,93 @@ export function MultiplayerGame({ roomId, playerId, opponentId, theme, onExit }:
     // Apply instant debuff effects
     switch (abilityType) {
       case 'earthquake': {
-        // Shift all rows randomly
-        const newBoard = applyEarthquake(gameState.board);
+        // Find blocks that will be removed
+        const removedBlocks: Array<{ x: number; y: number }> = [];
+        for (let y = 0; y < gameState.board.height; y++) {
+          for (let x = 0; x < gameState.board.width; x++) {
+            if (gameState.board.grid[y][x]) {
+              // Check if this block will be removed (roughly 15-25 out of all blocks)
+              if (Math.random() < 0.3) { // Approximate probability
+                removedBlocks.push({ x, y });
+              }
+            }
+          }
+        }
+
+        // Trigger fade-out animation for removed blocks
+        if (rendererRef.current) {
+          rendererRef.current.animationManager.animateBlocksDisappearing(removedBlocks, '#888888');
+        }
+
+        // Apply the effect after brief delay for animation
+        setTimeout(() => {
+          const newBoard = applyEarthquake(gameState.board);
+          updateBoard(newBoard);
+        }, 100);
+        break;
+      }
+
+      case 'death_cross': {
+        // Flash diagonal blocks
+        const diagonalBlocks: Array<{ x: number; y: number }> = [];
+        const board = gameState.board;
+
+        // Diagonal from bottom-left to top-right
+        for (let i = 0; i < Math.min(board.width, board.height); i++) {
+          const x = i;
+          const y = board.height - 1 - i;
+          if (y >= 0) {
+            diagonalBlocks.push({ x, y });
+          }
+        }
+
+        // Diagonal from bottom-right to top-left
+        for (let i = 0; i < Math.min(board.width, board.height); i++) {
+          const x = board.width - 1 - i;
+          const y = board.height - 1 - i;
+          if (y >= 0 && x >= 0) {
+            diagonalBlocks.push({ x, y });
+          }
+        }
+
+        // Trigger flash animation
+        if (rendererRef.current) {
+          rendererRef.current.animationManager.animateBlocksFlashing(diagonalBlocks, '#ff00ff');
+        }
+
+        // Apply the effect after animation
+        setTimeout(() => {
+          const newBoard = applyDeathCross(gameState.board);
+          updateBoard(newBoard);
+        }, 150);
+        break;
+      }
+
+      case 'row_rotate': {
+        // Flash all blocks briefly to indicate rotation
+        const allBlocks: Array<{ x: number; y: number }> = [];
+        for (let y = 0; y < gameState.board.height; y++) {
+          for (let x = 0; x < gameState.board.width; x++) {
+            if (gameState.board.grid[y][x]) {
+              allBlocks.push({ x, y });
+            }
+          }
+        }
+
+        if (rendererRef.current) {
+          rendererRef.current.animationManager.animateBlocksFlashing(allBlocks, '#00d4ff');
+        }
+
+        // Rotate each row randomly
+        const newBoard = applyRowRotate(gameState.board);
         updateBoard(newBoard);
         break;
       }
 
       case 'weird_shapes': {
-        // Next 3 pieces will be weird 5x5 shapes
-        setWeirdShapesRemaining(3);
-        console.log('Weird Shapes received - next 3 pieces will be large random shapes');
+        // Next piece will be weird 5x5 shape
+        setWeirdShapesRemaining(1);
+        console.log('Weird Shapes received - next piece will be large hollowed shape');
         break;
       }
 
@@ -396,6 +556,7 @@ export function MultiplayerGame({ roomId, playerId, opponentId, theme, onExit }:
       case 'screen_shake':
       case 'shrink_ceiling':
       case 'random_spawner':
+      case 'gold_digger':
         // Duration-based effects handled by AbilityEffectManager
         // These will be checked during game loop or rendering
         break;
@@ -406,6 +567,125 @@ export function MultiplayerGame({ roomId, playerId, opponentId, theme, onExit }:
   const updateActiveEffects = () => {
     setActiveEffects(effectManager.getActiveEffects());
   };
+
+  // Calculate and save match rewards
+  const calculateMatchRewards = useCallback(async (isWin: boolean) => {
+    console.log('[REWARDS] Starting reward calculation...', { isWin, opponentProfile, profile });
+
+    // Ensure we have opponent profile
+    let currentOpponentProfile = opponentProfile;
+    if (!currentOpponentProfile) {
+      console.error('[REWARDS] Opponent profile not loaded, fetching now...');
+      const fetchedProfile = await progressionService.getUserProfile(opponentId);
+      if (fetchedProfile) {
+        setOpponentProfile(fetchedProfile);
+        currentOpponentProfile = fetchedProfile;
+      } else {
+        console.error('[REWARDS] Could not fetch opponent profile, using default Rank');
+        currentOpponentProfile = { rank: 1000 } as UserProfile;
+      }
+    }
+
+    const outcome: 'win' | 'loss' = isWin ? 'win' : 'loss';
+    const matchDuration = Math.floor((Date.now() - matchStartTimeRef.current) / 1000);
+
+    // Calculate Rank change
+    const opponentRank = currentOpponentProfile?.rank || 1000;
+    console.log('[REWARDS] Calculating Rank...', { playerRank: profile.rank, opponentRank, gamesPlayed: profile.gamesPlayed });
+    const rankChange = calculateRankChange(
+      profile.rank,
+      opponentRank,
+      outcome,
+      profile.gamesPlayed
+    );
+    const rankAfter = profile.rank + rankChange;
+    const isPlacementMatch = isInPlacement(profile.gamesPlayed);
+
+    // Calculate base coins
+    let coinsEarned = isWin ? COIN_VALUES.win : COIN_VALUES.loss;
+
+    // Performance bonuses
+    if (gameState.linesCleared >= 40) {
+      coinsEarned += COIN_VALUES.lines40Plus;
+    } else if (gameState.linesCleared >= 20) {
+      coinsEarned += COIN_VALUES.lines20Plus;
+    }
+
+    if (abilitiesUsedCount >= 5) {
+      coinsEarned += COIN_VALUES.abilities5Plus;
+    } else if (abilitiesUsedCount === 0 && isWin) {
+      coinsEarned += COIN_VALUES.noAbilityWin;
+    }
+
+    // Calculate XP
+    let xpEarned = XP_VALUES.matchComplete;
+    if (isWin) {
+      xpEarned += XP_VALUES.matchWin;
+    }
+
+    // Calculate new totals
+    const newCoins = profile.coins + coinsEarned;
+    const newXp = profile.xp + xpEarned;
+    const oldLevel = profile.level;
+    const newLevel = calculateLevel(newXp);
+    const leveledUp = newLevel > oldLevel;
+
+    // Check for newly unlocked abilities
+    const availableAbilitiesBefore = getAvailableAbilities(oldLevel);
+    const availableAbilitiesAfter = getAvailableAbilities(newLevel);
+    const newAbilities = availableAbilitiesAfter
+      .filter(unlock => !availableAbilitiesBefore.find(u => u.abilityId === unlock.abilityId))
+      .map(unlock => unlock.abilityId);
+
+    console.log('[REWARDS] Updating profile...', { newCoins, newXp, newLevel, rankAfter });
+
+    // Update profile in database
+    const updated = await progressionService.updateUserProfile(profile.userId, {
+      coins: newCoins,
+      xp: newXp,
+      level: newLevel,
+      rank: rankAfter,
+      gamesPlayed: profile.gamesPlayed + 1,
+      lastActiveAt: Date.now(),
+    });
+
+    console.log('[REWARDS] Profile updated:', updated);
+
+    // Save match result
+    const matchResult: MatchResult = {
+      id: `${profile.userId}-${Date.now()}`,
+      userId: profile.userId,
+      opponentId: opponentId,
+      outcome,
+      linesCleared: gameState.linesCleared,
+      abilitiesUsed: abilitiesUsedCount,
+      coinsEarned,
+      xpEarned,
+      rankChange,
+      rankAfter,
+      opponentRank,
+      duration: matchDuration,
+      timestamp: Date.now(),
+    };
+
+    console.log('[REWARDS] Saving match result...', matchResult);
+    const saved = await progressionService.saveMatchResult(matchResult);
+    console.log('[REWARDS] Match result saved:', saved);
+
+    // Set rewards for display
+    console.log('[REWARDS] Setting rewards for display...');
+    setMatchRewards({
+      coinsEarned,
+      xpEarned,
+      rankChange,
+      rankAfter,
+      leveledUp,
+      newLevel,
+      newAbilities,
+      isPlacement: isPlacementMatch,
+    });
+    console.log('[REWARDS] Rewards calculation complete!');
+  }, [opponentProfile, profile, opponentId, gameState.linesCleared, abilitiesUsedCount]);
 
   // Update active effects periodically
   useEffect(() => {
@@ -437,6 +717,18 @@ export function MultiplayerGame({ roomId, playerId, opponentId, theme, onExit }:
       const isActive = effectManager.isEffectActive('random_spawner');
       if (isActive) {
         const newBoard = applyRandomSpawner(gameState.board);
+        updateBoard(newBoard);
+      }
+    }, 2000); // Every 2 seconds
+    return () => clearInterval(interval);
+  }, [gameState.board]);
+
+  // Periodic gold digger effect - remove blocks every 2 seconds while active
+  useEffect(() => {
+    const interval = setInterval(() => {
+      const isActive = effectManager.isEffectActive('gold_digger');
+      if (isActive) {
+        const newBoard = applyGoldDigger(gameState.board);
         updateBoard(newBoard);
       }
     }, 2000); // Every 2 seconds
@@ -522,6 +814,38 @@ export function MultiplayerGame({ roomId, playerId, opponentId, theme, onExit }:
     availableAbilities,
   ]);
 
+  // Calculate rewards when game finishes
+  useEffect(() => {
+    if (gameFinished && winnerId && !matchRewards) {
+      console.log('[GAME] Game finished, calculating rewards...', { winnerId, playerId });
+      const isWin = winnerId === playerId;
+      calculateMatchRewards(isWin);
+    } else if (gameFinished && winnerId && matchRewards) {
+      console.log('[GAME] Rewards already calculated:', matchRewards);
+    }
+  }, [gameFinished, winnerId, playerId, matchRewards, calculateMatchRewards]);
+
+  // Play victory or defeat music when game finishes
+  useEffect(() => {
+    if (gameFinished && winnerId) {
+      const isWin = winnerId === playerId;
+
+      // Stop gameplay music
+      audioManager.stopMusic();
+
+      // Play victory or defeat theme
+      if (isWin) {
+        console.log('[AUDIO] Playing victory theme');
+        audioManager.playMusic('victory_theme', false); // Don't loop
+        haptics.success();
+      } else {
+        console.log('[AUDIO] Playing defeat theme');
+        audioManager.playMusic('defeat_theme', false); // Don't loop
+        haptics.error();
+      }
+    }
+  }, [gameFinished, winnerId, playerId]);
+
   const isWinner = winnerId === playerId;
 
   return (
@@ -541,7 +865,7 @@ export function MultiplayerGame({ roomId, playerId, opponentId, theme, onExit }:
       }}
     >
       {/* Main Game Area - Top Section */}
-      <div style={{ display: 'flex', flex: 1, overflow: 'hidden', padding: '4px', gap: '4px' }}>
+      <div style={{ display: 'flex', flex: 1, overflow: 'hidden', padding: 'clamp(2px, 0.5vw, 4px)', gap: 'clamp(2px, 0.5vw, 4px)' }}>
         {/* Left: Your Board */}
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0 }}>
           <motion.div
@@ -595,7 +919,7 @@ export function MultiplayerGame({ roomId, playerId, opponentId, theme, onExit }:
           <div
             style={{
               marginTop: '4px',
-              padding: '6px 8px',
+              padding: '4px 6px',
               background: 'transparent',
               border: 'none',
               borderRadius: '8px',
@@ -603,47 +927,61 @@ export function MultiplayerGame({ roomId, playerId, opponentId, theme, onExit }:
               textAlign: 'center',
               fontWeight: '700',
               fontVariantNumeric: 'tabular-nums',
+              display: 'flex',
+              justifyContent: 'space-around',
+              alignItems: 'center',
+              gap: 'clamp(6px, 1.5vw, 10px)',
+              flexWrap: 'wrap',
             }}
           >
-            <AnimatePresence mode="popLayout">
-              <motion.span
-                key={`score-${gameState.score}`}
-                variants={scoreVariants}
-                initial="initial"
-                animate="animate"
-                exit="exit"
-                transition={springs.gentle}
-                style={{ marginRight: '8px', color: '#00d4ff', textShadow: '0 0 8px rgba(0, 212, 255, 0.8)', display: 'inline-block' }}
-              >
-                {gameState.score}
-              </motion.span>
-            </AnimatePresence>
-            <AnimatePresence mode="popLayout">
-              <motion.span
-                key={`stars-${gameState.stars}`}
-                variants={scoreVariants}
-                initial="initial"
-                animate="animate"
-                exit="exit"
-                transition={springs.gentle}
-                style={{ marginRight: '8px', color: '#c942ff', textShadow: '0 0 8px rgba(201, 66, 255, 0.8)', display: 'inline-block' }}
-              >
-                {gameState.stars}
-              </motion.span>
-            </AnimatePresence>
-            <AnimatePresence mode="popLayout">
-              <motion.span
-                key={`lines-${gameState.linesCleared}`}
-                variants={scoreVariants}
-                initial="initial"
-                animate="animate"
-                exit="exit"
-                transition={springs.gentle}
-                style={{ color: '#00ff88', textShadow: '0 0 8px rgba(0, 255, 136, 0.8)', display: 'inline-block' }}
-              >
-                {gameState.linesCleared}
-              </motion.span>
-            </AnimatePresence>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 'clamp(2px, 0.5vw, 3px)' }}>
+              <span style={{ color: '#00d4ff', opacity: 0.7, fontSize: 'clamp(7px, 1.75vw, 9px)', fontWeight: '600' }}>Score</span>
+              <AnimatePresence mode="popLayout">
+                <motion.span
+                  key={`score-${gameState.score}`}
+                  variants={scoreVariants}
+                  initial="initial"
+                  animate="animate"
+                  exit="exit"
+                  transition={springs.gentle}
+                  style={{ color: '#00d4ff', textShadow: '0 0 8px rgba(0, 212, 255, 0.8)', display: 'inline-block' }}
+                >
+                  {gameState.score}
+                </motion.span>
+              </AnimatePresence>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 'clamp(2px, 0.5vw, 3px)' }}>
+              <span style={{ color: '#c942ff', opacity: 0.7, fontSize: 'clamp(7px, 1.75vw, 9px)', fontWeight: '600' }}>Stars</span>
+              <AnimatePresence mode="popLayout">
+                <motion.span
+                  key={`stars-${gameState.stars}`}
+                  variants={scoreVariants}
+                  initial="initial"
+                  animate="animate"
+                  exit="exit"
+                  transition={springs.gentle}
+                  style={{ color: '#c942ff', textShadow: '0 0 8px rgba(201, 66, 255, 0.8)', display: 'inline-block' }}
+                >
+                  {gameState.stars}⭐
+                </motion.span>
+              </AnimatePresence>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 'clamp(2px, 0.5vw, 3px)' }}>
+              <span style={{ color: '#00ff88', opacity: 0.7, fontSize: 'clamp(7px, 1.75vw, 9px)', fontWeight: '600' }}>Lines</span>
+              <AnimatePresence mode="popLayout">
+                <motion.span
+                  key={`lines-${gameState.linesCleared}`}
+                  variants={scoreVariants}
+                  initial="initial"
+                  animate="animate"
+                  exit="exit"
+                  transition={springs.gentle}
+                  style={{ color: '#00ff88', textShadow: '0 0 8px rgba(0, 255, 136, 0.8)', display: 'inline-block' }}
+                >
+                  {gameState.linesCleared}
+                </motion.span>
+              </AnimatePresence>
+            </div>
           </div>
         </div>
 
@@ -1070,43 +1408,212 @@ export function MultiplayerGame({ roomId, playerId, opponentId, theme, onExit }:
         </div>
       )}
 
-      {gameFinished && (
-        <div
-          style={{
-            position: 'fixed',
-            top: '50%',
-            left: '50%',
-            transform: 'translate(-50%, -50%)',
-            backgroundColor: 'rgba(0, 0, 0, 0.95)',
-            padding: '40px',
-            borderRadius: '10px',
-            textAlign: 'center',
-            zIndex: 1000,
-            border: `3px solid ${isWinner ? theme.colors.T : theme.colors.Z}`,
-          }}
-        >
-          <h2 style={{ fontSize: '3rem', marginBottom: '20px' }}>
-            {isWinner ? 'YOU WIN! 🎉' : 'YOU LOSE'}
-          </h2>
-          <p style={{ fontSize: '1.5rem', marginBottom: '30px' }}>
-            Final Score: {gameState.score}
-          </p>
-          <button
-            onClick={onExit}
+      <AnimatePresence>
+        {gameFinished && (
+          <motion.div
+            variants={overlayVariants}
+            initial="hidden"
+            animate="visible"
+            exit="exit"
+            transition={{ duration: 0.3 }}
             style={{
-              padding: '15px 40px',
-              fontSize: '18px',
-              backgroundColor: theme.colors.T,
-              color: '#ffffff',
-              border: 'none',
-              borderRadius: '5px',
-              cursor: 'pointer',
+              position: 'fixed',
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              background: 'rgba(0, 0, 0, 0.9)',
+              backdropFilter: 'blur(10px)',
+              zIndex: 1000,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
             }}
           >
-            Back to Menu
-          </button>
-        </div>
-      )}
+            <motion.div
+              variants={modalVariants}
+              initial="hidden"
+              animate="visible"
+              exit="exit"
+              transition={springs.smooth}
+              style={{
+                background: 'rgba(10, 10, 30, 0.95)',
+                backdropFilter: 'blur(30px)',
+                border: `2px solid ${isWinner ? '#00ff88' : '#ff006e'}`,
+                borderRadius: 'clamp(16px, 4vw, 24px)',
+                padding: 'clamp(32px, 8vw, 48px)',
+                textAlign: 'center',
+                maxWidth: '90vw',
+                width: 'clamp(300px, 80vw, 500px)',
+                boxShadow: isWinner
+                  ? '0 0 40px rgba(0, 255, 136, 0.5), inset 0 0 30px rgba(0, 255, 136, 0.1)'
+                  : '0 0 40px rgba(255, 0, 110, 0.5), inset 0 0 30px rgba(255, 0, 110, 0.1)',
+              }}
+            >
+              <h2 style={{
+                fontSize: 'clamp(32px, 8vw, 48px)',
+                marginBottom: 'clamp(16px, 4vw, 24px)',
+                fontWeight: '800',
+                color: isWinner ? '#00ff88' : '#ff006e',
+                textShadow: isWinner
+                  ? '0 0 20px rgba(0, 255, 136, 0.8)'
+                  : '0 0 20px rgba(255, 0, 110, 0.8)',
+                letterSpacing: '2px',
+              }}>
+                {isWinner ? 'VICTORY!' : 'DEFEAT'}
+              </h2>
+
+              <div style={{
+                display: 'flex',
+                flexDirection: 'column',
+                gap: 'clamp(12px, 3vw, 16px)',
+                marginBottom: 'clamp(24px, 6vw, 32px)',
+              }}>
+                <div style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  padding: 'clamp(8px, 2vw, 12px)',
+                  background: 'rgba(255, 255, 255, 0.05)',
+                  borderRadius: 'clamp(6px, 1.5vw, 8px)',
+                }}>
+                  <span style={{ color: '#aaa', fontSize: 'clamp(14px, 3.5vw, 18px)' }}>Score</span>
+                  <span style={{ color: '#fff', fontWeight: '700', fontSize: 'clamp(14px, 3.5vw, 18px)' }}>{gameState.score}</span>
+                </div>
+                <div style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  padding: 'clamp(8px, 2vw, 12px)',
+                  background: 'rgba(255, 255, 255, 0.05)',
+                  borderRadius: 'clamp(6px, 1.5vw, 8px)',
+                }}>
+                  <span style={{ color: '#aaa', fontSize: 'clamp(14px, 3.5vw, 18px)' }}>Lines Cleared</span>
+                  <span style={{ color: '#fff', fontWeight: '700', fontSize: 'clamp(14px, 3.5vw, 18px)' }}>{gameState.linesCleared}</span>
+                </div>
+                <div style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  padding: 'clamp(8px, 2vw, 12px)',
+                  background: 'rgba(255, 255, 255, 0.05)',
+                  borderRadius: 'clamp(6px, 1.5vw, 8px)',
+                }}>
+                  <span style={{ color: '#aaa', fontSize: 'clamp(14px, 3.5vw, 18px)' }}>Stars Earned</span>
+                  <span style={{ color: '#c942ff', fontWeight: '700', fontSize: 'clamp(14px, 3.5vw, 18px)' }}>{gameState.stars}</span>
+                </div>
+              </div>
+
+              {/* Rewards Section */}
+              {matchRewards && (
+                <div style={{
+                  marginBottom: 'clamp(24px, 6vw, 32px)',
+                  padding: 'clamp(12px, 3vw, 16px)',
+                  background: 'rgba(0, 255, 136, 0.1)',
+                  border: '1px solid rgba(0, 255, 136, 0.3)',
+                  borderRadius: 'clamp(8px, 2vw, 12px)',
+                  boxShadow: '0 0 20px rgba(0, 255, 136, 0.2)',
+                }}>
+                  <h3 style={{
+                    fontSize: 'clamp(16px, 4vw, 20px)',
+                    fontWeight: '700',
+                    color: '#00ff88',
+                    marginBottom: 'clamp(8px, 2vw, 12px)',
+                    textShadow: '0 0 10px rgba(0, 255, 136, 0.6)',
+                  }}>
+                    REWARDS
+                  </h3>
+                  <div style={{
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: 'clamp(6px, 1.5vw, 8px)',
+                  }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <span style={{ color: '#fff', fontSize: 'clamp(13px, 3.2vw, 16px)' }}>Coins</span>
+                      <span style={{ color: '#ffd700', fontWeight: '700', fontSize: 'clamp(13px, 3.2vw, 16px)' }}>
+                        +{matchRewards.coinsEarned}
+                      </span>
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <span style={{ color: '#fff', fontSize: 'clamp(13px, 3.2vw, 16px)' }}>XP</span>
+                      <span style={{ color: '#00d4ff', fontWeight: '700', fontSize: 'clamp(13px, 3.2vw, 16px)' }}>
+                        +{matchRewards.xpEarned}
+                      </span>
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <span style={{ color: '#fff', fontSize: 'clamp(13px, 3.2vw, 16px)' }}>
+                        Rank {matchRewards.isPlacement && '(Placement)'}
+                      </span>
+                      <span style={{
+                        color: matchRewards.rankChange >= 0 ? '#00ff88' : '#ff006e',
+                        fontWeight: '700',
+                        fontSize: 'clamp(13px, 3.2vw, 16px)'
+                      }}>
+                        {matchRewards.rankChange >= 0 ? '+' : ''}{matchRewards.rankChange} → {matchRewards.rankAfter}
+                      </span>
+                    </div>
+                    {matchRewards.leveledUp && (
+                      <div style={{
+                        marginTop: 'clamp(4px, 1vw, 6px)',
+                        padding: 'clamp(6px, 1.5vw, 8px)',
+                        background: 'rgba(255, 215, 0, 0.15)',
+                        borderRadius: 'clamp(4px, 1vw, 6px)',
+                        textAlign: 'center',
+                      }}>
+                        <span style={{
+                          color: '#ffd700',
+                          fontWeight: '800',
+                          fontSize: 'clamp(14px, 3.5vw, 18px)',
+                          textShadow: '0 0 10px rgba(255, 215, 0, 0.6)',
+                        }}>
+                          LEVEL UP! → {matchRewards.newLevel}
+                        </span>
+                      </div>
+                    )}
+                    {matchRewards.newAbilities.length > 0 && (
+                      <div style={{
+                        marginTop: 'clamp(4px, 1vw, 6px)',
+                        padding: 'clamp(6px, 1.5vw, 8px)',
+                        background: 'rgba(0, 212, 255, 0.15)',
+                        borderRadius: 'clamp(4px, 1vw, 6px)',
+                        textAlign: 'center',
+                      }}>
+                        <span style={{
+                          color: '#00d4ff',
+                          fontWeight: '700',
+                          fontSize: 'clamp(12px, 3vw, 15px)',
+                          textShadow: '0 0 8px rgba(0, 212, 255, 0.6)',
+                        }}>
+                          {matchRewards.newAbilities.length} NEW {matchRewards.newAbilities.length === 1 ? 'ABILITY' : 'ABILITIES'} AVAILABLE!
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              <motion.button
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+                transition={springs.snappy}
+                onClick={onExit}
+                style={{
+                  width: '100%',
+                  padding: 'clamp(12px, 3vw, 16px)',
+                  fontSize: 'clamp(16px, 4vw, 20px)',
+                  fontWeight: '800',
+                  background: 'rgba(10, 10, 30, 0.6)',
+                  backdropFilter: 'blur(20px)',
+                  color: '#ffffff',
+                  border: '1px solid rgba(255, 255, 255, 0.2)',
+                  borderRadius: 'clamp(8px, 2vw, 12px)',
+                  cursor: 'pointer',
+                  boxShadow: '0 4px 15px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.1)',
+                }}
+              >
+                Continue
+              </motion.button>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       <AnimatePresence>
         {showAbilityInfo && (
