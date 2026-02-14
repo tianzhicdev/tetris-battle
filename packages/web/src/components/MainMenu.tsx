@@ -6,7 +6,9 @@ import { AbilityShop } from './AbilityShop';
 import { LoadoutManager } from './LoadoutManager';
 import { ProfilePage } from './ProfilePage';
 import { AbilityInfo } from './AbilityInfo';
+import { FriendList } from './FriendList';
 import { audioManager } from '../services/audioManager';
+import { useFriendStore } from '../stores/friendStore';
 import { glassSuccess, glassGold, glassBlue, glassPurple, mergeGlass } from '../styles/glassUtils';
 
 interface MainMenuProps {
@@ -14,13 +16,16 @@ interface MainMenuProps {
   theme: any;
   profile: UserProfile;
   onProfileUpdate: (profile: UserProfile) => void;
+  onChallenge?: (friendUserId: string, friendUsername: string) => void;
 }
 
-export function MainMenu({ onSelectMode, theme, profile, onProfileUpdate }: MainMenuProps) {
+export function MainMenu({ onSelectMode, theme, profile, onProfileUpdate, onChallenge }: MainMenuProps) {
   const [showShop, setShowShop] = useState(false);
   const [showLoadout, setShowLoadout] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
   const [showAbilityInfo, setShowAbilityInfo] = useState(false);
+  const [showFriends, setShowFriends] = useState(false);
+  const pendingRequests = useFriendStore(state => state.pendingRequests);
 
   const stage = getLevelStage(profile.level);
 
@@ -149,6 +154,46 @@ export function MainMenu({ onSelectMode, theme, profile, onProfileUpdate }: Main
         <button
           onClick={() => {
             audioManager.playSfx('button_click');
+            setShowFriends(true);
+          }}
+          style={mergeGlass(glassBlue(), {
+            padding: '12px 20px',
+            fontSize: '14px',
+            color: '#00d4ff',
+            cursor: 'pointer',
+            fontFamily: 'monospace',
+            fontWeight: 'bold',
+            minWidth: '90px',
+            touchAction: 'manipulation',
+            borderRadius: '8px',
+            textShadow: '0 0 10px rgba(0, 212, 255, 0.5)',
+            transition: 'all 0.2s ease',
+            position: 'relative' as const,
+          })}
+        >
+          Friends
+          {pendingRequests.length > 0 && (
+            <span style={{
+              position: 'absolute',
+              top: '-4px',
+              right: '-4px',
+              background: '#ff006e',
+              color: '#fff',
+              borderRadius: '10px',
+              padding: '1px 5px',
+              fontSize: '10px',
+              fontWeight: 'bold',
+              minWidth: '16px',
+              textAlign: 'center',
+            }}>
+              {pendingRequests.length}
+            </span>
+          )}
+        </button>
+
+        <button
+          onClick={() => {
+            audioManager.playSfx('button_click');
             setShowProfile(true);
           }}
           style={mergeGlass(glassBlue(), {
@@ -261,6 +306,17 @@ export function MainMenu({ onSelectMode, theme, profile, onProfileUpdate }: Main
 
       {showAbilityInfo && (
         <AbilityInfo onClose={() => setShowAbilityInfo(false)} />
+      )}
+
+      {showFriends && (
+        <FriendList
+          profile={profile}
+          onClose={() => setShowFriends(false)}
+          onChallenge={(friendUserId, friendUsername) => {
+            setShowFriends(false);
+            onChallenge?.(friendUserId, friendUsername);
+          }}
+        />
       )}
     </div>
   );

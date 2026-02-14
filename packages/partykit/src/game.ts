@@ -10,7 +10,7 @@ import {
   createTetromino,
   getRandomTetromino,
   findBestPlacement,
-  AI_DIFFICULTIES,
+  calculateStars,
   createInitialPlayerMetrics,
   AdaptiveAI,
   applyEarthquake,
@@ -19,6 +19,12 @@ import {
   applyRowRotate,
   applyDeathCross,
   applyGoldDigger,
+  applyAddJunkRows,
+  applyScrambleBoard,
+  applyGravityFlip,
+  applyCrossBomb,
+  applyCircleBomb,
+  STAR_VALUES,
   type AIPersona,
   type GameState as CoreGameState,
   type Tetromino,
@@ -59,6 +65,9 @@ export default class GameRoomServer implements Party.Server {
   adaptiveAI: AdaptiveAI | null = null;
   aiAbilityLoadout: string[] = [];
   aiLastAbilityUse: number = 0;
+  aiIsFrozen: boolean = false;
+  aiFreezeTimeout: ReturnType<typeof setTimeout> | null = null;
+  aiLastClearTime: number = 0;
 
   constructor(readonly room: Party.Room) {}
 
@@ -114,7 +123,7 @@ export default class GameRoomServer implements Party.Server {
         metrics: createInitialPlayerMetrics(),
         lastPieceLockTime: Date.now(),
       });
-      console.log(`AI opponent ${aiOpponent.id} (${aiOpponent.difficulty}) added to game`);
+      console.log(`AI opponent ${aiOpponent.id} (rank: ${aiOpponent.rank}) added to game`);
     }
 
     console.log(`Player ${playerId} joined. Total players: ${this.players.size}`);
@@ -174,10 +183,13 @@ export default class GameRoomServer implements Party.Server {
     this.aiGameState.nextPieces.shift();
     this.aiGameState.nextPieces.push(getRandomTetromino());
 
-    const config = AI_DIFFICULTIES[this.aiPlayer.difficulty];
-
     this.aiInterval = setInterval(() => {
       if (!this.aiGameState || !this.aiGameState.currentPiece || this.aiGameState.isGameOver) {
+        return;
+      }
+
+      // If AI is frozen, skip all actions
+      if (this.aiIsFrozen) {
         return;
       }
 
@@ -201,7 +213,22 @@ export default class GameRoomServer implements Party.Server {
           this.aiGameState.board = board;
           this.aiGameState.linesCleared += linesCleared;
           this.aiGameState.score += linesCleared * 100;
-          this.aiGameState.stars += linesCleared * 10;
+
+          // Proper star calculation with combo tracking
+          if (linesCleared > 0) {
+            const comboWindow = STAR_VALUES.comboWindow;
+            if (now - this.aiLastClearTime < comboWindow) {
+              this.aiGameState.comboCount++;
+            } else {
+              this.aiGameState.comboCount = 0;
+            }
+            this.aiLastClearTime = now;
+            const starsEarned = calculateStars(linesCleared, this.aiGameState.comboCount);
+            this.aiGameState.stars = Math.min(
+              STAR_VALUES.maxCapacity,
+              this.aiGameState.stars + starsEarned
+            );
+          }
 
           // Spawn next piece
           this.aiGameState.currentPiece = createTetromino(
@@ -404,14 +431,16 @@ export default class GameRoomServer implements Party.Server {
     console.log(`Applying ability ${abilityType} to AI`);
 
     switch (abilityType) {
+      // Board-modifying debuffs
       case 'earthquake':
         this.aiGameState.board = applyEarthquake(this.aiGameState.board);
         break;
 
-      case 'clear_rows':
+      case 'clear_rows': {
         const { board: clearedBoard } = applyClearRows(this.aiGameState.board, 5);
         this.aiGameState.board = clearedBoard;
         break;
+      }
 
       case 'random_spawner':
         this.aiGameState.board = applyRandomSpawner(this.aiGameState.board);
@@ -429,7 +458,45 @@ export default class GameRoomServer implements Party.Server {
         this.aiGameState.board = applyGoldDigger(this.aiGameState.board);
         break;
 
-      // Time-based debuffs (not fully implemented for AI yet)
+      // New spec-003 abilities
+      case 'add_junk_rows':
+        this.aiGameState.board = applyAddJunkRows(this.aiGameState.board, 2);
+        break;
+
+      case 'scramble_board':
+        this.aiGameState.board = applyScrambleBoard(this.aiGameState.board);
+        break;
+
+      case 'gravity_flip':
+        this.aiGameState.board = applyGravityFlip(this.aiGameState.board);
+        break;
+
+      case 'freeze':
+        // Pause AI game loop for 3 seconds
+        this.aiIsFrozen = true;
+        if (this.aiFreezeTimeout) clearTimeout(this.aiFreezeTimeout);
+        this.aiFreezeTimeout = setTimeout(() => {
+          this.aiIsFrozen = false;
+          this.aiFreezeTimeout = null;
+        }, 3000);
+        break;
+
+      // Bomb abilities applied to AI board (clear area at center)
+      case 'cross_firebomb': {
+        const cx = Math.floor(this.aiGameState.board.width / 2);
+        const cy = Math.floor(this.aiGameState.board.height / 2);
+        this.aiGameState.board = applyCrossBomb(this.aiGameState.board, cx, cy);
+        break;
+      }
+
+      case 'circle_bomb': {
+        const bx = Math.floor(this.aiGameState.board.width / 2);
+        const by = Math.floor(this.aiGameState.board.height / 2);
+        this.aiGameState.board = applyCircleBomb(this.aiGameState.board, bx, by);
+        break;
+      }
+
+      // Time-based debuffs — AI ignores visual/control effects
       case 'speed_up_opponent':
       case 'reverse_controls':
       case 'rotation_lock':
@@ -437,12 +504,11 @@ export default class GameRoomServer implements Party.Server {
       case 'screen_shake':
       case 'shrink_ceiling':
       case 'cascade_multiplier':
+      case 'weird_shapes':
         console.log(`Time-based ability ${abilityType} on AI - effect limited`);
         break;
 
-      // Buff abilities shouldn't target AI
-      case 'cross_firebomb':
-      case 'circle_bomb':
+      // Self-buff abilities shouldn't target AI
       case 'mini_blocks':
       case 'fill_holes':
         console.warn(`Buff ability ${abilityType} sent to AI - ignoring`);
@@ -482,6 +548,27 @@ export default class GameRoomServer implements Party.Server {
     }));
   }
 
+  // Ability costs for AI (matching abilities.json)
+  private getAbilityCost(abilityType: string): number {
+    const costs: Record<string, number> = {
+      earthquake: 65, random_spawner: 50, death_cross: 75,
+      row_rotate: 60, gold_digger: 55, speed_up_opponent: 35,
+      reverse_controls: 35, rotation_lock: 60, blind_spot: 85,
+      screen_shake: 25, shrink_ceiling: 50, weird_shapes: 80,
+      cross_firebomb: 45, circle_bomb: 50, clear_rows: 60,
+      cascade_multiplier: 90, mini_blocks: 40, fill_holes: 70,
+    };
+    return costs[abilityType] || 50;
+  }
+
+  // Offensive debuffs that target the human player
+  private readonly OFFENSIVE_ABILITIES = [
+    'earthquake', 'random_spawner', 'death_cross', 'row_rotate',
+    'gold_digger', 'speed_up_opponent', 'reverse_controls',
+    'rotation_lock', 'blind_spot', 'screen_shake', 'shrink_ceiling',
+    'weird_shapes',
+  ];
+
   aiConsiderUsingAbility() {
     if (!this.aiGameState || !this.aiPlayer || this.aiAbilityLoadout.length === 0) {
       return;
@@ -499,39 +586,70 @@ export default class GameRoomServer implements Party.Server {
       return;
     }
 
-    // Need enough stars (30-80)
-    const abilityCost = 30 + Math.floor(Math.random() * 50);
-    if (this.aiGameState.stars < abilityCost) {
-      return;
-    }
-
-    // Get human player state
+    // Get human player state for strategic decision
     const humanPlayer = Array.from(this.players.values()).find(p => p.playerId !== this.aiPlayer!.id);
     if (!humanPlayer || !humanPlayer.gameState) {
       return;
     }
 
-    // Decide: 30% chance to use ability when available
-    const useAbility = Math.random() < 0.3;
-    if (!useAbility) {
+    const aiBoardHeight = this.calculateBoardHeight(this.aiGameState.board);
+    const playerBoardHeight = this.calculateBoardHeight(humanPlayer.gameState.board);
+
+    // Strategic ability selection
+    let selectedAbility: string | null = null;
+
+    // AI losing (board high) — pick an offensive debuff to disrupt player
+    if (aiBoardHeight > 12) {
+      const offensiveOptions = this.aiAbilityLoadout.filter(a =>
+        this.OFFENSIVE_ABILITIES.includes(a)
+      );
+      if (offensiveOptions.length > 0) {
+        selectedAbility = offensiveOptions[Math.floor(Math.random() * offensiveOptions.length)];
+      }
+    }
+    // Player doing well (low board) — use offensive ability
+    else if (playerBoardHeight < 6) {
+      const offensiveOptions = this.aiAbilityLoadout.filter(a =>
+        this.OFFENSIVE_ABILITIES.includes(a)
+      );
+      if (offensiveOptions.length > 0) {
+        selectedAbility = offensiveOptions[Math.floor(Math.random() * offensiveOptions.length)];
+      }
+    }
+
+    // If no strategic choice, 30% chance to use random ability
+    if (!selectedAbility) {
+      if (Math.random() < 0.3) {
+        selectedAbility = this.aiAbilityLoadout[Math.floor(Math.random() * this.aiAbilityLoadout.length)];
+      }
+    }
+
+    if (!selectedAbility) return;
+
+    const abilityCost = this.getAbilityCost(selectedAbility);
+
+    // AI star management: if stars too low and board is high, grant bonus stars
+    if (this.aiGameState.stars < abilityCost && aiBoardHeight > 10) {
+      // "Cheat slightly" per spec to maintain balance
+      this.aiGameState.stars += Math.floor(abilityCost * 0.5);
+    }
+
+    if (this.aiGameState.stars < abilityCost) {
       return;
     }
 
-    // Pick random ability from loadout
-    const abilityType = this.aiAbilityLoadout[Math.floor(Math.random() * this.aiAbilityLoadout.length)];
-
-    console.log(`AI using ability: ${abilityType} (${this.aiGameState.stars} stars)`);
+    console.log(`AI using ability: ${selectedAbility} (cost: ${abilityCost}, stars: ${this.aiGameState.stars})`);
 
     // Spend stars
     this.aiGameState.stars -= abilityCost;
     this.aiLastAbilityUse = now;
 
-    // Send ability to human player
+    // Send ability to human player (debuffs target player)
     const humanConn = this.getConnection(humanPlayer.connectionId);
     if (humanConn) {
       humanConn.send(JSON.stringify({
         type: 'ability_received',
-        abilityType,
+        abilityType: selectedAbility,
         fromPlayerId: this.aiPlayer.id,
       }));
     }
@@ -590,10 +708,14 @@ export default class GameRoomServer implements Party.Server {
   }
 
   onClose(conn: Party.Connection) {
-    // Clear AI interval if exists
+    // Clear AI interval and freeze timeout if exists
     if (this.aiInterval) {
       clearInterval(this.aiInterval);
       this.aiInterval = null;
+    }
+    if (this.aiFreezeTimeout) {
+      clearTimeout(this.aiFreezeTimeout);
+      this.aiFreezeTimeout = null;
     }
 
     // Find and remove player

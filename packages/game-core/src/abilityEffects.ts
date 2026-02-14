@@ -349,6 +349,71 @@ function isEnclosed(grid: CellValue[][], startX: number, startY: number, visited
   return { isEnclosed: !touchesBorder && cells.length > 0, cells };
 }
 
+// ADDITIONAL ABILITY EFFECTS (for AI and spec 003)
+
+export function applyAddJunkRows(board: Board, numRows: number = 2): Board {
+  // Add garbage rows to the bottom of the board, pushing existing content up
+  const newGrid = board.grid.map(row => [...row]);
+  const types: CellValue[] = ['I', 'O', 'T', 'S', 'Z', 'L', 'J'];
+
+  // Remove top rows to make room (content pushed up and lost if at top)
+  for (let i = 0; i < numRows; i++) {
+    newGrid.shift();
+  }
+
+  // Add garbage rows at bottom with 1 random gap per row
+  for (let i = 0; i < numRows; i++) {
+    const gapColumn = Math.floor(Math.random() * board.width);
+    const junkRow: CellValue[] = [];
+    for (let x = 0; x < board.width; x++) {
+      junkRow.push(x === gapColumn ? null : types[Math.floor(Math.random() * types.length)]);
+    }
+    newGrid.push(junkRow);
+  }
+
+  return { ...board, grid: newGrid };
+}
+
+export function applyScrambleBoard(board: Board): Board {
+  // Collect all filled cells, then redistribute them randomly
+  const filledCells: CellValue[] = [];
+
+  for (let y = 0; y < board.height; y++) {
+    for (let x = 0; x < board.width; x++) {
+      if (board.grid[y][x] !== null) {
+        filledCells.push(board.grid[y][x]);
+      }
+    }
+  }
+
+  // Create empty grid
+  const newGrid: CellValue[][] = Array(board.height)
+    .fill(null)
+    .map(() => Array(board.width).fill(null));
+
+  // Shuffle the filled cells
+  for (let i = filledCells.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [filledCells[i], filledCells[j]] = [filledCells[j], filledCells[i]];
+  }
+
+  // Place cells in bottom rows (gravity-settled)
+  let cellIndex = 0;
+  for (let y = board.height - 1; y >= 0 && cellIndex < filledCells.length; y--) {
+    for (let x = 0; x < board.width && cellIndex < filledCells.length; x++) {
+      newGrid[y][x] = filledCells[cellIndex++];
+    }
+  }
+
+  return { ...board, grid: newGrid };
+}
+
+export function applyGravityFlip(board: Board): Board {
+  // Reverse the board vertically (top becomes bottom)
+  const newGrid = [...board.grid].reverse().map(row => [...row]);
+  return { ...board, grid: newGrid };
+}
+
 // UTILITY FUNCTIONS
 
 function applyGravity(board: Board): Board {

@@ -150,10 +150,11 @@ describe('AI Player', () => {
       const targetPosition = { x: 7, y: 18 };
       const moves = generateMoves(piece, targetPosition, 0);
 
-      // Should move right 4 times, then drop
+      // Should move right 4 times (gravity handles dropping)
       const rightMoves = moves.filter(m => m.type === 'right');
       expect(rightMoves.length).toBe(4);
-      expect(moves[moves.length - 1].type).toBe('hard_drop');
+      // No hard_drop — gravity handles piece falling naturally
+      expect(moves.filter(m => m.type === 'hard_drop').length).toBe(0);
     });
 
     it('generates correct moves for left shift', () => {
@@ -162,10 +163,10 @@ describe('AI Player', () => {
       const targetPosition = { x: 1, y: 18 };
       const moves = generateMoves(piece, targetPosition, 0);
 
-      // Should move left 2 times, then drop
+      // Should move left 2 times (gravity handles dropping)
       const leftMoves = moves.filter(m => m.type === 'left');
       expect(leftMoves.length).toBe(2);
-      expect(moves[moves.length - 1].type).toBe('hard_drop');
+      expect(moves.filter(m => m.type === 'hard_drop').length).toBe(0);
     });
 
     it('generates correct moves for rotation', () => {
@@ -173,10 +174,10 @@ describe('AI Player', () => {
       const targetPosition = piece.position;
       const moves = generateMoves(piece, targetPosition, 2);
 
-      // Should rotate twice, then drop
+      // Should rotate twice (gravity handles dropping)
       const rotateMoves = moves.filter(m => m.type === 'rotate_cw');
       expect(rotateMoves.length).toBe(2);
-      expect(moves[moves.length - 1].type).toBe('hard_drop');
+      expect(moves.filter(m => m.type === 'hard_drop').length).toBe(0);
     });
 
     it('generates combined moves for rotation and translation', () => {
@@ -184,11 +185,11 @@ describe('AI Player', () => {
       const targetPosition = { x: 5, y: 18 };
       const moves = generateMoves(piece, targetPosition, 1);
 
-      // Should have rotations, translations, and drop
+      // Should have rotations and translations (gravity handles dropping)
       const rotateMoves = moves.filter(m => m.type === 'rotate_cw');
 
       expect(rotateMoves.length).toBeGreaterThan(0);
-      expect(moves[moves.length - 1].type).toBe('hard_drop');
+      expect(moves.filter(m => m.type === 'hard_drop').length).toBe(0);
     });
   });
 });
