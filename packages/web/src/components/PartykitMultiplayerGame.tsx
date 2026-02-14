@@ -722,7 +722,7 @@ export function MultiplayerGame({ roomId, playerId, opponentId, theme, profile, 
       }
     }, 2000); // Every 2 seconds
     return () => clearInterval(interval);
-  }, [gameState.board]);
+  }, []); // Empty deps - interval runs once, accesses current gameState via closure
 
   // Periodic gold digger effect - remove blocks every 2 seconds while active
   useEffect(() => {
@@ -734,7 +734,7 @@ export function MultiplayerGame({ roomId, playerId, opponentId, theme, profile, 
       }
     }, 2000); // Every 2 seconds
     return () => clearInterval(interval);
-  }, [gameState.board]);
+  }, []); // Empty deps - interval runs once, accesses current gameState via closure
 
   // Keyboard controls
   useEffect(() => {

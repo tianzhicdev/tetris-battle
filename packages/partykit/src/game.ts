@@ -56,6 +56,7 @@ export default class GameRoomServer implements Party.Server {
   aiMoveQueue: AIMove[] = [];
   aiLastMoveTime: number = 0;
   aiLastGravityTime: number = 0;
+  aiHasPlannedCurrentPiece: boolean = false; // Prevent re-planning mid-piece
   adaptiveAI: AdaptiveAI | null = null;
   aiAbilityLoadout: string[] = [];
   aiLastAbilityUse: number = 0;
@@ -155,13 +156,13 @@ export default class GameRoomServer implements Party.Server {
     // Initialize adaptive AI with player metrics
     this.adaptiveAI = new AdaptiveAI(humanPlayer.metrics);
 
-    // Set AI ability loadout (balanced debuffs only - no overpowered abilities)
+    // Set AI ability loadout (balanced debuffs - all event-based)
     this.aiAbilityLoadout = [
-      'earthquake',        // Moderate: Shift rows
-      'random_spawner',    // Moderate: Add garbage blocks
+      'earthquake',        // Moderate: Shift rows randomly
+      'random_spawner',    // Moderate: Add garbage blocks (time-based)
+      'death_cross',       // Moderate: Toggle diagonal blocks
       'row_rotate',        // Moderate: Rotate rows
-      'speed_up_opponent', // Strong: 3x fall speed
-      'screen_shake',      // Weak: Visual distraction
+      'gold_digger',       // Moderate: Remove blocks over time (time-based)
     ];
     this.aiLastAbilityUse = Date.now();
 
@@ -220,8 +221,9 @@ export default class GameRoomServer implements Party.Server {
           // AI ability usage after locking piece
           this.aiConsiderUsingAbility();
 
-          // Clear move queue (start fresh for new piece)
+          // Clear move queue and planning flag (start fresh for new piece)
           this.aiMoveQueue = [];
+          this.aiHasPlannedCurrentPiece = false;
 
           // Broadcast updated state
           this.broadcastAIState();
@@ -230,13 +232,14 @@ export default class GameRoomServer implements Party.Server {
       }
 
       // Execute all moves instantly (no delay) - AI positions pieces like humans
-      // If no moves queued, decide next placement using adaptive AI
-      if (this.aiMoveQueue.length === 0 && this.adaptiveAI) {
+      // Plan once per piece: decide placement only if we haven't planned yet
+      if (!this.aiHasPlannedCurrentPiece && this.aiMoveQueue.length === 0 && this.adaptiveAI) {
         const decision = this.adaptiveAI.findMove(
           this.aiGameState.board,
           this.aiGameState.currentPiece
         );
         this.aiMoveQueue = decision.moves;
+        this.aiHasPlannedCurrentPiece = true; // Lock in the plan
       }
 
       // Execute ALL queued moves instantly (positioning is instant, gravity handles falling)
@@ -444,8 +447,9 @@ export default class GameRoomServer implements Party.Server {
         console.warn(`Unknown ability type: ${abilityType}`);
     }
 
-    // Clear AI move queue to force re-planning with new board state
+    // Clear AI move queue and reset planning flag to force re-planning with new board state
     this.aiMoveQueue = [];
+    this.aiHasPlannedCurrentPiece = false;
 
     // Broadcast updated AI state to human player immediately
     this.broadcastAIState();

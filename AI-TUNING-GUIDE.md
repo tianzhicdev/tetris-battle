@@ -128,58 +128,56 @@ const GRAVITY_INTERVAL = 1000;  // Current: 1 second
 - `1500` - 1.5 seconds (slow, more time to position)
 - `2000` - 2 seconds (very slow)
 
-### AI Ability Loadout (game.ts:159-165)
+### AI Ability Loadout (game.ts:159-166)
 
 ```typescript
 this.aiAbilityLoadout = [
-  'earthquake',      // Shift rows
-  'random_spawner',  // Add garbage
-  'death_cross',     // Toggle blocks (OVERPOWERED - clears board!)
-  'row_rotate',      // Rotate rows
-  'gold_digger',     // Remove blocks continuously
+  'earthquake',        // Moderate: Shift rows randomly
+  'random_spawner',    // Moderate: Add garbage blocks (time-based)
+  'death_cross',       // Moderate: Toggle diagonal blocks
+  'row_rotate',        // Moderate: Rotate rows
+  'gold_digger',       // Moderate: Remove blocks over time (time-based)
 ];
 ```
 
-**Recommended balanced loadout**:
-```typescript
-this.aiAbilityLoadout = [
-  'earthquake',       // Debuff: Shift rows (moderate)
-  'random_spawner',   // Debuff: Add garbage blocks (moderate)
-  'row_rotate',       // Debuff: Rotate rows (moderate)
-  'speed_up_opponent', // Debuff: 3x speed (strong but fair)
-  'screen_shake',     // Debuff: Visual distraction (weak)
-];
-```
+**Architecture**:
+- All abilities are event-based (server sends `ability_received`, client applies effect)
+- Same behavior whether human or AI uses the ability
+- death_cross and gold_digger work correctly with proper interval timing
 
-## Current Bugs
+## Fixed Bugs
 
-### Bug 1: death_cross Clears Entire Board
+### ✅ Bug 1: gold_digger Interval Creating Multiple Instances (FIXED)
 
-**Problem**: death_cross toggles all blocks (filled → empty, empty → filled)
-- Result: Player's entire board gets cleared
+**Problem**: useEffect with `gameState.board` dependency caused interval recreation on every board change
+- Result: Multiple intervals running simultaneously, removing blocks too frequently
 
-**Fix**: Remove death_cross and gold_digger from AI loadout
+**Fix**: Changed dependency to `[]` so interval runs once and accesses current state via closure
+- Location: `PartykitMultiplayerGame.tsx:725, 737`
 
-### Bug 2: AI Barely Moves Pieces
+### ✅ Bug 2: AI Re-planning Mid-Piece (FIXED)
 
-**Problem**: Gravity too fast relative to move execution
-- Gravity: 1000ms (piece falls)
-- Move delay: 216-324ms per move
-- Moves needed: 3-5 moves
-- Total time: 648-1620ms
-- **Result**: Piece falls (1000ms) before AI finishes moving (1620ms)
+**Problem**: AI recalculated best placement every 50ms when move queue was empty
+- Gravity moves piece down → queue empty → AI recalculates → different placement → new moves
+- **Result**: AI appears to make "unnecessary" repeated movements
 
-**Fix**: Execute moves instantly (no delay between moves), only delay between pieces
+**Fix**: Added `aiHasPlannedCurrentPiece` flag to prevent re-planning
+- AI plans ONCE when piece spawns, executes all moves, then waits for gravity
+- Flag resets when new piece spawns or ability disrupts board
+- Location: `game.ts:59, 226, 236-242, 452`
 
-## Recommended Fixes
+### ✅ Bug 3: Move Execution Timing (FIXED - Previous Session)
 
-### 1. Fix AI Ability Loadout
-Replace overpowered abilities with balanced ones.
+**Problem**: Move delays caused pieces to fall before AI finished positioning
+**Fix**: Execute ALL moves instantly, gravity controls falling (1000ms intervals)
 
-### 2. Fix Move Execution Timing
-- Execute all moves for current piece immediately
-- Only delay between pieces (match gravity timing)
+## Tuning Recommendations
 
-### 3. Adjust Difficulty
-- Keep 15% mistake rate
-- Slightly reduce board evaluation weights for more human-like play
+### 1. Difficulty Balance
+- Current 15% mistake rate provides balanced gameplay
+- Can adjust `baseMistakeRate` in `adaptiveAI.ts:15`
+
+### 2. Board Evaluation Weights
+- Current weights (`adaptiveAI.ts:54-58`) provide reasonable play
+- Increase weights toward optimal values for harder AI
+- Decrease weights toward weak values for easier AI
