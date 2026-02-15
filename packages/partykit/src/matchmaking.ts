@@ -27,8 +27,10 @@ export default class MatchmakingServer implements Party.Server {
       this.checkAIFallback();
     }, 2000);
 
-    // Schedule alarm to keep server alive and process queue
-    this.scheduleNextAlarm();
+    // Schedule alarm to keep server alive and process queue (fire and forget)
+    this.scheduleNextAlarm().catch(err => {
+      console.error('[MATCHMAKING] Failed to schedule alarm:', err);
+    });
   }
 
   // Alarm API to prevent hibernation and process queue
@@ -42,12 +44,12 @@ export default class MatchmakingServer implements Party.Server {
     }
 
     // Schedule next alarm
-    this.scheduleNextAlarm();
+    await this.scheduleNextAlarm();
   }
 
-  private scheduleNextAlarm() {
+  private async scheduleNextAlarm() {
     // Schedule alarm for 5 seconds from now
-    this.room.storage.setAlarm(Date.now() + 5000);
+    await this.room.storage.setAlarm(Date.now() + 5000);
   }
 
   onConnect(conn: Party.Connection, ctx: Party.ConnectionContext) {
