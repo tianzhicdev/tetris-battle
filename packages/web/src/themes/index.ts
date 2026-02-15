@@ -10,12 +10,7 @@ export * from './types';
 export { glassmorphismTheme } from './glassmorphism';
 export { retro8bitTheme } from './retro8bit';
 export { neonCyberpunkTheme } from './neonCyberpunk';
-export { minimalistFlatTheme } from './minimalistFlat';
-export { brutalistTheme } from './brutalist';
 export { isometric3dTheme } from './isometric3d';
-export { handDrawnTheme } from './handDrawn';
-export { natureOrganicTheme } from './natureOrganic';
-export { terminalHackerTheme } from './terminalHacker';
 export { liquidMorphingTheme } from './liquidMorphing';
 
 import type { Theme, ThemeRegistry, ThemeCategoryGroups } from './types';
@@ -23,12 +18,7 @@ import type { TetrominoType } from '@tetris-battle/game-core';
 import { glassmorphismTheme } from './glassmorphism';
 import { retro8bitTheme } from './retro8bit';
 import { neonCyberpunkTheme } from './neonCyberpunk';
-import { minimalistFlatTheme } from './minimalistFlat';
-import { brutalistTheme } from './brutalist';
 import { isometric3dTheme } from './isometric3d';
-import { handDrawnTheme } from './handDrawn';
-import { natureOrganicTheme } from './natureOrganic';
-import { terminalHackerTheme } from './terminalHacker';
 import { liquidMorphingTheme } from './liquidMorphing';
 
 /**
@@ -39,12 +29,7 @@ export const THEME_REGISTRY: ThemeRegistry = {
   'glassmorphism': glassmorphismTheme,
   'retro-8bit': retro8bitTheme,
   'neon-cyberpunk': neonCyberpunkTheme,
-  'minimalist-flat': minimalistFlatTheme,
-  'brutalist': brutalistTheme,
   'isometric-3d': isometric3dTheme,
-  'hand-drawn': handDrawnTheme,
-  'nature-organic': natureOrganicTheme,
-  'terminal-hacker': terminalHackerTheme,
   'liquid-morphing': liquidMorphingTheme,
 };
 
@@ -81,10 +66,10 @@ export const DEFAULT_THEME = THEME_REGISTRY[DEFAULT_THEME_ID];
  * Theme categories for filtering
  */
 export const THEME_CATEGORIES: ThemeCategoryGroups = {
-  retro: ['retro-8bit', 'terminal-hacker'],
-  modern: ['glassmorphism', 'minimalist-flat', 'neon-cyberpunk'],
-  artistic: ['hand-drawn', 'nature-organic', 'liquid-morphing'],
-  technical: ['brutalist', 'isometric-3d'],
+  retro: ['retro-8bit'],
+  modern: ['glassmorphism', 'neon-cyberpunk'],
+  artistic: ['liquid-morphing'],
+  experimental: ['isometric-3d'],
 };
 
 /**

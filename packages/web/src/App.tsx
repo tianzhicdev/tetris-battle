@@ -8,6 +8,7 @@ import { audioManager } from './services/audioManager';
 import { ChallengeWaiting } from './components/ChallengeWaiting';
 import { AuthWrapper } from './components/AuthWrapper';
 import { AbilityEffectsDemo } from './components/AbilityEffectsDemo';
+import { VisualEffectsDemo } from './components/VisualEffectsDemo';
 import { ThemeProvider, useTheme } from './contexts/ThemeContext';
 import { toLegacyTheme } from './themes/index';
 import { progressionService } from './lib/supabase';
@@ -312,10 +313,14 @@ function GameApp({ profile: initialProfile }: { profile: UserProfile }) {
 function App() {
   // Check if demo mode is enabled via URL parameter
   const params = new URLSearchParams(window.location.search);
-  const isDemo = params.get('demo') === 'abilities';
+  const demoMode = params.get('demo');
 
-  if (isDemo) {
+  if (demoMode === 'abilities') {
     return <AbilityEffectsDemo />;
+  }
+
+  if (demoMode === 'effects') {
+    return <VisualEffectsDemo />;
   }
 
   return (
