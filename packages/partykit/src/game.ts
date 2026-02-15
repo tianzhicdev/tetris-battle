@@ -425,6 +425,7 @@ export default class GameRoomServer implements Party.Server {
   }
 
   handleAbilityActivation(playerId: string, abilityType: string, targetPlayerId: string, requestId?: string) {
+    console.log(`[ABILITY] Request id=${requestId ?? 'n/a'} ${playerId} -> ${targetPlayerId}: ${abilityType}`);
     const ability = ABILITIES[abilityType as keyof typeof ABILITIES];
     if (!ability) {
       this.rejectAbilityActivation(playerId, abilityType, targetPlayerId, requestId, 'unknown_ability', `Unknown ability type: ${abilityType}`);
@@ -468,7 +469,7 @@ export default class GameRoomServer implements Party.Server {
       return;
     }
     playerState.gameState.stars -= ability.cost;
-    console.log(`[ABILITY] Player ${playerId} used ${abilityType}, stars: ${playerState.gameState.stars}`);
+    console.log(`[ABILITY] Accepted id=${requestId ?? 'n/a'} ${playerId} used ${abilityType}, stars: ${playerState.gameState.stars}`);
 
     const targetPlayer = this.players.get(targetPlayerId);
     if (!targetPlayer) {

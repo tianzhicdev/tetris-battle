@@ -95,7 +95,9 @@ export function ServerAuthMultiplayerGame({
   const [opponentProfile, setOpponentProfile] = useState<UserProfile | null>(null);
   const matchStartTimeRef = useRef<number>(Date.now());
   const pendingAbilityActivationsRef = useRef(new Map<string, { ability: Ability; target: 'self' | 'opponent' }>());
+  const abilityResponseTimeoutsRef = useRef(new Map<string, ReturnType<typeof setTimeout>>());
   const [debugLogger, setDebugLogger] = useState<DebugLogger | null>(null);
+  const debugLoggerRef = useRef<DebugLogger | null>(null);
   const [isDebugMode, setIsDebugMode] = useState(false);
 
   const { availableAbilities, setLoadout } = useAbilityStore();
@@ -120,6 +122,11 @@ export function ServerAuthMultiplayerGame({
       }
     }
   }, []);
+
+  useEffect(() => {
+    debugLoggerRef.current = debugLogger;
+    gameClientRef.current?.setDebugLogger(debugLogger);
+  }, [debugLogger]);
 
   // Initialize server-authoritative game client
   useEffect(() => {
@@ -162,6 +169,10 @@ export function ServerAuthMultiplayerGame({
 
     return () => {
       pendingAbilityActivationsRef.current.clear();
+      for (const timeout of abilityResponseTimeoutsRef.current.values()) {
+        clearTimeout(timeout);
+      }
+      abilityResponseTimeoutsRef.current.clear();
       client.disconnect();
       audioManager.stopMusic(true);
     };
@@ -352,7 +363,7 @@ export function ServerAuthMultiplayerGame({
 
     if (!requestId) {
       console.warn('[SERVER-AUTH] Failed to send ability activation request');
-      debugLogger?.logEvent('ability_send_failed', `Failed to send ${ability.name} to server`, {
+      debugLoggerRef.current?.logEvent('ability_send_failed', `Failed to send ${ability.name} to server`, {
         ability: ability.type,
         target,
       });
@@ -360,13 +371,28 @@ export function ServerAuthMultiplayerGame({
     }
 
     pendingAbilityActivationsRef.current.set(requestId, { ability, target });
-    debugLogger?.logEvent('ability_attempted', `Attempted ${ability.name} (${ability.shortName}) on ${target}`, {
+    debugLoggerRef.current?.logEvent('ability_attempted', `Attempted ${ability.name} (${ability.shortName}) on ${target}`, {
       requestId,
       ability: ability.type,
       name: ability.name,
       category: ability.category,
       target,
     });
+    const timeout = setTimeout(() => {
+      if (!pendingAbilityActivationsRef.current.has(requestId)) return;
+      pendingAbilityActivationsRef.current.delete(requestId);
+      abilityResponseTimeoutsRef.current.delete(requestId);
+      debugLoggerRef.current?.logEvent(
+        'ability_no_response',
+        `No server response for ${ability.name} (${requestId})`,
+        {
+          requestId,
+          ability: ability.type,
+          target,
+        }
+      );
+    }, 3000);
+    abilityResponseTimeoutsRef.current.set(requestId, timeout);
   };
 
   // Handle server acceptance/rejection for your ability requests
@@ -374,6 +400,11 @@ export function ServerAuthMultiplayerGame({
     const pending = result.requestId ? pendingAbilityActivationsRef.current.get(result.requestId) : undefined;
     if (result.requestId) {
       pendingAbilityActivationsRef.current.delete(result.requestId);
+      const timeout = abilityResponseTimeoutsRef.current.get(result.requestId);
+      if (timeout) {
+        clearTimeout(timeout);
+        abilityResponseTimeoutsRef.current.delete(result.requestId);
+      }
     }
 
     const abilityFromCatalog = ABILITIES[result.abilityType as keyof typeof ABILITIES];
@@ -395,7 +426,7 @@ export function ServerAuthMultiplayerGame({
         }
       }
       setAbilitiesUsedCount(prev => prev + 1);
-      debugLogger?.logEvent(
+      debugLoggerRef.current?.logEvent(
         'ability_used',
         `Ability accepted: ${ability?.name || result.abilityType} on ${target}`,
         {
@@ -408,7 +439,7 @@ export function ServerAuthMultiplayerGame({
     }
 
     console.warn('[SERVER-AUTH] Ability rejected:', result);
-    debugLogger?.logEvent(
+    debugLoggerRef.current?.logEvent(
       'ability_rejected',
       `Ability rejected: ${ability?.name || result.abilityType} (${result.reason || 'unknown'})`,
       {
@@ -429,13 +460,11 @@ export function ServerAuthMultiplayerGame({
     if (!ability) return;
 
     // Log ability received in debug mode
-    if (debugLogger) {
-      debugLogger.logEvent('opponent_ability', `Opponent used ${ability.name} (${ability.shortName}) on you`, {
-        ability: abilityType,
-        name: ability.name,
-        category: ability.category
-      });
-    }
+    debugLoggerRef.current?.logEvent('opponent_ability', `Opponent used ${ability.name} (${ability.shortName}) on you`, {
+      ability: abilityType,
+      name: ability.name,
+      category: ability.category
+    });
 
     audioManager.playSfx('ability_debuff_activate');
 

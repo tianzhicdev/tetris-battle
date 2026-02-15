@@ -209,6 +209,10 @@ export class ServerAuthGameClient {
     this.send({ type: 'debug_ping', timestamp });
   }
 
+  setDebugLogger(debugLogger: DebugLogger | null): void {
+    this.debugLogger = debugLogger;
+  }
+
   disconnect(): void {
     this.socket.close();
   }
