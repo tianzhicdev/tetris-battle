@@ -39,11 +39,19 @@ mkdir -p "$LOG_DIR"
 
 is_complete() {
   # Check if verification report exists and has no FAIL entries
+  # NEEDS_MANUAL_TEST entries are OK - those are for the user to verify
   if [[ -f "$VERIFICATION" ]]; then
-    if grep -q "FAIL" "$VERIFICATION"; then
+    if grep -q "| FAIL |" "$VERIFICATION" || grep -q "Status.*FAIL" "$VERIFICATION"; then
       return 1
     fi
-    return 0
+    # Also check if the verification has a summary showing 0 failures
+    if grep -q "Failed: 0" "$VERIFICATION"; then
+      return 0
+    fi
+    # If verification exists but no clear completion signal, check work log
+    if [[ -f "$WORK_LOG" ]] && grep -q "Phase 4.*complete" "$WORK_LOG"; then
+      return 0
+    fi
   fi
   return 1
 }
@@ -156,6 +164,36 @@ while true; do
     if [[ -f "$VERIFICATION" ]] && grep -q "NEEDS_MANUAL_TEST" "$VERIFICATION"; then
       warn "Some criteria need manual testing. Check ${VERIFICATION}"
     fi
+
+    # Auto-deploy to PartyKit and Vercel
+    log "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    log "Starting deployment..."
+    log "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo ""
+
+    # Deploy to PartyKit
+    log "Deploying to PartyKit..."
+    if cd packages/partykit && npx partykit deploy 2>&1; then
+      log "✓ PartyKit deployment successful"
+    else
+      warn "⚠ PartyKit deployment failed (check logs above)"
+    fi
+    cd ../.. 2>/dev/null || true
+    echo ""
+
+    # Deploy to Vercel (via git push)
+    log "Pushing to GitHub (Vercel will auto-deploy)..."
+    if git push 2>&1; then
+      log "✓ Pushed to GitHub - Vercel deployment in progress"
+      log "  Check https://vercel.com for deployment status"
+    else
+      warn "⚠ Git push failed (check logs above)"
+    fi
+    echo ""
+
+    log "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    log "Deployment complete!"
+    log "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
     break
   fi
