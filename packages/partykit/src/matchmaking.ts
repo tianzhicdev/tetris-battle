@@ -37,19 +37,29 @@ export default class MatchmakingServer implements Party.Server {
   async onAlarm() {
     console.log(`[MATCHMAKING ALARM] Triggered at ${new Date().toISOString()} - Queue size: ${this.queue.length}`);
 
-    // Process any pending matches
-    if (this.queue.length >= 2) {
-      console.log('[MATCHMAKING ALARM] Attempting to match players');
-      this.tryMatch();
+    try {
+      // Process any pending matches
+      if (this.queue.length >= 2) {
+        console.log('[MATCHMAKING ALARM] Attempting to match players');
+        this.tryMatch();
+      }
+
+      // Check for AI fallbacks
+      this.checkAIFallback();
+
+      // Schedule next alarm (must be done at END of alarm handler)
+      const nextAlarmTime = Date.now() + 5000; // 5 seconds
+      await this.room.storage.setAlarm(nextAlarmTime);
+      console.log(`[MATCHMAKING ALARM] Next alarm scheduled for ${new Date(nextAlarmTime).toISOString()}`);
+    } catch (error) {
+      console.error('[MATCHMAKING ALARM] ERROR:', error);
+      // Try to reschedule even if error occurs
+      try {
+        await this.room.storage.setAlarm(Date.now() + 5000);
+      } catch (rescheduleError) {
+        console.error('[MATCHMAKING ALARM] Failed to reschedule:', rescheduleError);
+      }
     }
-
-    // Schedule next alarm
-    await this.scheduleNextAlarm();
-  }
-
-  private async scheduleNextAlarm() {
-    // Schedule alarm for 5 seconds from now
-    await this.room.storage.setAlarm(Date.now() + 5000);
   }
 
   onConnect(conn: Party.Connection, ctx: Party.ConnectionContext) {
