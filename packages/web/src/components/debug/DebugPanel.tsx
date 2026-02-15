@@ -9,7 +9,7 @@ import type { DebugEvent } from '../../services/debug/DebugLogger';
 
 interface DebugPanelProps {
   debugLogger: DebugLogger;
-  gameClient: any; // ServerAuthGameClient or PartykitGameSync
+  gameClient: any; // ServerAuthGameClient
   yourState: any;
   opponentState: any;
   onAbilityTrigger: (abilityType: string, target: 'self' | 'opponent') => void;

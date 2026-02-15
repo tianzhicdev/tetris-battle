@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { PartykitMatchmaking } from '../services/partykit/matchmaking';
+import { normalizePartykitHost } from '../services/partykit/host';
 
 interface MatchmakingProps {
   playerId: string;
@@ -23,6 +24,7 @@ export function Matchmaking({ playerId, rank, onMatchFound, onCancel, theme }: M
   const [wsStatus, setWsStatus] = useState<'connecting' | 'connected' | 'disconnected'>('connecting');
   const [wsEvents, setWsEvents] = useState<WebSocketEvent[]>([]);
   const matchmakingRef = useRef<PartykitMatchmaking | null>(null);
+  const onMatchFoundRef = useRef(onMatchFound);
 
   // Initialize debug mode
   useEffect(() => {
@@ -36,9 +38,13 @@ export function Matchmaking({ playerId, rank, onMatchFound, onCancel, theme }: M
     setWsEvents(prev => [...prev.slice(-19), { timestamp: Date.now(), type, data }]);
   }, []);
 
+  useEffect(() => {
+    onMatchFoundRef.current = onMatchFound;
+  }, [onMatchFound]);
+
   // Initialize matchmaking service
   if (!matchmakingRef.current) {
-    const host = import.meta.env.VITE_PARTYKIT_HOST || 'localhost:1999';
+    const host = normalizePartykitHost(import.meta.env.VITE_PARTYKIT_HOST);
     matchmakingRef.current = new PartykitMatchmaking(playerId, host, rank, addWsEvent);
   }
   const matchmaking = matchmakingRef.current;
@@ -66,20 +72,23 @@ export function Matchmaking({ playerId, rank, onMatchFound, onCancel, theme }: M
     matchmaking.connect(
       (roomId, player1, player2, aiOpponent) => {
         console.log('Match found:', roomId, player1, player2, aiOpponent ? '(AI Match)' : '');
-        onMatchFound(roomId, player1, player2, aiOpponent);
+        onMatchFoundRef.current(roomId, player1, player2, aiOpponent);
       },
       (position) => {
         setQueuePosition(position);
       },
       (status) => {
         setWsStatus(status);
+        if (status !== 'connected') {
+          setQueuePosition(-1);
+        }
       }
     );
 
     return () => {
       matchmaking.disconnect();
     };
-  }, [matchmaking, onMatchFound]);
+  }, [matchmaking]);
 
   const handleCancel = () => {
     matchmaking.leaveQueue();

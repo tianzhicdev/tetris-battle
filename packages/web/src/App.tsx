@@ -2,7 +2,6 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { MainMenu } from './components/MainMenu';
 import { TetrisGame } from './components/TetrisGame';
 import { Matchmaking } from './components/PartykitMatchmaking';
-import { MultiplayerGame } from './components/PartykitMultiplayerGame';
 import { ServerAuthMultiplayerGame } from './components/ServerAuthMultiplayerGame';
 import { ChallengeNotification } from './components/ChallengeNotification';
 import { ChallengeWaiting } from './components/ChallengeWaiting';
@@ -11,6 +10,7 @@ import { DEFAULT_THEME } from './themes';
 import { progressionService } from './lib/supabase';
 import { friendService } from './services/friendService';
 import { PartykitPresence } from './services/partykit/presence';
+import { normalizePartykitHost } from './services/partykit/host';
 import { useFriendStore } from './stores/friendStore';
 import type { UserProfile } from '@tetris-battle/game-core';
 
@@ -30,13 +30,6 @@ function GameApp({ profile: initialProfile }: { profile: UserProfile }) {
   const [profile, setProfile] = useState<UserProfile>(initialProfile);
   const presenceRef = useRef<PartykitPresence | null>(null);
 
-  // Feature flag for server-authoritative mode
-  const [useServerAuth] = useState(() => {
-    // Check URL parameter: ?serverAuth=true
-    const params = new URLSearchParams(window.location.search);
-    return params.get('serverAuth') === 'true';
-  });
-
   const {
     loadFriends,
     loadPendingRequests,
@@ -52,7 +45,7 @@ function GameApp({ profile: initialProfile }: { profile: UserProfile }) {
 
   // Initialize presence connection
   useEffect(() => {
-    const host = import.meta.env.VITE_PARTYKIT_HOST || 'localhost:1999';
+    const host = normalizePartykitHost(import.meta.env.VITE_PARTYKIT_HOST);
     const presence = new PartykitPresence(playerId, host);
 
     presence.connect({
@@ -247,18 +240,8 @@ function GameApp({ profile: initialProfile }: { profile: UserProfile }) {
 
       {mode === 'multiplayer' && gameMatch && (() => {
         const opponentId = gameMatch.player1Id === playerId ? gameMatch.player2Id : gameMatch.player1Id;
-        return useServerAuth ? (
+        return (
           <ServerAuthMultiplayerGame
-            roomId={gameMatch.roomId}
-            playerId={playerId}
-            opponentId={opponentId}
-            theme={currentTheme}
-            profile={profile}
-            onExit={handleExitGame}
-            aiOpponent={gameMatch.aiOpponent}
-          />
-        ) : (
-          <MultiplayerGame
             roomId={gameMatch.roomId}
             playerId={playerId}
             opponentId={opponentId}

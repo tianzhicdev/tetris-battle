@@ -70,7 +70,13 @@ export default class MatchmakingServer implements Party.Server {
   }
 
   onMessage(message: string, sender: Party.Connection) {
-    const data = JSON.parse(message);
+    let data: any;
+    try {
+      data = JSON.parse(message);
+    } catch (error) {
+      console.warn('[MATCHMAKING] Ignoring non-JSON message:', message, error);
+      return;
+    }
 
     if (data.type === 'join_queue') {
       this.handleJoinQueue(data.playerId, data.rank, sender);
@@ -190,7 +196,7 @@ export default class MatchmakingServer implements Party.Server {
           const aiPersona = generateAIPersona(player.rank);
           const roomId = `game_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 
-          console.log(`[AI FALLBACK] Matched ${player.id} vs ${aiPersona.id} (${aiPersona.difficulty}, rank: ${aiPersona.rank})`);
+          console.log(`[AI FALLBACK] Matched ${player.id} vs ${aiPersona.id} (rank: ${aiPersona.rank})`);
 
           // Send match_found with AI opponent data
           const conn = [...this.room.getConnections()].find(c => c.id === player.connectionId);

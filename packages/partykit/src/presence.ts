@@ -38,7 +38,13 @@ export default class PresenceServer implements Party.Server {
   }
 
   onMessage(message: string, sender: Party.Connection) {
-    const data = JSON.parse(message);
+    let data: any;
+    try {
+      data = JSON.parse(message);
+    } catch (error) {
+      console.warn('[PRESENCE] Ignoring non-JSON message:', message, error);
+      return;
+    }
 
     switch (data.type) {
       case 'presence_connect':

@@ -36,12 +36,14 @@ export class ServerAuthGameClient {
   private playerId: string;
   private roomId: string;
   private loadout: string[];
+  private aiOpponent?: any;
   private debugLogger: DebugLogger | null = null;
 
   constructor(roomId: string, playerId: string, host: string, loadout: string[], _aiOpponent?: any, debugLogger?: DebugLogger) {
     this.roomId = roomId;
     this.playerId = playerId;
     this.loadout = loadout;
+    this.aiOpponent = _aiOpponent;
     this.debugLogger = debugLogger || null;
 
     this.socket = new PartySocket({
@@ -63,7 +65,17 @@ export class ServerAuthGameClient {
     });
 
     this.socket.addEventListener('message', (event) => {
-      const data = JSON.parse(event.data);
+      let data: any;
+      try {
+        data = JSON.parse(event.data);
+      } catch (error) {
+        console.error('[SERVER-AUTH] Failed to parse message:', event.data, error);
+        this.debugLogger?.logEvent('parse_error', 'Failed to parse server message', {
+          raw: String(event.data),
+          error: String(error),
+        });
+        return;
+      }
       this.debugLogger?.logIncoming(data);
 
       switch (data.type) {
@@ -110,6 +122,7 @@ export class ServerAuthGameClient {
       type: 'join_game',
       playerId: this.playerId,
       loadout: this.loadout,
+      aiOpponent: this.aiOpponent,
     });
   }
 

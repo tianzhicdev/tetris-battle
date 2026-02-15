@@ -19,6 +19,13 @@ export class PartykitMatchmaking {
     onQueueUpdate?: (position: number) => void,
     onStatusChange?: (status: 'connecting' | 'connected' | 'disconnected') => void
   ): void {
+    // Avoid duplicate sockets from repeated renders.
+    if (this.socket) {
+      this.disconnect();
+    }
+    onStatusChange?.('connecting');
+    this.onDebugEvent?.('status', { event: 'connecting', host: this.host });
+
     // Connect to matchmaking party
     this.socket = new PartySocket({
       host: this.host,
@@ -27,7 +34,17 @@ export class PartykitMatchmaking {
     });
 
     this.socket.addEventListener('message', (event) => {
-      const data = JSON.parse(event.data);
+      let data: any;
+      try {
+        data = JSON.parse(event.data);
+      } catch (error) {
+        this.onDebugEvent?.('status', {
+          event: 'parse_error',
+          raw: String(event.data),
+          error: String(error),
+        });
+        return;
+      }
       this.onDebugEvent?.('received', data);
 
       switch (data.type) {
@@ -58,11 +75,22 @@ export class PartykitMatchmaking {
 
     this.socket.addEventListener('error', (error) => {
       console.error('Matchmaking error:', error);
-      this.onDebugEvent?.('status', { event: 'error', error: String(error) });
+      const socket = this.socket as WebSocket | null;
+      this.onDebugEvent?.('status', {
+        event: 'error',
+        type: error.type,
+        readyState: socket?.readyState,
+        host: this.host,
+      });
     });
 
-    this.socket.addEventListener('close', () => {
-      this.onDebugEvent?.('status', { event: 'disconnected' });
+    this.socket.addEventListener('close', (event) => {
+      this.onDebugEvent?.('status', {
+        event: 'disconnected',
+        code: event.code,
+        reason: event.reason || '(empty)',
+        wasClean: event.wasClean,
+      });
       onStatusChange?.('disconnected');
     });
   }
@@ -81,7 +109,7 @@ export class PartykitMatchmaking {
   }
 
   leaveQueue(): void {
-    if (this.socket) {
+    if (this.socket && this.socket.readyState === WebSocket.OPEN) {
       const message = {
         type: 'leave_queue',
         playerId: this.playerId,

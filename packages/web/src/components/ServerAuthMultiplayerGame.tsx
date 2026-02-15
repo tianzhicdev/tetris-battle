@@ -26,6 +26,7 @@ import type { Ability, UserProfile, MatchResult } from '@tetris-battle/game-core
 import { progressionService } from '../lib/supabase';
 import type { Theme } from '../themes';
 import { audioManager } from '../services/audioManager';
+import { normalizePartykitHost } from '../services/partykit/host';
 import { haptics } from '../utils/haptics';
 import { buttonVariants, springs, scoreVariants, overlayVariants, modalVariants } from '../utils/animations';
 
@@ -117,7 +118,7 @@ export function ServerAuthMultiplayerGame({
 
   // Initialize server-authoritative game client
   useEffect(() => {
-    const host = import.meta.env.VITE_PARTYKIT_HOST || 'localhost:1999';
+    const host = normalizePartykitHost(import.meta.env.VITE_PARTYKIT_HOST);
     const client = new ServerAuthGameClient(roomId, playerId, host, profile.loadout, aiOpponent, debugLogger || undefined);
     gameClientRef.current = client;
 
@@ -518,18 +519,16 @@ export function ServerAuthMultiplayerGame({
     const handleKeyDown = (e: KeyboardEvent) => {
       if (!gameClientRef.current || !yourState || yourState.isGameOver || gameFinished) return;
 
-      const isReversed = effectManager.isEffectActive('reverse_controls');
-
       switch (e.key) {
         case 'ArrowLeft':
           e.preventDefault();
           audioManager.playSfx('piece_move', 0.3);
-          gameClientRef.current.sendInput(isReversed ? 'move_right' : 'move_left');
+          gameClientRef.current.sendInput('move_left');
           break;
         case 'ArrowRight':
           e.preventDefault();
           audioManager.playSfx('piece_move', 0.3);
-          gameClientRef.current.sendInput(isReversed ? 'move_left' : 'move_right');
+          gameClientRef.current.sendInput('move_right');
           break;
         case 'ArrowDown':
           e.preventDefault();
@@ -540,10 +539,8 @@ export function ServerAuthMultiplayerGame({
         case 'x':
         case 'X':
           e.preventDefault();
-          if (!effectManager.isEffectActive('rotation_lock')) {
-            audioManager.playSfx('piece_rotate', 0.5);
-            gameClientRef.current.sendInput('rotate_cw');
-          }
+          audioManager.playSfx('piece_rotate', 0.5);
+          gameClientRef.current.sendInput('rotate_cw');
           break;
         case ' ':
           e.preventDefault();
@@ -945,8 +942,7 @@ export function ServerAuthMultiplayerGame({
             if (!gameClientRef.current) return;
             haptics.light();
             audioManager.playSfx('piece_move', 0.3);
-            const isReversed = effectManager.isEffectActive('reverse_controls');
-            gameClientRef.current.sendInput(isReversed ? 'move_right' : 'move_left');
+            gameClientRef.current.sendInput('move_left');
           }}
           style={{
             flex: 1,
@@ -1042,10 +1038,8 @@ export function ServerAuthMultiplayerGame({
             e.preventDefault();
             if (!gameClientRef.current) return;
             haptics.light();
-            if (!effectManager.isEffectActive('rotation_lock')) {
-              audioManager.playSfx('piece_rotate', 0.5);
-              gameClientRef.current.sendInput('rotate_cw');
-            }
+            audioManager.playSfx('piece_rotate', 0.5);
+            gameClientRef.current.sendInput('rotate_cw');
           }}
           style={{
             flex: 1,
@@ -1078,8 +1072,7 @@ export function ServerAuthMultiplayerGame({
             if (!gameClientRef.current) return;
             haptics.light();
             audioManager.playSfx('piece_move', 0.3);
-            const isReversed = effectManager.isEffectActive('reverse_controls');
-            gameClientRef.current.sendInput(isReversed ? 'move_left' : 'move_right');
+            gameClientRef.current.sendInput('move_right');
           }}
           style={{
             flex: 1,
@@ -1346,14 +1339,10 @@ export function ServerAuthMultiplayerGame({
           onAbilityTrigger={(abilityType, target) => {
             const ability = ABILITIES[abilityType as keyof typeof ABILITIES];
             if (!ability) return;
-
-            if (target === 'opponent') {
-              handleAbilityActivate(ability);
-            } else {
-              // Self-targeting abilities (buffs) - trigger on own state
-              // For now, just log (server-auth doesn't support self-buffs yet)
-              console.log('[DEBUG] Self-ability trigger not implemented in server-auth mode:', abilityType);
-            }
+            // Target selection is validated server-side by ability category.
+            // In debug mode this still uses the standard activation pathway.
+            void target;
+            handleAbilityActivate(ability);
           }}
         />
       )}

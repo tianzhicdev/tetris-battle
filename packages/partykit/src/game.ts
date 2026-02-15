@@ -1,55 +1,19 @@
 import type * as Party from "partykit/server";
 import {
-  createInitialGameState,
-  movePiece,
-  rotatePiece,
-  lockPiece,
-  clearLines,
-  isValidPosition,
-  getHardDropPosition,
-  createTetromino,
-  getRandomTetromino,
-  findBestPlacement,
   createInitialPlayerMetrics,
   AdaptiveAI,
-  applyEarthquake,
-  applyClearRows,
-  applyRandomSpawner,
-  applyRowRotate,
-  applyDeathCross,
-  applyGoldDigger,
-  applyAddJunkRows,
-  applyScrambleBoard,
-  applyGravityFlip,
-  applyCrossBomb,
-  applyCircleBomb,
-  calculateStars,
-  STAR_VALUES,
+  ABILITIES,
   type AIPersona,
-  type GameState as CoreGameState,
-  type Tetromino,
-  type Board,
   type AIMove,
   type PlayerMetrics,
   type PlayerInputType,
 } from '@tetris-battle/game-core';
 import { ServerGameState } from './ServerGameState';
 
-interface GameState {
-  board: any;
-  score: number;
-  stars: number;
-  linesCleared: number;
-  comboCount: number;
-  isGameOver: boolean;
-}
-
 interface PlayerState {
   playerId: string;
   connectionId: string;
-  gameState: GameState | null;
   metrics: PlayerMetrics;
-  lastPieceLockTime: number;
 }
 
 export default class GameRoomServer implements Party.Server {
@@ -59,16 +23,12 @@ export default class GameRoomServer implements Party.Server {
 
   // AI fields
   aiPlayer: AIPersona | null = null;
-  aiGameState: CoreGameState | null = null;
   aiInterval: ReturnType<typeof setInterval> | null = null;
   aiMoveQueue: AIMove[] = [];
   aiLastMoveTime: number = 0;
   adaptiveAI: AdaptiveAI | null = null;
   aiAbilityLoadout: string[] = [];
   aiLastAbilityUse: number = 0;
-  aiIsFrozen: boolean = false;
-  aiFreezeTimeout: ReturnType<typeof setTimeout> | null = null;
-  aiLastClearTime: number = 0;
 
   // Server-authoritative mode
   serverGameStates: Map<string, ServerGameState> = new Map();
@@ -77,33 +37,9 @@ export default class GameRoomServer implements Party.Server {
   broadcastThrottle: number = 16; // 60fps = 16ms
   roomSeed: number = 0; // Deterministic seed for this room
 
-  // Debug: Track message frequency
-  messageCounters: Map<string, { count: number; lastReset: number }> = new Map();
-
   constructor(readonly room: Party.Room) {
     // Generate deterministic seed from room ID
     this.roomSeed = parseInt(room.id.substring(0, 8), 36) || 12345;
-  }
-
-  private trackMessage(playerId: string, messageType: string): void {
-    const now = Date.now();
-    let counter = this.messageCounters.get(playerId);
-
-    if (!counter) {
-      counter = { count: 0, lastReset: now };
-      this.messageCounters.set(playerId, counter);
-    }
-
-    // Reset counter every second
-    if (now - counter.lastReset >= 1000) {
-      if (counter.count > 10) {
-        console.warn(`[GAME] Player ${playerId} sent ${counter.count} ${messageType} messages in 1 second (possible loop!)`);
-      }
-      counter.count = 0;
-      counter.lastReset = now;
-    }
-
-    counter.count++;
   }
 
   onConnect(conn: Party.Connection, ctx: Party.ConnectionContext) {
@@ -118,7 +54,13 @@ export default class GameRoomServer implements Party.Server {
   }
 
   onMessage(message: string, sender: Party.Connection) {
-    const data = JSON.parse(message);
+    let data: any;
+    try {
+      data = JSON.parse(message);
+    } catch (error) {
+      console.warn('[GAME] Ignoring non-JSON message:', message, error);
+      return;
+    }
 
     // Debug ping/pong support
     if (data.type === 'debug_ping') {
@@ -137,12 +79,6 @@ export default class GameRoomServer implements Party.Server {
       case 'player_input':
         this.handlePlayerInput(data.playerId, data.input);
         break;
-      case 'game_state_update':
-        this.handleGameStateUpdate(data.playerId, data.state, sender);
-        break;
-      case 'game_event':
-        this.handleGameEvent(data.playerId, data.event, sender);
-        break;
       case 'ability_activation':
         this.handleAbilityActivation(data.playerId, data.abilityType, data.targetPlayerId);
         break;
@@ -157,9 +93,7 @@ export default class GameRoomServer implements Party.Server {
     this.players.set(playerId, {
       playerId,
       connectionId: conn.id,
-      gameState: null, // Not used in server-authoritative mode
       metrics: createInitialPlayerMetrics(),
-      lastPieceLockTime: Date.now(),
     });
 
     // Initialize server-side game state for this player
@@ -175,10 +109,10 @@ export default class GameRoomServer implements Party.Server {
       this.players.set(aiOpponent.id, {
         playerId: aiOpponent.id,
         connectionId: 'ai',
-        gameState: null,
         metrics: createInitialPlayerMetrics(),
-        lastPieceLockTime: Date.now(),
       });
+      const aiServerState = new ServerGameState(aiOpponent.id, this.roomSeed, []);
+      this.serverGameStates.set(aiOpponent.id, aiServerState);
       console.log(`AI opponent ${aiOpponent.id} added to game`);
     }
 
@@ -221,7 +155,7 @@ export default class GameRoomServer implements Party.Server {
       conn.send(JSON.stringify({
         type: 'opponent_info',
         opponentId: opponent.playerId,
-        opponentState: opponent.gameState,
+        opponentState: null,
       }));
     }
   }
@@ -290,20 +224,6 @@ export default class GameRoomServer implements Party.Server {
       playerStates[playerId] = serverState.getPublicState();
     }
 
-    // Include AI state if present
-    if (this.aiPlayer && this.aiGameState) {
-      playerStates[this.aiPlayer.id] = {
-        board: this.aiGameState.board.grid,
-        currentPiece: this.aiGameState.currentPiece,
-        score: this.aiGameState.score,
-        stars: this.aiGameState.stars,
-        linesCleared: this.aiGameState.linesCleared,
-        comboCount: this.aiGameState.comboCount,
-        isGameOver: this.aiGameState.isGameOver,
-        activeEffects: [], // AI doesn't track effects
-      };
-    }
-
     // Send to each player: their state + opponent state
     for (const [playerId, playerState] of this.players) {
       if (playerId === this.aiPlayer?.id) continue; // Skip AI
@@ -342,43 +262,47 @@ export default class GameRoomServer implements Party.Server {
     // Get human player for metrics
     const humanPlayer = Array.from(this.players.values()).find(p => p.playerId !== this.aiPlayer!.id);
     if (!humanPlayer) return;
+    const aiState = this.serverGameStates.get(this.aiPlayer.id);
+    if (!aiState) return;
 
     // Initialize adaptive AI with player metrics
     this.adaptiveAI = new AdaptiveAI(humanPlayer.metrics);
 
-    // Set AI ability loadout (balanced debuffs - all event-based)
+    // Set AI ability loadout (debuff-focused)
     this.aiAbilityLoadout = [
-      'earthquake',        // Moderate: Shift rows randomly
-      'random_spawner',    // Moderate: Add garbage blocks (time-based)
-      'death_cross',       // Moderate: Toggle diagonal blocks
-      'row_rotate',        // Moderate: Rotate rows
-      'gold_digger',       // Moderate: Remove blocks over time (time-based)
+      'earthquake',
+      'random_spawner',
+      'death_cross',
+      'row_rotate',
+      'gold_digger',
+      'speed_up_opponent',
+      'reverse_controls',
+      'rotation_lock',
+      'blind_spot',
+      'screen_shake',
+      'shrink_ceiling',
+      'weird_shapes',
     ];
+    aiState.loadout = [...this.aiAbilityLoadout];
     this.aiLastAbilityUse = Date.now();
 
-    // Initialize AI game state
-    this.aiGameState = createInitialGameState();
-    this.aiGameState.currentPiece = createTetromino(
-      this.aiGameState.nextPieces[0],
-      this.aiGameState.board.width
-    );
-    this.aiGameState.nextPieces.shift();
-    this.aiGameState.nextPieces.push(getRandomTetromino());
-
     this.aiInterval = setInterval(() => {
-      if (!this.aiGameState || !this.aiGameState.currentPiece || this.aiGameState.isGameOver) {
+      const currentAIState = this.serverGameStates.get(this.aiPlayer!.id);
+      if (!currentAIState) {
         return;
       }
-
-      // If AI is frozen, skip all actions
-      if (this.aiIsFrozen) {
+      if (!currentAIState.gameState.currentPiece || currentAIState.gameState.isGameOver) {
         return;
       }
 
       const now = Date.now();
 
-      // Use adaptive move delay - controls speed
-      const moveDelay = this.adaptiveAI ? this.adaptiveAI.decideMoveDelay() : 300;
+      // AI gets slower under visual disruption debuffs to mirror human impact.
+      const activeEffects = new Set(currentAIState.getActiveEffects());
+      let moveDelay = this.adaptiveAI ? this.adaptiveAI.decideMoveDelay() : 300;
+      if (activeEffects.has('blind_spot')) moveDelay *= 1.2;
+      if (activeEffects.has('screen_shake')) moveDelay *= 1.2;
+      if (activeEffects.has('shrink_ceiling')) moveDelay *= 1.1;
 
       if (now - this.aiLastMoveTime < moveDelay) {
         return;
@@ -387,148 +311,59 @@ export default class GameRoomServer implements Party.Server {
       // If no moves queued, decide next placement using adaptive AI
       if (this.aiMoveQueue.length === 0 && this.adaptiveAI) {
         const decision = this.adaptiveAI.findMove(
-          this.aiGameState.board,
-          this.aiGameState.currentPiece
+          currentAIState.gameState.board,
+          currentAIState.gameState.currentPiece
         );
         this.aiMoveQueue = decision.moves;
       }
 
-      // Execute next move (ONE move per tick - visible movement!)
-      const move = this.aiMoveQueue.shift();
+      let move = this.aiMoveQueue.shift();
       if (!move) return;
 
-      let newPiece = this.aiGameState.currentPiece;
-
-      switch (move.type) {
-        case 'left':
-          newPiece = movePiece(newPiece, -1, 0);
-          break;
-        case 'right':
-          newPiece = movePiece(newPiece, 1, 0);
-          break;
-        case 'rotate_cw':
-          newPiece = rotatePiece(newPiece, true);
-          break;
-        case 'rotate_ccw':
-          newPiece = rotatePiece(newPiece, false);
-          break;
-        case 'hard_drop':
-          newPiece.position = getHardDropPosition(this.aiGameState.board, newPiece);
-          // Lock piece
-          this.aiGameState.board = lockPiece(this.aiGameState.board, newPiece);
-          const { board, linesCleared } = clearLines(this.aiGameState.board);
-          this.aiGameState.board = board;
-          this.aiGameState.linesCleared += linesCleared;
-          this.aiGameState.score += linesCleared * 100;
-
-          // Update AI stars (proper calculation with combo)
-          if (linesCleared > 0) {
-            const comboWindow = STAR_VALUES.comboWindow;
-            if (now - this.aiLastClearTime < comboWindow) {
-              this.aiGameState.comboCount++;
-            } else {
-              this.aiGameState.comboCount = 0;
-            }
-            this.aiLastClearTime = now;
-            const starsEarned = calculateStars(linesCleared, this.aiGameState.comboCount);
-            this.aiGameState.stars = Math.min(
-              STAR_VALUES.maxCapacity,
-              this.aiGameState.stars + starsEarned
-            );
-          }
-
-          // Spawn next piece
-          this.aiGameState.currentPiece = createTetromino(
-            this.aiGameState.nextPieces[0],
-            this.aiGameState.board.width
-          );
-          this.aiGameState.nextPieces.shift();
-          this.aiGameState.nextPieces.push(getRandomTetromino());
-
-          // Check game over
-          if (!isValidPosition(this.aiGameState.board, this.aiGameState.currentPiece)) {
-            this.aiGameState.isGameOver = true;
-            this.handleGameOver(this.aiPlayer!.id);
-          }
-
-          // AI ability usage after locking piece
-          this.aiConsiderUsingAbility();
-
-          break;
+      if (activeEffects.has('reverse_controls')) {
+        if (move.type === 'left') move = { type: 'right' };
+        else if (move.type === 'right') move = { type: 'left' };
       }
 
-      // Validate and update piece
-      if (move.type !== 'hard_drop') {
-        if (isValidPosition(this.aiGameState.board, newPiece)) {
-          this.aiGameState.currentPiece = newPiece;
-        }
+      while (
+        activeEffects.has('rotation_lock') &&
+        (move.type === 'rotate_cw' || move.type === 'rotate_ccw')
+      ) {
+        move = this.aiMoveQueue.shift() || { type: 'hard_drop' };
+      }
+
+      const input = this.aiMoveToPlayerInput(move.type);
+      const linesBefore = currentAIState.gameState.linesCleared;
+      const stateChanged = currentAIState.processInput(input);
+
+      if (stateChanged) {
+        this.broadcastState();
+      }
+
+      if (currentAIState.gameState.linesCleared > linesBefore) {
+        this.aiConsiderUsingAbility();
+      }
+      if (currentAIState.gameState.isGameOver) {
+        this.handleGameOver(this.aiPlayer!.id);
       }
 
       this.aiLastMoveTime = now;
-
-      // Broadcast AI state after move
-      this.broadcastAIState();
-    }, 50); // Check every 50ms, but moveDelay controls actual move rate
+    }, 50);
   }
 
-  handleGameStateUpdate(playerId: string, state: GameState, sender: Party.Connection) {
-    this.trackMessage(playerId, 'game_state_update');
-
-    const player = this.players.get(playerId);
-    if (!player) return;
-
-    const previousState = player.gameState;
-    player.gameState = state;
-
-    // Update player metrics if piece count increased (piece was locked)
-    if (previousState && previousState.linesCleared !== undefined && state.linesCleared !== undefined) {
-      // Use linesCleared as a proxy for pieces - not perfect but simple
-      // Better: track score increases
-      const pieceLocked = previousState.score !== state.score;
-
-      if (pieceLocked) {
-        const now = Date.now();
-        const lockTime = now - player.lastPieceLockTime;
-        player.lastPieceLockTime = now;
-
-        // Update metrics (rolling average)
-        const metrics = player.metrics;
-        metrics.pieceCount++;
-        metrics.totalLockTime += lockTime;
-        metrics.averageLockTime = metrics.totalLockTime / metrics.pieceCount;
-
-        // Calculate PPM (pieces per minute)
-        const elapsedMinutes = (now - metrics.lastUpdateTime) / 60000;
-        if (elapsedMinutes > 0.1) {
-          metrics.averagePPM = metrics.pieceCount / elapsedMinutes;
-        }
-
-        // Calculate average board height
-        const boardHeight = this.calculateBoardHeight(state.board);
-        if (metrics.pieceCount === 1) {
-          metrics.averageBoardHeight = boardHeight;
-        } else {
-          // Exponential moving average (favor recent data)
-          metrics.averageBoardHeight = metrics.averageBoardHeight * 0.9 + boardHeight * 0.1;
-        }
-
-        // Update adaptive AI with new metrics
-        if (this.adaptiveAI) {
-          this.adaptiveAI.updatePlayerMetrics(metrics);
-        }
-      }
-    }
-
-    // Broadcast to opponent
-    const opponent = this.getOpponent(playerId);
-    if (opponent) {
-      const opponentConn = this.getConnection(opponent.connectionId);
-      if (opponentConn) {
-        opponentConn.send(JSON.stringify({
-          type: 'opponent_state_update',
-          state,
-        }));
-      }
+  private aiMoveToPlayerInput(moveType: AIMove['type']): PlayerInputType {
+    switch (moveType) {
+      case 'left':
+        return 'move_left';
+      case 'right':
+        return 'move_right';
+      case 'rotate_cw':
+        return 'rotate_cw';
+      case 'rotate_ccw':
+        return 'rotate_ccw';
+      case 'hard_drop':
+      default:
+        return 'hard_drop';
     }
   }
 
@@ -553,34 +388,35 @@ export default class GameRoomServer implements Party.Server {
     return maxHeight;
   }
 
-  handleGameEvent(playerId: string, event: any, sender: Party.Connection) {
-    // Broadcast event to opponent
-    const opponent = this.getOpponent(playerId);
-    if (opponent) {
-      const opponentConn = this.getConnection(opponent.connectionId);
-      if (opponentConn) {
-        opponentConn.send(JSON.stringify({
-          type: 'opponent_event',
-          event,
-        }));
-      }
-    }
-  }
-
   handleAbilityActivation(playerId: string, abilityType: string, targetPlayerId: string) {
-    // Validate: does player have enough stars?
+    const ability = ABILITIES[abilityType as keyof typeof ABILITIES];
+    if (!ability) {
+      console.warn(`[ABILITY] Unknown ability type: ${abilityType}`);
+      return;
+    }
+
+    // Validate target category
+    if (ability.category === 'buff' && targetPlayerId !== playerId) {
+      console.warn(`[ABILITY] Rejected ${abilityType}: buffs must target self`);
+      return;
+    }
+    if (ability.category === 'debuff' && targetPlayerId === playerId) {
+      console.warn(`[ABILITY] Rejected ${abilityType}: debuffs must target opponent`);
+      return;
+    }
+
+    // Validate source player state and star cost
     const playerState = this.serverGameStates.get(playerId);
     if (playerState) {
-      // Server-authoritative mode: validate stars
-      const abilityCost = this.getAbilityCost(abilityType);
-
-      if (playerState.gameState.stars < abilityCost) {
-        console.warn(`[ABILITY] Player ${playerId} has insufficient stars (${playerState.gameState.stars}/${abilityCost})`);
-        return; // Reject
+      if (playerState.loadout.length > 0 && !playerState.loadout.includes(abilityType)) {
+        console.warn(`[ABILITY] Rejected ${abilityType}: not in loadout for ${playerId}`);
+        return;
       }
-
-      // Deduct stars
-      playerState.gameState.stars -= abilityCost;
+      if (playerState.gameState.stars < ability.cost) {
+        console.warn(`[ABILITY] Player ${playerId} has insufficient stars (${playerState.gameState.stars}/${ability.cost})`);
+        return;
+      }
+      playerState.gameState.stars -= ability.cost;
       console.log(`[ABILITY] Player ${playerId} used ${abilityType}, stars: ${playerState.gameState.stars}`);
     }
 
@@ -591,13 +427,18 @@ export default class GameRoomServer implements Party.Server {
     const targetServerState = this.serverGameStates.get(targetPlayerId);
     if (targetServerState) {
       targetServerState.applyAbility(abilityType);
+      const targetConn = this.getConnection(targetPlayer.connectionId);
+      if (targetConn) {
+        targetConn.send(JSON.stringify({
+          type: 'ability_received',
+          abilityType,
+          fromPlayerId: playerId,
+        }));
+      }
+      if (targetPlayerId === this.aiPlayer?.id) {
+        this.aiMoveQueue = [];
+      }
       this.broadcastState();
-      return;
-    }
-
-    // If target is AI, apply ability to AI board directly
-    if (this.aiPlayer && targetPlayerId === this.aiPlayer.id && this.aiGameState) {
-      this.applyAbilityToAI(abilityType);
       return;
     }
 
@@ -612,154 +453,17 @@ export default class GameRoomServer implements Party.Server {
     }
   }
 
-  applyAbilityToAI(abilityType: string) {
-    if (!this.aiGameState) return;
-
-    console.log(`Applying ability ${abilityType} to AI`);
-
-    switch (abilityType) {
-      // Board-modifying debuffs
-      case 'earthquake':
-        this.aiGameState.board = applyEarthquake(this.aiGameState.board);
-        break;
-
-      case 'clear_rows': {
-        const { board: clearedBoard } = applyClearRows(this.aiGameState.board, 5);
-        this.aiGameState.board = clearedBoard;
-        break;
-      }
-
-      case 'random_spawner':
-        this.aiGameState.board = applyRandomSpawner(this.aiGameState.board);
-        break;
-
-      case 'row_rotate':
-        this.aiGameState.board = applyRowRotate(this.aiGameState.board);
-        break;
-
-      case 'death_cross':
-        this.aiGameState.board = applyDeathCross(this.aiGameState.board);
-        break;
-
-      case 'gold_digger':
-        this.aiGameState.board = applyGoldDigger(this.aiGameState.board);
-        break;
-
-      // New spec-003 abilities
-      case 'add_junk_rows':
-        this.aiGameState.board = applyAddJunkRows(this.aiGameState.board, 2);
-        break;
-
-      case 'scramble_board':
-        this.aiGameState.board = applyScrambleBoard(this.aiGameState.board);
-        break;
-
-      case 'gravity_flip':
-        this.aiGameState.board = applyGravityFlip(this.aiGameState.board);
-        break;
-
-      case 'freeze':
-        // Pause AI game loop for 3 seconds
-        this.aiIsFrozen = true;
-        if (this.aiFreezeTimeout) clearTimeout(this.aiFreezeTimeout);
-        this.aiFreezeTimeout = setTimeout(() => {
-          this.aiIsFrozen = false;
-          this.aiFreezeTimeout = null;
-        }, 3000);
-        break;
-
-      // Bomb abilities applied to AI board (clear area at center)
-      case 'cross_firebomb': {
-        const cx = Math.floor(this.aiGameState.board.width / 2);
-        const cy = Math.floor(this.aiGameState.board.height / 2);
-        this.aiGameState.board = applyCrossBomb(this.aiGameState.board, cx, cy);
-        break;
-      }
-
-      case 'circle_bomb': {
-        const bx = Math.floor(this.aiGameState.board.width / 2);
-        const by = Math.floor(this.aiGameState.board.height / 2);
-        this.aiGameState.board = applyCircleBomb(this.aiGameState.board, bx, by);
-        break;
-      }
-
-      // Time-based debuffs — AI ignores visual/control effects
-      case 'speed_up_opponent':
-      case 'reverse_controls':
-      case 'rotation_lock':
-      case 'blind_spot':
-      case 'screen_shake':
-      case 'shrink_ceiling':
-      case 'cascade_multiplier':
-      case 'weird_shapes':
-        console.log(`Time-based ability ${abilityType} on AI - effect limited`);
-        break;
-
-      // Self-buff abilities shouldn't target AI
-      case 'mini_blocks':
-      case 'fill_holes':
-        console.warn(`Buff ability ${abilityType} sent to AI - ignoring`);
-        break;
-
-      default:
-        console.warn(`Unknown ability type: ${abilityType}`);
-    }
-
-    // Clear AI move queue to force re-planning with new board state
-    this.aiMoveQueue = [];
-
-    // Broadcast updated AI state to human player immediately
-    this.broadcastAIState();
-  }
-
-  broadcastAIState() {
-    if (!this.aiGameState || !this.aiPlayer) return;
-
-    const humanPlayer = Array.from(this.players.values()).find(p => p.playerId !== this.aiPlayer!.id);
-    if (!humanPlayer) return;
-
-    const conn = this.getConnection(humanPlayer.connectionId);
-    if (!conn) return;
-
-    conn.send(JSON.stringify({
-      type: 'opponent_state_update',
-      state: {
-        board: this.aiGameState.board.grid,
-        score: this.aiGameState.score,
-        stars: this.aiGameState.stars,
-        linesCleared: this.aiGameState.linesCleared,
-        comboCount: this.aiGameState.comboCount || 0,
-        isGameOver: this.aiGameState.isGameOver,
-        currentPiece: this.aiGameState.currentPiece,
-      },
-    }));
-  }
-
-  // Ability costs for AI (matching abilities.json)
   private getAbilityCost(abilityType: string): number {
-    const costs: Record<string, number> = {
-      earthquake: 65, random_spawner: 50, death_cross: 75,
-      row_rotate: 60, gold_digger: 55, speed_up_opponent: 35,
-      reverse_controls: 35, rotation_lock: 60, blind_spot: 85,
-      screen_shake: 25, shrink_ceiling: 50, weird_shapes: 80,
-      cross_firebomb: 45, circle_bomb: 50, clear_rows: 60,
-      cascade_multiplier: 90, mini_blocks: 40, fill_holes: 70,
-    };
-    return costs[abilityType] || 50;
+    const ability = ABILITIES[abilityType as keyof typeof ABILITIES];
+    return ability?.cost ?? Number.MAX_SAFE_INTEGER;
   }
-
-  // Offensive debuffs that target the human player
-  private readonly OFFENSIVE_ABILITIES = [
-    'earthquake', 'random_spawner', 'death_cross', 'row_rotate',
-    'gold_digger', 'speed_up_opponent', 'reverse_controls',
-    'rotation_lock', 'blind_spot', 'screen_shake', 'shrink_ceiling',
-    'weird_shapes',
-  ];
 
   aiConsiderUsingAbility() {
-    if (!this.aiGameState || !this.aiPlayer || this.aiAbilityLoadout.length === 0) {
+    if (!this.aiPlayer || this.aiAbilityLoadout.length === 0) {
       return;
     }
+    const aiState = this.serverGameStates.get(this.aiPlayer.id);
+    if (!aiState) return;
 
     const now = Date.now();
     const timeSinceLastAbility = now - this.aiLastAbilityUse;
@@ -774,31 +478,29 @@ export default class GameRoomServer implements Party.Server {
     }
 
     // Get human player state for strategic decision
-    const humanPlayer = Array.from(this.players.values()).find(p => p.playerId !== this.aiPlayer!.id);
-    if (!humanPlayer || !humanPlayer.gameState) {
+    const humanPlayer = Array.from(this.players.values()).find(
+      p => p.playerId !== this.aiPlayer!.id && p.connectionId !== 'ai'
+    );
+    if (!humanPlayer) {
+      return;
+    }
+    const humanState = this.serverGameStates.get(humanPlayer.playerId);
+    if (!humanState) {
       return;
     }
 
-    const aiBoardHeight = this.calculateBoardHeight(this.aiGameState.board);
-    const playerBoardHeight = this.calculateBoardHeight(humanPlayer.gameState.board);
+    const aiBoardHeight = this.calculateBoardHeight(aiState.gameState.board);
+    const playerBoardHeight = this.calculateBoardHeight(humanState.gameState.board);
 
     // Strategic ability selection
     let selectedAbility: string | null = null;
+    const offensiveOptions = this.aiAbilityLoadout.filter(ability => {
+      const metadata = ABILITIES[ability as keyof typeof ABILITIES];
+      return metadata?.category === 'debuff';
+    });
 
     // AI losing (board high) — pick an offensive debuff to disrupt player
-    if (aiBoardHeight > 12) {
-      const offensiveOptions = this.aiAbilityLoadout.filter(a =>
-        this.OFFENSIVE_ABILITIES.includes(a)
-      );
-      if (offensiveOptions.length > 0) {
-        selectedAbility = offensiveOptions[Math.floor(Math.random() * offensiveOptions.length)];
-      }
-    }
-    // Player doing well (low board) — use offensive ability
-    else if (playerBoardHeight < 6) {
-      const offensiveOptions = this.aiAbilityLoadout.filter(a =>
-        this.OFFENSIVE_ABILITIES.includes(a)
-      );
+    if (aiBoardHeight > 12 || playerBoardHeight < 6) {
       if (offensiveOptions.length > 0) {
         selectedAbility = offensiveOptions[Math.floor(Math.random() * offensiveOptions.length)];
       }
@@ -816,62 +518,71 @@ export default class GameRoomServer implements Party.Server {
     const abilityCost = this.getAbilityCost(selectedAbility);
 
     // AI star management: if stars too low and board is high, grant bonus stars
-    if (this.aiGameState.stars < abilityCost && aiBoardHeight > 10) {
+    if (aiState.gameState.stars < abilityCost && aiBoardHeight > 10) {
       // "Cheat slightly" per spec to maintain balance
-      this.aiGameState.stars += Math.floor(abilityCost * 0.5);
+      aiState.gameState.stars += Math.floor(abilityCost * 0.5);
     }
 
-    if (this.aiGameState.stars < abilityCost) {
+    if (aiState.gameState.stars < abilityCost) {
       return;
     }
 
-    console.log(`AI using ability: ${selectedAbility} (cost: ${abilityCost}, stars: ${this.aiGameState.stars})`);
-
-    // Spend stars
-    this.aiGameState.stars -= abilityCost;
+    console.log(`AI using ability: ${selectedAbility} (cost: ${abilityCost}, stars: ${aiState.gameState.stars})`);
     this.aiLastAbilityUse = now;
-
-    // Send ability to human player (debuffs target player)
-    const humanConn = this.getConnection(humanPlayer.connectionId);
-    if (humanConn) {
-      humanConn.send(JSON.stringify({
-        type: 'ability_received',
-        abilityType: selectedAbility,
-        fromPlayerId: this.aiPlayer.id,
-      }));
-    }
+    this.handleAbilityActivation(this.aiPlayer.id, selectedAbility, humanPlayer.playerId);
   }
 
   handleGameOver(playerId: string) {
-    const player = this.players.get(playerId);
-    if (!player) return;
+    if (this.roomStatus === 'finished') return;
 
-    // Mark as game over (handle both AI and human players)
-    if (this.aiPlayer && playerId === this.aiPlayer.id) {
-      // AI lost - aiGameState already marked as game over
-      console.log('[GAME OVER] AI lost');
-    } else if (player.gameState) {
-      // Human player lost
-      player.gameState.isGameOver = true;
-      console.log('[GAME OVER] Human player lost');
+    const loser = this.players.get(playerId);
+    if (!loser) return;
+
+    const loserServerState = this.serverGameStates.get(playerId);
+    if (loserServerState) {
+      loserServerState.gameState.isGameOver = true;
     } else {
-      console.warn('[GAME OVER] Player has no game state:', playerId);
+      console.warn('[GAME OVER] No authoritative state for loser:', playerId);
+    }
+
+    if (this.aiPlayer && playerId === this.aiPlayer.id) {
+      console.log('[GAME OVER] AI lost');
+    } else {
+      console.log('[GAME OVER] Human player lost');
+    }
+
+    const opponent = this.getOpponent(playerId);
+    if (!opponent) {
+      console.warn('[GAME OVER] Opponent not found for loser:', playerId);
       return;
     }
 
-    // Determine winner
-    const opponent = this.getOpponent(playerId);
-    if (opponent) {
-      this.winnerId = opponent.playerId;
-      this.roomStatus = 'finished';
+    this.winnerId = opponent.playerId;
+    this.roomStatus = 'finished';
+    this.stopAllGameLoops();
+    this.stopAIGameLoop();
+    this.aiMoveQueue = [];
 
-      console.log(`[GAME OVER] Winner: ${this.winnerId}, Loser: ${playerId}`);
+    console.log(`[GAME OVER] Winner: ${this.winnerId}, Loser: ${playerId}`);
 
-      this.broadcast({
-        type: 'game_finished',
-        winnerId: this.winnerId,
-        loserId: playerId,
-      });
+    this.broadcast({
+      type: 'game_finished',
+      winnerId: this.winnerId,
+      loserId: playerId,
+    });
+  }
+
+  private stopAllGameLoops(): void {
+    for (const timeout of this.gameLoops.values()) {
+      clearTimeout(timeout);
+    }
+    this.gameLoops.clear();
+  }
+
+  private stopAIGameLoop(): void {
+    if (this.aiInterval) {
+      clearInterval(this.aiInterval);
+      this.aiInterval = null;
     }
   }
 
@@ -895,22 +606,16 @@ export default class GameRoomServer implements Party.Server {
   }
 
   onClose(conn: Party.Connection) {
-    // Clear AI interval and freeze timeout if exists
-    if (this.aiInterval) {
-      clearInterval(this.aiInterval);
-      this.aiInterval = null;
-    }
-    if (this.aiFreezeTimeout) {
-      clearTimeout(this.aiFreezeTimeout);
-      this.aiFreezeTimeout = null;
-    }
+    this.stopAIGameLoop();
 
     // Find and remove player
     for (const [playerId, player] of this.players) {
       if (player.connectionId === conn.id) {
         // Clean up server game state
-        this.stopGameLoop(playerId);
+        this.stopAllGameLoops();
         this.serverGameStates.delete(playerId);
+        this.aiMoveQueue = [];
+        this.roomStatus = 'finished';
 
         this.players.delete(playerId);
         console.log(`Player ${playerId} disconnected`);

@@ -306,7 +306,7 @@ describe('ServerGameState', () => {
         expect(activeEffects.length).toBeGreaterThanOrEqual(3);
       });
 
-      it('should restore normal tick rate after speed_up expires', (done) => {
+      it('should restore normal tick rate after speed_up expires', async () => {
         const originalTickRate = state.tickRate;
         state.applyAbility('speed_up_opponent');
 
@@ -314,11 +314,9 @@ describe('ServerGameState', () => {
 
         // Wait for effect to expire (10 seconds + buffer)
         // Note: This is a simplified test - in production you'd use fake timers
-        setTimeout(() => {
-          expect(state.tickRate).toBe(originalTickRate);
-          expect(state.getActiveEffects()).not.toContain('speed_up_opponent');
-          done();
-        }, 10100);
+        await new Promise(resolve => setTimeout(resolve, 10100));
+        expect(state.tickRate).toBe(originalTickRate);
+        expect(state.getActiveEffects()).not.toContain('speed_up_opponent');
       }, 11000); // 11 second timeout for test
 
       it('should restore normal controls after reverse_controls expires', () => {
