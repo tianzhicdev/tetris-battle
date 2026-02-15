@@ -12,6 +12,7 @@ import { AbilityNotification } from './AbilityNotification';
 import { UserButton } from '@clerk/clerk-react';
 import { DebugLogger } from '../services/debug/DebugLogger';
 import { DebugPanel } from './debug/DebugPanel';
+import { useDebugStore } from '../stores/debugStore';
 import {
   AbilityEffectManager,
   ABILITIES,
@@ -120,6 +121,11 @@ export function MultiplayerGame({ roomId, playerId, opponentId, theme, profile, 
     setIsDebugMode(debugEnabled);
     if (debugEnabled) {
       setDebugLogger(new DebugLogger());
+      // Auto-open debug panel when debug mode is enabled
+      const { togglePanel, isOpen } = useDebugStore.getState();
+      if (!isOpen) {
+        togglePanel();
+      }
     }
   }, []);
 
