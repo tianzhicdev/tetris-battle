@@ -105,7 +105,7 @@ export default class GameRoomServer implements Party.Server {
         this.handleJoinGame(data.playerId, sender, data.loadout, data.aiOpponent);
         break;
       case 'player_input':
-        this.handlePlayerInput(data.playerId, data.input);
+        this.handlePlayerInput(data.playerId, data.input, data.seq);
         break;
       case 'ability_activation':
         this.handleAbilityActivation(data.playerId, data.abilityType, data.targetPlayerId, data.requestId);
@@ -196,16 +196,43 @@ export default class GameRoomServer implements Party.Server {
     }
   }
 
-  private handlePlayerInput(playerId: string, input: PlayerInputType): void {
+  private handlePlayerInput(playerId: string, input: PlayerInputType, seq?: number): void {
     const serverState = this.serverGameStates.get(playerId);
     if (!serverState) {
       console.warn(`[INPUT] No server state for player ${playerId}`);
+      if (seq !== undefined) {
+        this.sendToPlayer(playerId, {
+          type: 'input_rejected',
+          rejectedSeq: seq,
+          reason: 'no_server_state',
+          serverState: null,
+        });
+      }
       return;
     }
 
     const stateChanged = serverState.processInput(input);
+
     if (stateChanged) {
+      // Input was successful
+      if (seq !== undefined) {
+        this.sendToPlayer(playerId, {
+          type: 'input_confirmed',
+          confirmedSeq: seq,
+          serverState: serverState.getPublicState(),
+        });
+      }
       this.broadcastState();
+    } else {
+      // Input failed validation (collision, etc.)
+      if (seq !== undefined) {
+        this.sendToPlayer(playerId, {
+          type: 'input_rejected',
+          rejectedSeq: seq,
+          reason: 'invalid_action',
+          serverState: serverState.getPublicState(),
+        });
+      }
     }
   }
 

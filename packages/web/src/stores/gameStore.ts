@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { GameState, Tetromino, ActiveAbility } from '@tetris-battle/game-core';
+import type { GameState, Tetromino, ActiveAbility, PlayerInputType } from '@tetris-battle/game-core';
 import {
   createInitialGameState,
   createTetromino,
@@ -18,6 +18,9 @@ import {
   applyWeirdShapes,
 } from '@tetris-battle/game-core';
 import { audioManager } from '../services/audioManager';
+import type { PendingInput } from '../types/prediction';
+import { MAX_PENDING_INPUTS } from '../types/prediction';
+import { applyInputAction, areStatesEqual } from '../utils/predictionHelpers';
 
 interface GameStore {
   gameState: GameState;
@@ -31,6 +34,14 @@ interface GameStore {
   piecePreviewCount: number; // 1 = normal, 5 = piece preview+ active
   hasDeflectShield: boolean; // Active deflect shield that blocks next debuff
   onBombExplode: ((x: number, y: number, type: 'cross' | 'circle') => void) | null;
+
+  // Client-side prediction (server-auth mode only)
+  serverState: GameState | null;    // Last confirmed state from server
+  predictedState: GameState | null; // Current optimistic state (rendered)
+  pendingInputs: PendingInput[];    // Queue of inputs awaiting confirmation
+  inputSequence: number;             // Monotonic counter for input sequencing
+  isPredictionMode: boolean;         // Whether prediction is active
+  onMisprediction: (() => void) | null;
 
   // Actions
   initGame: () => void;
@@ -54,6 +65,15 @@ interface GameStore {
   setPiecePreviewCount: (count: number) => void;
   setHasDeflectShield: (active: boolean) => void;
   setOnBombExplode: (callback: (x: number, y: number, type: 'cross' | 'circle') => void) => void;
+
+  // Prediction methods
+  setPredictionMode: (enabled: boolean) => void;
+  setServerState: (state: GameState) => void;
+  setPredictedState: (state: GameState) => void;
+  predictInput: (action: PlayerInputType) => number | null; // Returns seq number
+  reconcileWithServer: (confirmedSeq: number, serverState: any) => void;
+  handleInputRejection: (rejectedSeq: number, serverState: any) => void;
+  setOnMisprediction: (callback: () => void) => void;
 }
 
 export const useGameStore = create<GameStore>((set, get) => ({
@@ -68,6 +88,14 @@ export const useGameStore = create<GameStore>((set, get) => ({
   piecePreviewCount: 1,
   hasDeflectShield: false,
   onBombExplode: null,
+
+  // Prediction state
+  serverState: null,
+  predictedState: null,
+  pendingInputs: [],
+  inputSequence: 0,
+  isPredictionMode: false,
+  onMisprediction: null,
 
   initGame: () => {
     const initialState = createInitialGameState();
@@ -397,5 +425,159 @@ export const useGameStore = create<GameStore>((set, get) => ({
 
   setOnBombExplode: (callback: (x: number, y: number, type: 'cross' | 'circle') => void) => {
     set({ onBombExplode: callback });
+  },
+
+  // Prediction methods (placeholder implementations)
+  setPredictionMode: (enabled: boolean) => {
+    set({ isPredictionMode: enabled });
+  },
+
+  setServerState: (state: GameState) => {
+    set({ serverState: state });
+  },
+
+  setPredictedState: (state: GameState) => {
+    set({ predictedState: state });
+  },
+
+  predictInput: (action: PlayerInputType) => {
+    const { isPredictionMode, predictedState, pendingInputs, inputSequence, gameState } = get();
+
+    // If prediction mode not enabled, return null
+    if (!isPredictionMode) {
+      return null;
+    }
+
+    // Use predicted state if available, otherwise use game state
+    const currentState = predictedState || gameState;
+
+    // Generate next sequence number
+    const seq = inputSequence + 1;
+
+    // Apply action using helper
+    const newState = applyInputAction(currentState, action);
+
+    // If action failed validation, don't predict (return null)
+    if (!newState) {
+      console.warn('[PREDICTION] Action failed validation:', action);
+      return null;
+    }
+
+    // Create pending input entry
+    const pendingInput: PendingInput = {
+      seq,
+      action,
+      predictedState: newState,
+      timestamp: Date.now(),
+    };
+
+    // Check queue limit
+    let newPendingInputs = [...pendingInputs, pendingInput];
+    if (newPendingInputs.length > MAX_PENDING_INPUTS) {
+      console.warn('[PREDICTION] Queue overflow, dropping oldest input');
+      newPendingInputs = newPendingInputs.slice(1);
+    }
+
+    // Update store
+    set({
+      predictedState: newState,
+      pendingInputs: newPendingInputs,
+      inputSequence: seq,
+    });
+
+    return seq;
+  },
+
+  reconcileWithServer: (confirmedSeq: number, serverState: any) => {
+    const { pendingInputs, predictedState, onMisprediction } = get();
+
+    // Remove all inputs with seq <= confirmedSeq
+    const remainingInputs = pendingInputs.filter(input => input.seq > confirmedSeq);
+
+    // Update server state
+    set({ serverState });
+
+    // Compare server state to predicted state
+    const statesMatch = predictedState && areStatesEqual(predictedState, serverState);
+
+    if (statesMatch) {
+      // Perfect prediction! No visual change needed
+      console.log('[PREDICTION] Perfect match for seq', confirmedSeq);
+      set({ pendingInputs: remainingInputs });
+      return;
+    }
+
+    // Misprediction detected
+    console.warn('[MISPREDICTION] Server state differs from prediction', {
+      seq: confirmedSeq,
+      predicted: predictedState?.currentPiece,
+      actual: serverState.currentPiece,
+      pendingCount: remainingInputs.length,
+    });
+
+    // Snap to server state
+    let reconciledState = serverState;
+
+    // Replay remaining pending inputs
+    for (const input of remainingInputs) {
+      const newState = applyInputAction(reconciledState, input.action);
+      if (newState) {
+        reconciledState = newState;
+        // Update the pending input's predicted state
+        input.predictedState = newState;
+      } else {
+        // Input no longer valid, remove it
+        console.warn('[PREDICTION] Replay failed for action:', input.action);
+      }
+    }
+
+    // Update state and trigger misprediction callback
+    set({
+      predictedState: reconciledState,
+      pendingInputs: remainingInputs.filter(input =>
+        applyInputAction(reconciledState, input.action) !== null
+      ),
+    });
+
+    // Trigger visual feedback
+    if (onMisprediction) {
+      onMisprediction();
+    }
+  },
+
+  handleInputRejection: (rejectedSeq: number, serverState: any) => {
+    const { pendingInputs, onMisprediction } = get();
+
+    console.error('[INPUT REJECTED] Seq:', rejectedSeq, 'Reason:', serverState.reason || 'unknown');
+
+    // Remove the rejected input and all older inputs
+    const remainingInputs = pendingInputs.filter(input => input.seq > rejectedSeq);
+
+    // Snap to server state (same as misprediction)
+    let reconciledState = serverState;
+
+    // Replay remaining inputs
+    for (const input of remainingInputs) {
+      const newState = applyInputAction(reconciledState, input.action);
+      if (newState) {
+        reconciledState = newState;
+        input.predictedState = newState;
+      }
+    }
+
+    set({
+      serverState,
+      predictedState: reconciledState,
+      pendingInputs: remainingInputs,
+    });
+
+    // Trigger visual feedback
+    if (onMisprediction) {
+      onMisprediction();
+    }
+  },
+
+  setOnMisprediction: (callback: () => void) => {
+    set({ onMisprediction: callback });
   },
 }));

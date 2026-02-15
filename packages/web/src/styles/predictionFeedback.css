@@ -1,0 +1,21 @@
+.prediction-correction {
+  outline: 2px solid rgba(255, 0, 0, 0.3);
+  animation: shake 0.2s ease-in-out;
+}
+
+@keyframes shake {
+  0%, 100% {
+    transform: translateX(0);
+  }
+  25% {
+    transform: translateX(-2px);
+  }
+  75% {
+    transform: translateX(2px);
+  }
+}
+
+/* Smooth transition for piece position corrections */
+.tetris-board canvas {
+  transition: transform 0.05s ease-out;
+}
