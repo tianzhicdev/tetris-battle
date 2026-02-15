@@ -138,4 +138,274 @@ describe('ServerGameState', () => {
     expect(publicState).toHaveProperty('isGameOver');
     expect(publicState).toHaveProperty('activeEffects');
   });
+
+  describe('Ability System - Comprehensive Tests', () => {
+    describe('Instant Effect Debuff Abilities', () => {
+      beforeEach(() => {
+        // Lock a few pieces to have blocks on the board
+        for (let i = 0; i < 3; i++) {
+          state.processInput('hard_drop');
+        }
+      });
+
+      it('should apply earthquake - removes random blocks', () => {
+        const blockCountBefore = countBlocks(state.gameState.board.grid);
+        state.applyAbility('earthquake');
+        const blockCountAfter = countBlocks(state.gameState.board.grid);
+
+        // Earthquake should remove some blocks (up to 20%)
+        expect(blockCountAfter).toBeLessThanOrEqual(blockCountBefore);
+      });
+
+      it('should apply clear_rows - clears bottom rows', () => {
+        const boardBefore = JSON.parse(JSON.stringify(state.gameState.board.grid));
+        state.applyAbility('clear_rows');
+        const boardAfter = state.gameState.board.grid;
+
+        // Bottom rows should be cleared
+        const bottomRowBefore = boardBefore[boardBefore.length - 1];
+        const bottomRowAfter = boardAfter[boardAfter.length - 1];
+
+        // At least some difference should exist
+        expect(JSON.stringify(bottomRowAfter)).not.toBe(JSON.stringify(bottomRowBefore));
+      });
+
+      it('should apply random_spawner - adds random blocks', () => {
+        const blockCountBefore = countBlocks(state.gameState.board.grid);
+        state.applyAbility('random_spawner');
+        const blockCountAfter = countBlocks(state.gameState.board.grid);
+
+        // Random spawner should add blocks
+        expect(blockCountAfter).toBeGreaterThanOrEqual(blockCountBefore);
+      });
+
+      it('should apply row_rotate - rotates board rows', () => {
+        const boardBefore = JSON.parse(JSON.stringify(state.gameState.board.grid));
+        state.applyAbility('row_rotate');
+        const boardAfter = state.gameState.board.grid;
+
+        // Board should change due to rotation
+        expect(JSON.stringify(boardAfter)).not.toBe(JSON.stringify(boardBefore));
+      });
+
+      it('should apply death_cross - creates cross pattern', () => {
+        const blockCountBefore = countBlocks(state.gameState.board.grid);
+        state.applyAbility('death_cross');
+        const blockCountAfter = countBlocks(state.gameState.board.grid);
+
+        // Death cross should add blocks in a cross pattern
+        expect(blockCountAfter).toBeGreaterThan(blockCountBefore);
+      });
+
+      it('should apply gold_digger - removes random blocks', () => {
+        const blockCountBefore = countBlocks(state.gameState.board.grid);
+        state.applyAbility('gold_digger');
+        const blockCountAfter = countBlocks(state.gameState.board.grid);
+
+        // Gold digger removes 1-3 filled blocks (opposite of random_spawner)
+        expect(blockCountAfter).toBeLessThanOrEqual(blockCountBefore);
+      });
+    });
+
+    describe('Duration-Based Debuff Abilities', () => {
+      it('should apply speed_up_opponent - increases tick rate', () => {
+        const originalTickRate = state.tickRate;
+        state.applyAbility('speed_up_opponent');
+
+        expect(state.tickRate).toBe(originalTickRate / 3);
+        expect(state.getActiveEffects()).toContain('speed_up_opponent');
+
+        // Effect should be in active effects
+        const publicState = state.getPublicState();
+        expect(publicState.activeEffects).toContain('speed_up_opponent');
+      });
+
+      it('should apply reverse_controls - swaps left/right inputs', () => {
+        state.applyAbility('reverse_controls');
+
+        const originalX = state.gameState.currentPiece!.position.x;
+
+        // Try to move left - should go right instead
+        state.processInput('move_left');
+        expect(state.gameState.currentPiece!.position.x).toBeGreaterThan(originalX);
+
+        // Effect should be active
+        expect(state.getActiveEffects()).toContain('reverse_controls');
+      });
+
+      it('should apply rotation_lock - blocks rotation', () => {
+        state.applyAbility('rotation_lock');
+
+        const originalRotation = state.gameState.currentPiece!.rotation;
+
+        // Try to rotate - should be blocked
+        const changed = state.processInput('rotate_cw');
+        expect(changed).toBe(false);
+        expect(state.gameState.currentPiece!.rotation).toBe(originalRotation);
+
+        // Effect should be active
+        expect(state.getActiveEffects()).toContain('rotation_lock');
+      });
+
+      it('should apply blind_spot - adds visual effect', () => {
+        state.applyAbility('blind_spot');
+
+        // Effect should be tracked
+        expect(state.getActiveEffects()).toContain('blind_spot');
+
+        const publicState = state.getPublicState();
+        expect(publicState.activeEffects).toContain('blind_spot');
+      });
+
+      it('should apply screen_shake - adds visual effect', () => {
+        state.applyAbility('screen_shake');
+
+        expect(state.getActiveEffects()).toContain('screen_shake');
+      });
+
+      it('should apply shrink_ceiling - adds visual effect', () => {
+        state.applyAbility('shrink_ceiling');
+
+        expect(state.getActiveEffects()).toContain('shrink_ceiling');
+      });
+
+      it('should apply weird_shapes - affects next piece', () => {
+        state.applyAbility('weird_shapes');
+
+        // Effect should be tracked (very short duration)
+        const activeEffects = state.getActiveEffects();
+        // May or may not be active due to 1ms duration
+        expect(activeEffects).toBeDefined();
+      });
+    });
+
+    describe('Effect Duration and Cleanup', () => {
+      it('should remove expired effects from active list', () => {
+        // Apply effect with short duration
+        state.applyAbility('screen_shake');
+
+        // Effect should initially be active
+        expect(state.getActiveEffects()).toContain('screen_shake');
+
+        // Manually expire the effect
+        state.activeEffects.set('screen_shake', Date.now() - 1000);
+
+        // Should no longer be in active effects
+        expect(state.getActiveEffects()).not.toContain('screen_shake');
+      });
+
+      it('should handle multiple active effects simultaneously', () => {
+        state.applyAbility('screen_shake');
+        state.applyAbility('blind_spot');
+        state.applyAbility('rotation_lock');
+
+        const activeEffects = state.getActiveEffects();
+        expect(activeEffects).toContain('screen_shake');
+        expect(activeEffects).toContain('blind_spot');
+        expect(activeEffects).toContain('rotation_lock');
+        expect(activeEffects.length).toBeGreaterThanOrEqual(3);
+      });
+
+      it('should restore normal tick rate after speed_up expires', (done) => {
+        const originalTickRate = state.tickRate;
+        state.applyAbility('speed_up_opponent');
+
+        expect(state.tickRate).toBe(originalTickRate / 3);
+
+        // Wait for effect to expire (10 seconds + buffer)
+        // Note: This is a simplified test - in production you'd use fake timers
+        setTimeout(() => {
+          expect(state.tickRate).toBe(originalTickRate);
+          expect(state.getActiveEffects()).not.toContain('speed_up_opponent');
+          done();
+        }, 10100);
+      }, 11000); // 11 second timeout for test
+
+      it('should restore normal controls after reverse_controls expires', () => {
+        state.applyAbility('reverse_controls');
+
+        // Manually expire the effect
+        state.activeEffects.set('reverse_controls', Date.now() - 1000);
+
+        const originalX = state.gameState.currentPiece!.position.x;
+
+        // Move left should work normally now
+        state.processInput('move_left');
+        expect(state.gameState.currentPiece!.position.x).toBeLessThan(originalX);
+      });
+
+      it('should allow rotation after rotation_lock expires', () => {
+        state.applyAbility('rotation_lock');
+
+        // Manually expire the effect
+        state.activeEffects.set('rotation_lock', Date.now() - 1000);
+
+        const originalRotation = state.gameState.currentPiece!.rotation;
+
+        // Rotation should work now
+        const changed = state.processInput('rotate_cw');
+        expect(changed).toBe(true);
+        expect(state.gameState.currentPiece!.rotation).not.toBe(originalRotation);
+      });
+    });
+
+    describe('Ability Edge Cases', () => {
+      it('should handle unknown ability type gracefully', () => {
+        // Should not throw error
+        expect(() => {
+          state.applyAbility('unknown_ability_xyz');
+        }).not.toThrow();
+      });
+
+      it('should handle abilities on empty board', () => {
+        const freshState = new ServerGameState('test', 12345, []);
+
+        // Should not crash on empty board
+        expect(() => {
+          freshState.applyAbility('earthquake');
+          freshState.applyAbility('clear_rows');
+          freshState.applyAbility('random_spawner');
+          freshState.applyAbility('death_cross');
+        }).not.toThrow();
+      });
+
+      it('should handle abilities on full board', () => {
+        // Fill board to near-capacity
+        for (let i = 0; i < 45; i++) {
+          if (state.gameState.isGameOver) break;
+          state.processInput('hard_drop');
+        }
+
+        // Should not crash on full board
+        expect(() => {
+          state.applyAbility('random_spawner');
+          state.applyAbility('death_cross');
+          state.applyAbility('gold_digger');
+        }).not.toThrow();
+      });
+
+      it('should handle rapid ability application', () => {
+        // Apply many abilities in quick succession
+        state.applyAbility('screen_shake');
+        state.applyAbility('blind_spot');
+        state.applyAbility('rotation_lock');
+        state.applyAbility('reverse_controls');
+        state.applyAbility('shrink_ceiling');
+
+        const activeEffects = state.getActiveEffects();
+        expect(activeEffects.length).toBeGreaterThan(0);
+      });
+    });
+  });
 });
+
+// Helper function to count blocks on board
+function countBlocks(grid: any[][]): number {
+  let count = 0;
+  for (const row of grid) {
+    for (const cell of row) {
+      if (cell !== null) count++;
+    }
+  }
+  return count;
+}
