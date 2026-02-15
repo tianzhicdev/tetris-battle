@@ -3,7 +3,8 @@ import { MainMenu } from './components/MainMenu';
 import { TetrisGame } from './components/TetrisGame';
 import { Matchmaking } from './components/PartykitMatchmaking';
 import { ServerAuthMultiplayerGame } from './components/ServerAuthMultiplayerGame';
-import { ChallengeNotification } from './components/ChallengeNotification';
+import { Notification } from './components/Notification';
+import { audioManager } from './services/audioManager';
 import { ChallengeWaiting } from './components/ChallengeWaiting';
 import { AuthWrapper } from './components/AuthWrapper';
 import { DEFAULT_THEME } from './themes';
@@ -38,10 +39,38 @@ function GameApp({ profile: initialProfile }: { profile: UserProfile }) {
     setOutgoingChallenge,
     clearChallenges,
     friends,
+    incomingChallenge,
   } = useFriendStore();
+
+  const [challengeTimeLeft, setChallengeTimeLeft] = useState(120);
 
   // Use Clerk user ID as player ID
   const playerId = profile.userId;
+
+  // Handle challenge countdown timer
+  useEffect(() => {
+    if (!incomingChallenge) {
+      setChallengeTimeLeft(120);
+      return;
+    }
+
+    const remaining = Math.max(0, Math.floor((incomingChallenge.expiresAt - Date.now()) / 1000));
+    setChallengeTimeLeft(remaining);
+
+    const interval = setInterval(() => {
+      setChallengeTimeLeft(prev => {
+        const next = prev - 1;
+        if (next <= 0) {
+          clearInterval(interval);
+          handleDeclineChallenge(incomingChallenge.challengeId);
+          return 0;
+        }
+        return next;
+      });
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [incomingChallenge]);
 
   // Initialize presence connection
   useEffect(() => {
@@ -207,9 +236,30 @@ function GameApp({ profile: initialProfile }: { profile: UserProfile }) {
   return (
     <>
       {/* Global challenge notifications */}
-      <ChallengeNotification
-        onAccept={handleAcceptChallenge}
-        onDecline={handleDeclineChallenge}
+      <Notification
+        visible={!!incomingChallenge}
+        title={incomingChallenge?.challengerUsername || 'Challenge'}
+        message={`Lv ${incomingChallenge?.challengerLevel || 0} · Rank ${incomingChallenge?.challengerRank || 0}`}
+        variant="challenge"
+        countdown={challengeTimeLeft}
+        actions={incomingChallenge ? [
+          {
+            label: 'Accept',
+            onClick: () => {
+              audioManager.playSfx('button_click');
+              handleAcceptChallenge(incomingChallenge.challengeId);
+            },
+            variant: 'success',
+          },
+          {
+            label: 'Decline',
+            onClick: () => {
+              audioManager.playSfx('button_click');
+              handleDeclineChallenge(incomingChallenge.challengeId);
+            },
+            variant: 'danger',
+          },
+        ] : undefined}
       />
       <ChallengeWaiting onCancel={handleCancelChallenge} />
 

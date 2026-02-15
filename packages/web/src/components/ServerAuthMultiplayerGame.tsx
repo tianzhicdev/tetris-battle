@@ -11,7 +11,7 @@ import { AbilityEffects } from './AbilityEffects';
 import { AbilityInfo } from './AbilityInfo';
 import { ParticleEffect } from './ParticleEffect';
 import { FlashOverlay } from './FlashOverlay';
-import { AbilityNotification } from './AbilityNotification';
+import { Notification } from './Notification';
 import { UserButton } from '@clerk/clerk-react';
 import { DebugLogger } from '../services/debug/DebugLogger';
 import { DebugPanel } from './debug/DebugPanel';
@@ -1596,10 +1596,11 @@ export function ServerAuthMultiplayerGame({
         />
       )}
 
-      <AbilityNotification
-        abilityName={abilityNotification?.name || null}
-        description={abilityNotification?.description || null}
-        category={abilityNotification?.category || null}
+      <Notification
+        visible={!!abilityNotification}
+        title={abilityNotification?.name || ''}
+        message={abilityNotification?.description}
+        variant={abilityNotification?.category}
       />
 
       {/* Debug Panel */}
