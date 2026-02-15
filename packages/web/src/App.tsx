@@ -7,7 +7,8 @@ import { Notification } from './components/Notification';
 import { audioManager } from './services/audioManager';
 import { ChallengeWaiting } from './components/ChallengeWaiting';
 import { AuthWrapper } from './components/AuthWrapper';
-import { DEFAULT_THEME } from './themes';
+import { ThemeProvider, useTheme } from './contexts/ThemeContext';
+import { toLegacyTheme } from './themes/index';
 import { progressionService } from './lib/supabase';
 import { friendService } from './services/friendService';
 import { PartykitPresence } from './services/partykit/presence';
@@ -26,7 +27,8 @@ interface GameMatch {
 
 function GameApp({ profile: initialProfile }: { profile: UserProfile }) {
   const [mode, setMode] = useState<GameMode>('menu');
-  const [currentTheme, setCurrentTheme] = useState(DEFAULT_THEME); // Default to Glass
+  const { theme } = useTheme();
+  const currentTheme = toLegacyTheme(theme); // Convert to legacy format for existing components
   const [gameMatch, setGameMatch] = useState<GameMatch | null>(null);
   const [profile, setProfile] = useState<UserProfile>(initialProfile);
   const presenceRef = useRef<PartykitPresence | null>(null);
@@ -275,7 +277,7 @@ function GameApp({ profile: initialProfile }: { profile: UserProfile }) {
       )}
 
       {mode === 'solo' && (
-        <TetrisGame onExit={handleExitGame} currentTheme={currentTheme} onThemeChange={setCurrentTheme} />
+        <TetrisGame onExit={handleExitGame} currentTheme={currentTheme} onThemeChange={() => {}} />
       )}
 
       {mode === 'matchmaking' && (
@@ -309,7 +311,11 @@ function GameApp({ profile: initialProfile }: { profile: UserProfile }) {
 function App() {
   return (
     <AuthWrapper>
-      {(profile) => <GameApp profile={profile} />}
+      {(profile) => (
+        <ThemeProvider userId={profile.userId}>
+          <GameApp profile={profile} />
+        </ThemeProvider>
+      )}
     </AuthWrapper>
   );
 }

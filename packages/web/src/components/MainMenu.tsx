@@ -6,8 +6,10 @@ import { LoadoutManager } from './LoadoutManager';
 import { ProfilePage } from './ProfilePage';
 import { AbilityInfo } from './AbilityInfo';
 import { FriendList } from './FriendList';
+import { ThemeSelector } from './ThemeSelector';
 import { audioManager } from '../services/audioManager';
 import { useFriendStore } from '../stores/friendStore';
+import { useTheme } from '../contexts/ThemeContext';
 import { glassSuccess, glassGold, glassBlue, glassPurple, mergeGlass } from '../styles/glassUtils';
 
 interface MainMenuProps {
@@ -24,7 +26,9 @@ export function MainMenu({ onSelectMode, theme, profile, onProfileUpdate, onChal
   const [showProfile, setShowProfile] = useState(false);
   const [showAbilityInfo, setShowAbilityInfo] = useState(false);
   const [showFriends, setShowFriends] = useState(false);
+  const [showThemeSelector, setShowThemeSelector] = useState(false);
   const pendingRequests = useFriendStore(state => state.pendingRequests);
+  const { themeId, setTheme } = useTheme();
 
   // Play menu music on mount
   useEffect(() => {
@@ -244,6 +248,28 @@ export function MainMenu({ onSelectMode, theme, profile, onProfileUpdate, onChal
         >
           Abilities
         </button>
+
+        <button
+          onClick={() => {
+            audioManager.playSfx('button_click');
+            setShowThemeSelector(true);
+          }}
+          style={mergeGlass(glassPurple(), {
+            padding: '12px 20px',
+            fontSize: '14px',
+            color: '#c942ff',
+            cursor: 'pointer',
+            fontFamily: 'monospace',
+            fontWeight: 'bold',
+            minWidth: '90px',
+            touchAction: 'manipulation',
+            borderRadius: '8px',
+            textShadow: '0 0 10px rgba(201, 66, 255, 0.5)',
+            transition: 'all 0.2s ease',
+          })}
+        >
+          Themes
+        </button>
       </div>
 
       {/* Modals */}
@@ -282,6 +308,17 @@ export function MainMenu({ onSelectMode, theme, profile, onProfileUpdate, onChal
             setShowFriends(false);
             onChallenge?.(friendUserId, friendUsername);
           }}
+        />
+      )}
+
+      {showThemeSelector && (
+        <ThemeSelector
+          currentThemeId={themeId}
+          onSelectTheme={(newThemeId) => {
+            setTheme(newThemeId);
+            audioManager.playSfx('button_click');
+          }}
+          onClose={() => setShowThemeSelector(false)}
         />
       )}
     </div>
