@@ -142,24 +142,38 @@ export function applyWeirdShapes(piece: Tetromino): Tetromino {
 export function applyRandomSpawner(board: Board, blockCount: number = 1, rng?: SeededRandom): Board {
   // Add random garbage blocks to EMPTY cells only.
   // Technical behavior: one random empty cell per trigger by default.
+  // Spawn only at bottom row OR next to existing filled cells.
   const newGrid = board.grid.map(row => [...row]);
 
-  // Find all empty cells
-  const emptyCells: { x: number; y: number }[] = [];
+  // Find all valid empty cells (bottom row or adjacent to filled cells)
+  const validEmptyCells: { x: number; y: number }[] = [];
+
   for (let y = 5; y < board.height; y++) { // Don't spawn in top 5 rows
     for (let x = 0; x < board.width; x++) {
       if (!newGrid[y][x]) {
-        emptyCells.push({ x, y });
+        // Check if it's at the bottom row
+        const isBottom = y === board.height - 1;
+
+        // Check if it's adjacent to a filled cell
+        const hasAdjacentFilled =
+          (y > 0 && newGrid[y - 1][x]) ||  // Above
+          (y < board.height - 1 && newGrid[y + 1][x]) ||  // Below
+          (x > 0 && newGrid[y][x - 1]) ||  // Left
+          (x < board.width - 1 && newGrid[y][x + 1]);  // Right
+
+        if (isBottom || hasAdjacentFilled) {
+          validEmptyCells.push({ x, y });
+        }
       }
     }
   }
 
-  // Randomly select and fill empty cells
-  for (let i = 0; i < blockCount && emptyCells.length > 0; i++) {
-    const randomIndex = randomInt(emptyCells.length, rng);
-    const { x, y } = emptyCells[randomIndex];
+  // Randomly select and fill valid empty cells
+  for (let i = 0; i < blockCount && validEmptyCells.length > 0; i++) {
+    const randomIndex = randomInt(validEmptyCells.length, rng);
+    const { x, y } = validEmptyCells[randomIndex];
     newGrid[y][x] = randomCellType(rng);
-    emptyCells.splice(randomIndex, 1); // Remove from available cells
+    validEmptyCells.splice(randomIndex, 1); // Remove from available cells
   }
 
   return { ...board, grid: newGrid };
