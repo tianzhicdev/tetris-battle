@@ -22,6 +22,7 @@ import {
   applyFillHoles,
   createMiniBlock,
   createWeirdShape,
+  ABILITIES,
   type GameState,
   type Tetromino,
   type PlayerInputType,
@@ -44,7 +45,7 @@ export class ServerGameState {
   // Buff ability state
   private bombMode: { type: 'circle' | 'cross' } | null = null;
   private miniBlocksRemaining: number = 0;
-  private shieldActive: boolean = false;
+  private periodicLastTrigger: Map<string, number> = new Map();
 
   constructor(playerId: string, seed: number, loadout: string[]) {
     this.playerId = playerId;
@@ -150,7 +151,9 @@ export class ServerGameState {
    * Tick: move piece down or lock (called by game loop)
    */
   tick(): boolean {
-    return this.movePieceDown();
+    const periodicChanged = this.applyPeriodicBoardEffects(Date.now());
+    const movementChanged = this.movePieceDown();
+    return periodicChanged || movementChanged;
   }
 
   private movePieceDown(): boolean {
@@ -246,7 +249,7 @@ export class ServerGameState {
 
     // Spawn next piece - check for special piece modifiers
     if (this.activeEffects.has('weird_shapes')) {
-      this.gameState.currentPiece = createWeirdShape(this.gameState.board.width);
+      this.gameState.currentPiece = createWeirdShape(this.gameState.board.width, this.rng);
       this.activeEffects.delete('weird_shapes');
     } else if (this.miniBlocksRemaining > 0) {
       this.gameState.currentPiece = createMiniBlock(this.gameState.board.width);
@@ -268,17 +271,10 @@ export class ServerGameState {
    * Apply ability effect (can be buff or debuff)
    */
   applyAbility(abilityType: string): void {
-    // Check if shield blocks this debuff
-    if (this.shieldActive && this.isDebuff(abilityType)) {
-      console.log(`[ServerGameState] Shield blocked ${abilityType}`);
-      this.shieldActive = false;
-      return;
-    }
-
     switch (abilityType) {
       // DEBUFF ABILITIES (from opponent)
       case 'earthquake':
-        this.gameState.board = applyEarthquake(this.gameState.board);
+        this.gameState.board = applyEarthquake(this.gameState.board, this.rng);
         break;
 
       case 'clear_rows': {
@@ -288,7 +284,8 @@ export class ServerGameState {
       }
 
       case 'random_spawner':
-        this.gameState.board = applyRandomSpawner(this.gameState.board);
+        this.activeEffects.set('random_spawner', Date.now() + this.getDurationMs('random_spawner', 20000));
+        this.periodicLastTrigger.set('random_spawner', Date.now());
         break;
 
       case 'row_rotate':
@@ -300,36 +297,37 @@ export class ServerGameState {
         break;
 
       case 'gold_digger':
-        this.gameState.board = applyGoldDigger(this.gameState.board);
+        this.activeEffects.set('gold_digger', Date.now() + this.getDurationMs('gold_digger', 20000));
+        this.periodicLastTrigger.set('gold_digger', Date.now());
         break;
 
       case 'speed_up_opponent':
         this.tickRate = 1000 / 3; // 3x faster
-        this.activeEffects.set('speed_up_opponent', Date.now() + 10000);
+        this.activeEffects.set('speed_up_opponent', Date.now() + this.getDurationMs('speed_up_opponent', 10000));
         setTimeout(() => {
           this.tickRate = 1000;
           this.activeEffects.delete('speed_up_opponent');
-        }, 10000);
+        }, this.getDurationMs('speed_up_opponent', 10000));
         break;
 
       case 'reverse_controls':
-        this.activeEffects.set('reverse_controls', Date.now() + 8000);
+        this.activeEffects.set('reverse_controls', Date.now() + this.getDurationMs('reverse_controls', 8000));
         break;
 
       case 'rotation_lock':
-        this.activeEffects.set('rotation_lock', Date.now() + 6000);
+        this.activeEffects.set('rotation_lock', Date.now() + this.getDurationMs('rotation_lock', 6000));
         break;
 
       case 'blind_spot':
-        this.activeEffects.set('blind_spot', Date.now() + 10000);
+        this.activeEffects.set('blind_spot', Date.now() + this.getDurationMs('blind_spot', 10000));
         break;
 
       case 'screen_shake':
-        this.activeEffects.set('screen_shake', Date.now() + 12000);
+        this.activeEffects.set('screen_shake', Date.now() + this.getDurationMs('screen_shake', 12000));
         break;
 
       case 'shrink_ceiling':
-        this.activeEffects.set('shrink_ceiling', Date.now() + 8000);
+        this.activeEffects.set('shrink_ceiling', Date.now() + this.getDurationMs('shrink_ceiling', 8000));
         break;
 
       case 'weird_shapes':
@@ -347,7 +345,7 @@ export class ServerGameState {
         break;
 
       case 'mini_blocks':
-        this.miniBlocksRemaining = 5;
+        this.miniBlocksRemaining = this.getDurationMs('mini_blocks', 5);
         break;
 
       case 'fill_holes':
@@ -355,15 +353,7 @@ export class ServerGameState {
         break;
 
       case 'cascade_multiplier':
-        this.activeEffects.set('cascade_multiplier', Date.now() + 15000);
-        break;
-
-      case 'deflect_shield':
-        this.shieldActive = true;
-        break;
-
-      case 'piece_preview_plus':
-        this.activeEffects.set('piece_preview_plus', Date.now() + 15000);
+        this.activeEffects.set('cascade_multiplier', Date.now() + this.getDurationMs('cascade_multiplier', 15000));
         break;
 
       default:
@@ -393,6 +383,53 @@ export class ServerGameState {
     return active;
   }
 
+  private applyPeriodicBoardEffects(now: number): boolean {
+    let changed = false;
+    changed = this.applyPeriodicEffect('random_spawner', now, () => {
+      this.gameState.board = applyRandomSpawner(this.gameState.board, 1, this.rng);
+    }) || changed;
+    changed = this.applyPeriodicEffect('gold_digger', now, () => {
+      this.gameState.board = applyGoldDigger(this.gameState.board, 1, this.rng);
+    }) || changed;
+    return changed;
+  }
+
+  private applyPeriodicEffect(
+    abilityType: 'random_spawner' | 'gold_digger',
+    now: number,
+    applyOnce: () => void
+  ): boolean {
+    const endTime = this.activeEffects.get(abilityType);
+    if (!endTime) {
+      this.periodicLastTrigger.delete(abilityType);
+      return false;
+    }
+    if (endTime <= now) {
+      this.activeEffects.delete(abilityType);
+      this.periodicLastTrigger.delete(abilityType);
+      return false;
+    }
+
+    const intervalMs = 2000;
+    const lastTrigger = this.periodicLastTrigger.get(abilityType) ?? now;
+    const elapsed = now - lastTrigger;
+    if (elapsed < intervalMs) {
+      return false;
+    }
+
+    const triggerCount = Math.floor(elapsed / intervalMs);
+    for (let i = 0; i < triggerCount; i++) {
+      applyOnce();
+    }
+    this.periodicLastTrigger.set(abilityType, lastTrigger + triggerCount * intervalMs);
+    return triggerCount > 0;
+  }
+
+  private getDurationMs(abilityType: string, fallbackMs: number): number {
+    const ability = ABILITIES[abilityType as keyof typeof ABILITIES];
+    return typeof ability?.duration === 'number' ? ability.duration : fallbackMs;
+  }
+
   /**
    * Get state for broadcasting (sanitized for opponent view)
    */
@@ -409,16 +446,4 @@ export class ServerGameState {
     };
   }
 
-  /**
-   * Check if an ability is a debuff (targets opponent)
-   */
-  private isDebuff(abilityType: string): boolean {
-    const debuffs = [
-      'earthquake', 'random_spawner', 'row_rotate', 'death_cross',
-      'gold_digger', 'speed_up_opponent', 'reverse_controls',
-      'rotation_lock', 'blind_spot', 'screen_shake', 'shrink_ceiling',
-      'weird_shapes', 'clear_rows'
-    ];
-    return debuffs.includes(abilityType);
-  }
 }

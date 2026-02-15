@@ -7,6 +7,7 @@
       "name": "Weird Shapes",
       "shortName": "BIG 4X4",
       "description": "Opponent's next piece is a big 4x4 hollowed shape",
+      "technical_description": "Opponent's next piece is a big 4x4 hollowed shape - triangle, square or circle",
       "cost": 80,
       "duration": 1,
       "category": "debuff",
@@ -66,6 +67,7 @@
       "name": "Cross FireBomb",
       "shortName": "X BOMB",
       "description": "Piece becomes a bomb. Clears 3 rows and 3 columns in cross pattern",
+      "technical_description": "Piece becomes a bomb. Clears 3 rows and 3 columns in cross pattern, cells not on those rows and columns are not affected",
       "cost": 45,
       "category": "buff",
       "unlockLevel": 1,
@@ -89,6 +91,7 @@
       "name": "Random Spawner",
       "shortName": "SPAWN",
       "description": "Random garbage blocks appear every 2 seconds",
+      "technical_description": "every 2 secs one random empty cell becomes filled",
       "cost": 50,
       "duration": 20000,
       "category": "debuff",
@@ -113,6 +116,7 @@
       "name": "Gold Digger",
       "shortName": "DIG",
       "description": "Random blocks disappear every 2 seconds",
+      "technical_description": "every 2 secs one random filled cell becomes empty",
       "cost": 55,
       "duration": 20000,
       "category": "debuff",
@@ -125,6 +129,7 @@
       "name": "Circle Bomb",
       "shortName": "O BOMB",
       "description": "Piece becomes a bomb. Clears all blocks within radius of 3 cells",
+      "technical_description": "Piece becomes a bomb. Clears all blocks within radius of 3 cells. cells not within 3 cells are not affected",
       "cost": 50,
       "category": "buff",
       "unlockLevel": 6,
@@ -209,29 +214,6 @@
       "category": "buff",
       "unlockLevel": 13,
       "unlockCost": 650
-    },
-    "deflect_shield": {
-      "id": "deflect_shield",
-      "type": "deflect_shield",
-      "name": "Deflect Shield",
-      "shortName": "SHIELD",
-      "description": "Block the next incoming debuff",
-      "cost": 35,
-      "category": "buff",
-      "unlockLevel": 1,
-      "unlockCost": 0
-    },
-    "piece_preview_plus": {
-      "id": "piece_preview_plus",
-      "type": "piece_preview_plus",
-      "name": "Piece Preview Plus",
-      "shortName": "PREVIEW+",
-      "description": "See next 5 pieces instead of 3",
-      "cost": 30,
-      "duration": 15000,
-      "category": "buff",
-      "unlockLevel": 1,
-      "unlockCost": 0
     }
   }
 }

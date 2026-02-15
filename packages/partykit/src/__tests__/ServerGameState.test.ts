@@ -149,12 +149,12 @@ describe('ServerGameState', () => {
       });
 
       it('should apply earthquake - removes random blocks', () => {
-        const blockCountBefore = countBlocks(state.gameState.board.grid);
+        const boardBefore = JSON.stringify(state.gameState.board.grid);
         state.applyAbility('earthquake');
-        const blockCountAfter = countBlocks(state.gameState.board.grid);
+        const boardAfter = JSON.stringify(state.gameState.board.grid);
 
-        // Earthquake should remove some blocks (up to 20%)
-        expect(blockCountAfter).toBeLessThanOrEqual(blockCountBefore);
+        // Earthquake should shift rows and alter board layout.
+        expect(boardAfter).not.toBe(boardBefore);
       });
 
       it('should apply clear_rows - clears bottom rows', () => {
@@ -171,12 +171,13 @@ describe('ServerGameState', () => {
       });
 
       it('should apply random_spawner - adds random blocks', () => {
-        const blockCountBefore = countBlocks(state.gameState.board.grid);
+        const boardBefore = JSON.stringify(state.gameState.board.grid);
         state.applyAbility('random_spawner');
-        const blockCountAfter = countBlocks(state.gameState.board.grid);
+        const boardAfter = JSON.stringify(state.gameState.board.grid);
 
-        // Random spawner should add blocks
-        expect(blockCountAfter).toBeGreaterThanOrEqual(blockCountBefore);
+        // Starts periodic effect (no immediate board mutation).
+        expect(state.getActiveEffects()).toContain('random_spawner');
+        expect(boardAfter).toBe(boardBefore);
       });
 
       it('should apply row_rotate - rotates board rows', () => {
@@ -198,12 +199,13 @@ describe('ServerGameState', () => {
       });
 
       it('should apply gold_digger - removes random blocks', () => {
-        const blockCountBefore = countBlocks(state.gameState.board.grid);
+        const boardBefore = JSON.stringify(state.gameState.board.grid);
         state.applyAbility('gold_digger');
-        const blockCountAfter = countBlocks(state.gameState.board.grid);
+        const boardAfter = JSON.stringify(state.gameState.board.grid);
 
-        // Gold digger removes 1-3 filled blocks (opposite of random_spawner)
-        expect(blockCountAfter).toBeLessThanOrEqual(blockCountBefore);
+        // Starts periodic effect (no immediate board mutation).
+        expect(state.getActiveEffects()).toContain('gold_digger');
+        expect(boardAfter).toBe(boardBefore);
       });
     });
 

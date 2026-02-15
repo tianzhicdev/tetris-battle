@@ -1,6 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
 import type { UserProfile, MatchResult } from '@tetris-battle/game-core';
-import { STARTER_ABILITIES } from '@tetris-battle/game-core';
+import { ABILITIES, STARTER_ABILITIES } from '@tetris-battle/game-core';
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
@@ -16,6 +16,13 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
     },
   },
 });
+
+const VALID_ABILITY_IDS = new Set(Object.keys(ABILITIES));
+
+function sanitizeAbilityIds(ids: string[] | undefined | null): string[] {
+  if (!Array.isArray(ids)) return [];
+  return ids.filter(id => VALID_ABILITY_IDS.has(id));
+}
 
 // Database types
 export interface GameRoom {
@@ -76,6 +83,30 @@ export class ProgressionService {
     }
 
     const profile = data as UserProfile;
+    const originalUnlocked = Array.isArray(profile.unlockedAbilities) ? profile.unlockedAbilities : [];
+    const originalLoadout = Array.isArray(profile.loadout) ? profile.loadout : [];
+
+    const unlockedAbilities = sanitizeAbilityIds(originalUnlocked);
+    let loadout = sanitizeAbilityIds(originalLoadout);
+
+    // Keep loadout constrained to currently unlocked abilities.
+    const unlockedSet = new Set(unlockedAbilities);
+    loadout = loadout.filter(id => unlockedSet.has(id));
+
+    // If unlocks or loadout were emptied by removed abilities, recover with starters.
+    if (unlockedAbilities.length === 0) {
+      unlockedAbilities.push(...STARTER_ABILITIES);
+    }
+    if (loadout.length === 0) {
+      loadout = STARTER_ABILITIES.filter(id => unlockedAbilities.includes(id));
+    }
+
+    const profileNeedsSanitization =
+      JSON.stringify(originalUnlocked) !== JSON.stringify(unlockedAbilities) ||
+      JSON.stringify(originalLoadout) !== JSON.stringify(loadout);
+
+    profile.unlockedAbilities = unlockedAbilities;
+    profile.loadout = loadout;
 
     // Fix for existing users: if loadout is empty/missing, set it to starter abilities
     if (!profile.loadout || profile.loadout.length === 0) {
@@ -88,6 +119,12 @@ export class ProgressionService {
       await this.updateUserProfile(userId, {
         loadout: starterAbilities,
         unlockedAbilities: starterAbilities,
+      });
+    } else if (profileNeedsSanitization) {
+      console.log('[SUPABASE] Profile ability lists contained invalid/removed entries, sanitizing');
+      await this.updateUserProfile(userId, {
+        loadout: profile.loadout,
+        unlockedAbilities: profile.unlockedAbilities,
       });
     }
 
@@ -146,7 +183,10 @@ export class ProgressionService {
   }
 
   async unlockAbility(userId: string, abilityId: string, cost: number): Promise<UserProfile | null> {
-    
+    if (!VALID_ABILITY_IDS.has(abilityId)) {
+      console.error('Cannot unlock unknown/removed ability:', abilityId);
+      return null;
+    }
 
     const profile = await this.getUserProfile(userId);
     if (!profile) return null;
@@ -170,11 +210,11 @@ export class ProgressionService {
   }
 
   async updateLoadout(userId: string, loadout: string[]): Promise<boolean> {
-    
+    const sanitizedLoadout = sanitizeAbilityIds(loadout);
 
     const { error } = await supabase
       .from('user_profiles')
-      .update({ loadout, updatedAt: Date.now() })
+      .update({ loadout: sanitizedLoadout, updatedAt: Date.now() })
       .eq('userId', userId);
 
     if (error) {

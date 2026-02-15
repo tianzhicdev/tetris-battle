@@ -61,16 +61,14 @@ export function createInitialPlayerMetrics(): PlayerMetrics {
 
 // Abilities
 export type AbilityType =
-  // Buffs (8)
+  // Buffs
   | 'cross_firebomb'
   | 'circle_bomb'
   | 'clear_rows'
   | 'cascade_multiplier'
   | 'mini_blocks'
   | 'fill_holes'
-  | 'deflect_shield'
-  | 'piece_preview_plus'
-  // Debuffs (12)
+  // Debuffs
   | 'speed_up_opponent'
   | 'weird_shapes'
   | 'random_spawner'
@@ -90,6 +88,7 @@ export interface Ability {
   name: string;
   shortName: string; // Short text for UI display (max 8 chars)
   description: string;
+  technical_description?: string;
   cost: number;
   duration?: number; // in milliseconds, undefined for instant
   category: 'buff' | 'debuff';

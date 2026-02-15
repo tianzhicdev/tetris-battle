@@ -44,6 +44,97 @@ interface ServerAuthMultiplayerGameProps {
   aiOpponent?: any;
 }
 
+const BOMB_ABILITY_TYPES = new Set<string>(['circle_bomb', 'cross_firebomb']);
+const CELL_MANIPULATION_ABILITY_TYPES = new Set<string>([
+  'death_cross',
+  'random_spawner',
+  'gold_digger',
+  'fill_holes',
+  'row_rotate',
+  'clear_rows',
+  'earthquake',
+]);
+const DEFERRED_BOARD_DIFF_ABILITY_TYPES = new Set<string>([
+  'circle_bomb',
+  'cross_firebomb',
+  'random_spawner',
+  'gold_digger',
+]);
+
+type BoardFxState = {
+  id: number;
+  color: string;
+  borderColor: string;
+  glow: string;
+};
+
+type BoardCellPosition = {
+  x: number;
+  y: number;
+};
+
+type BoardDiff = {
+  appeared: BoardCellPosition[];
+  disappeared: BoardCellPosition[];
+  mutated: BoardCellPosition[];
+};
+
+type BoardFxTarget = 'self' | 'opponent';
+
+type PendingBoardAbilityFx = {
+  abilityType: string;
+  expiresAt: number;
+};
+
+function cloneBoardGrid(grid: any[][]): any[][] {
+  return grid.map((row) => [...row]);
+}
+
+function getBoardDiff(previousGrid: any[][], currentGrid: any[][]): BoardDiff {
+  const appeared: BoardCellPosition[] = [];
+  const disappeared: BoardCellPosition[] = [];
+  const mutated: BoardCellPosition[] = [];
+  const height = Math.min(previousGrid.length, currentGrid.length);
+  const width = Math.min(previousGrid[0]?.length ?? 0, currentGrid[0]?.length ?? 0);
+
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      const before = previousGrid[y]?.[x] ?? null;
+      const after = currentGrid[y]?.[x] ?? null;
+      if (before === after) continue;
+      if (before && !after) {
+        disappeared.push({ x, y });
+      } else if (!before && after) {
+        appeared.push({ x, y });
+      } else {
+        mutated.push({ x, y });
+      }
+    }
+  }
+
+  return { appeared, disappeared, mutated };
+}
+
+function uniquePositions(positions: BoardCellPosition[]): BoardCellPosition[] {
+  const deduped = new Map<string, BoardCellPosition>();
+  for (const pos of positions) {
+    deduped.set(`${pos.x},${pos.y}`, pos);
+  }
+  return Array.from(deduped.values());
+}
+
+function centerOfPositions(positions: BoardCellPosition[]): BoardCellPosition {
+  if (positions.length === 0) return { x: 0, y: 0 };
+  const sum = positions.reduce(
+    (acc, pos) => ({ x: acc.x + pos.x, y: acc.y + pos.y }),
+    { x: 0, y: 0 }
+  );
+  return {
+    x: Math.round(sum.x / positions.length),
+    y: Math.round(sum.y / positions.length),
+  };
+}
+
 /**
  * ServerAuthMultiplayerGame - Server-Authoritative Version
  *
@@ -79,7 +170,9 @@ export function ServerAuthMultiplayerGame({
   const [showAbilityInfo, setShowAbilityInfo] = useState(false);
   const [screenShake, setScreenShake] = useState(0);
   const [flashEffect, setFlashEffect] = useState<{ color: string } | null>(null);
-  const [particles, setParticles] = useState<{ x: number; y: number; id: number } | null>(null);
+  const [particles, setParticles] = useState<{ x: number; y: number; id: number; count?: number; colors?: string[] } | null>(null);
+  const [selfBoardFx, setSelfBoardFx] = useState<BoardFxState | null>(null);
+  const [opponentBoardFx, setOpponentBoardFx] = useState<BoardFxState | null>(null);
   const [abilityNotification, setAbilityNotification] = useState<{ name: string; description: string; category: 'buff' | 'debuff' } | null>(null);
   const [matchRewards, setMatchRewards] = useState<{
     coinsEarned: number;
@@ -96,6 +189,15 @@ export function ServerAuthMultiplayerGame({
   const matchStartTimeRef = useRef<number>(Date.now());
   const pendingAbilityActivationsRef = useRef(new Map<string, { ability: Ability; target: 'self' | 'opponent' }>());
   const abilityResponseTimeoutsRef = useRef(new Map<string, ReturnType<typeof setTimeout>>());
+  const boardFxTimeoutsRef = useRef<ReturnType<typeof setTimeout>[]>([]);
+  const pendingBombVisualRef = useRef<string | null>(null);
+  const prevYourPieceRef = useRef<any | null>(null);
+  const prevSelfBoardRef = useRef<any[][] | null>(null);
+  const prevOpponentBoardRef = useRef<any[][] | null>(null);
+  const pendingBoardAbilityFxRef = useRef<{ self: PendingBoardAbilityFx | null; opponent: PendingBoardAbilityFx | null }>({
+    self: null,
+    opponent: null,
+  });
   const [debugLogger, setDebugLogger] = useState<DebugLogger | null>(null);
   const debugLoggerRef = useRef<DebugLogger | null>(null);
   const [isDebugMode, setIsDebugMode] = useState(false);
@@ -128,6 +230,136 @@ export function ServerAuthMultiplayerGame({
     gameClientRef.current?.setDebugLogger(debugLogger);
   }, [debugLogger]);
 
+  const triggerBoardAbilityVisual = useCallback((abilityType: string, target: 'self' | 'opponent') => {
+    const isBomb = BOMB_ABILITY_TYPES.has(abilityType);
+    const isCellManip = CELL_MANIPULATION_ABILITY_TYPES.has(abilityType);
+    if (!isBomb && !isCellManip) return;
+
+    const fx: BoardFxState = isBomb
+      ? {
+          id: Date.now(),
+          color: 'rgba(255, 120, 0, 0.25)',
+          borderColor: 'rgba(255, 150, 0, 0.9)',
+          glow: '0 0 28px rgba(255, 120, 0, 0.9), 0 0 52px rgba(255, 90, 0, 0.45)',
+        }
+      : {
+          id: Date.now(),
+          color: 'rgba(90, 180, 255, 0.2)',
+          borderColor: 'rgba(80, 210, 255, 0.85)',
+          glow: '0 0 22px rgba(80, 210, 255, 0.75), 0 0 40px rgba(30, 160, 255, 0.35)',
+        };
+
+    if (target === 'self') {
+      setSelfBoardFx(fx);
+    } else {
+      setOpponentBoardFx(fx);
+    }
+
+    const clearTimeoutId = setTimeout(() => {
+      if (target === 'self') {
+        setSelfBoardFx(prev => (prev?.id === fx.id ? null : prev));
+      } else {
+        setOpponentBoardFx(prev => (prev?.id === fx.id ? null : prev));
+      }
+    }, 450);
+    boardFxTimeoutsRef.current.push(clearTimeoutId);
+
+    setFlashEffect({ color: fx.color });
+
+    const targetCanvas = target === 'self' ? canvasRef.current : opponentCanvasRef.current;
+    if (targetCanvas) {
+      const rect = targetCanvas.getBoundingClientRect();
+      setParticles({
+        x: rect.left + rect.width / 2,
+        y: rect.top + rect.height / 2,
+        id: Date.now(),
+        count: isBomb ? 70 : 36,
+        colors: isBomb
+          ? ['#ffd166', '#ff8c42', '#ff5d5d', '#ffe066']
+          : ['#00d4ff', '#00ffcc', '#c942ff', '#7cf8ff'],
+      });
+    }
+
+    if (isBomb) {
+      setScreenShake(2);
+      const shakeTimeout = setTimeout(() => setScreenShake(0), 350);
+      boardFxTimeoutsRef.current.push(shakeTimeout);
+      audioManager.playSfx('ability_bomb_explode', 0.9);
+    }
+  }, []);
+
+  const queueBoardAbilityFx = useCallback((abilityType: string, target: BoardFxTarget) => {
+    if (!BOMB_ABILITY_TYPES.has(abilityType) && !CELL_MANIPULATION_ABILITY_TYPES.has(abilityType)) {
+      return;
+    }
+    pendingBoardAbilityFxRef.current[target] = {
+      abilityType,
+      expiresAt: Date.now() + 8000,
+    };
+  }, []);
+
+  const applyBoardDiffAnimations = useCallback((
+    renderer: TetrisRenderer,
+    target: BoardFxTarget,
+    currentGrid: any[][],
+    activeEffects?: string[]
+  ) => {
+    const previousBoardRef = target === 'self' ? prevSelfBoardRef : prevOpponentBoardRef;
+    const previousGrid = previousBoardRef.current;
+    const now = Date.now();
+
+    const pendingFx = pendingBoardAbilityFxRef.current[target];
+    if (pendingFx && pendingFx.expiresAt <= now) {
+      pendingBoardAbilityFxRef.current[target] = null;
+    }
+
+    const pendingAbility = pendingBoardAbilityFxRef.current[target]?.abilityType;
+    const periodicAbility = activeEffects?.includes('random_spawner')
+      ? 'random_spawner'
+      : activeEffects?.includes('gold_digger')
+      ? 'gold_digger'
+      : null;
+
+    if (previousGrid && (pendingAbility || periodicAbility)) {
+      const diff = getBoardDiff(previousGrid, currentGrid);
+      const allChanged = uniquePositions([
+        ...diff.appeared,
+        ...diff.disappeared,
+        ...diff.mutated,
+      ]);
+
+      if (allChanged.length > 0) {
+        const abilityType = pendingAbility || periodicAbility!;
+
+        if (BOMB_ABILITY_TYPES.has(abilityType)) {
+          renderer.animationManager.animateBlocksDisappearing(allChanged, '#ff8c42');
+          renderer.animationManager.animateBlocksFlashing(allChanged, '#ffd166');
+          const center = centerOfPositions(allChanged);
+          renderer.animationManager.animateExplosion(center.x, center.y, 3, '#ff6a00');
+        } else {
+          if (diff.disappeared.length > 0) {
+            renderer.animationManager.animateBlocksDisappearing(diff.disappeared, '#ff5d73');
+          }
+          if (diff.appeared.length > 0) {
+            renderer.animationManager.animateBlocksAppearing(diff.appeared, '#53d8ff');
+          }
+          if (diff.mutated.length > 0) {
+            renderer.animationManager.animateBlocksFlashing(diff.mutated, '#9cf8ff');
+          }
+          renderer.animationManager.animateBlocksFlashing(allChanged, '#7cf8ff');
+        }
+
+        if (pendingAbility) {
+          pendingBoardAbilityFxRef.current[target] = null;
+        }
+      } else if (pendingAbility && !DEFERRED_BOARD_DIFF_ABILITY_TYPES.has(pendingAbility)) {
+        pendingBoardAbilityFxRef.current[target] = null;
+      }
+    }
+
+    previousBoardRef.current = cloneBoardGrid(currentGrid);
+  }, []);
+
   // Initialize server-authoritative game client
   useEffect(() => {
     const host = normalizePartykitHost(import.meta.env.VITE_PARTYKIT_HOST);
@@ -154,7 +386,7 @@ export function ServerAuthMultiplayerGame({
       // On ability received
       (abilityType, fromPlayerId) => {
         console.log(`[SERVER-AUTH] Received ability: ${abilityType} from ${fromPlayerId}`);
-        handleAbilityReceived(abilityType);
+        handleAbilityReceived(abilityType, fromPlayerId);
       },
       // On ability activation result
       (result) => {
@@ -173,6 +405,15 @@ export function ServerAuthMultiplayerGame({
         clearTimeout(timeout);
       }
       abilityResponseTimeoutsRef.current.clear();
+      for (const timeout of boardFxTimeoutsRef.current) {
+        clearTimeout(timeout);
+      }
+      boardFxTimeoutsRef.current = [];
+      pendingBombVisualRef.current = null;
+      prevYourPieceRef.current = null;
+      prevSelfBoardRef.current = null;
+      prevOpponentBoardRef.current = null;
+      pendingBoardAbilityFxRef.current = { self: null, opponent: null };
       client.disconnect();
       audioManager.stopMusic(true);
     };
@@ -202,6 +443,13 @@ export function ServerAuthMultiplayerGame({
   // Render own board from server state
   useEffect(() => {
     if (rendererRef.current && yourState) {
+      applyBoardDiffAnimations(
+        rendererRef.current,
+        'self',
+        yourState.board,
+        yourState.activeEffects
+      );
+
       const board = {
         grid: yourState.board,
         width: 10,
@@ -223,12 +471,32 @@ export function ServerAuthMultiplayerGame({
       if (shrinkCeilingActive) {
         rendererRef.current.drawShrinkCeiling(board, 4);
       }
+
+      // Bomb visual should happen when the bombed piece actually locks and a new piece spawns.
+      const prevPiece = prevYourPieceRef.current;
+      const currPiece = yourState.currentPiece;
+      if (pendingBombVisualRef.current && prevPiece && currPiece) {
+        const prevY = prevPiece.position?.y ?? prevPiece.y ?? 0;
+        const currY = currPiece.position?.y ?? currPiece.y ?? 0;
+        if (currY < prevY) {
+          triggerBoardAbilityVisual(pendingBombVisualRef.current, 'self');
+          pendingBombVisualRef.current = null;
+        }
+      }
+      prevYourPieceRef.current = currPiece;
     }
-  }, [yourState]);
+  }, [yourState, applyBoardDiffAnimations, triggerBoardAbilityVisual]);
 
   // Render opponent's board
   useEffect(() => {
     if (opponentRendererRef.current && opponentState) {
+      applyBoardDiffAnimations(
+        opponentRendererRef.current,
+        'opponent',
+        opponentState.board,
+        opponentState.activeEffects
+      );
+
       const opponentBoard = {
         grid: opponentState.board,
         width: 10,
@@ -239,7 +507,7 @@ export function ServerAuthMultiplayerGame({
         showGhost: false,
       });
     }
-  }, [opponentState]);
+  }, [opponentState, applyBoardDiffAnimations]);
 
   // Track opponent state changes for debug logging
   const prevOpponentStateRef = useRef<any>(null);
@@ -424,6 +692,12 @@ export function ServerAuthMultiplayerGame({
         } else if (ability.category === 'debuff') {
           audioManager.playSfx('ability_debuff_activate');
         }
+        queueBoardAbilityFx(ability.type, target);
+        if (BOMB_ABILITY_TYPES.has(ability.type) && target === 'self') {
+          pendingBombVisualRef.current = ability.type;
+        } else {
+          triggerBoardAbilityVisual(ability.type, target);
+        }
       }
       setAbilitiesUsedCount(prev => prev + 1);
       debugLoggerRef.current?.logEvent(
@@ -451,7 +725,11 @@ export function ServerAuthMultiplayerGame({
   };
 
   // Handle receiving ability from opponent
-  const handleAbilityReceived = (abilityType: string) => {
+  const handleAbilityReceived = (abilityType: string, fromPlayerId: string) => {
+    if (fromPlayerId === playerId) {
+      // Self-targeted buff notification is handled by ability_activation_result path.
+      return;
+    }
     console.log('[SERVER-AUTH] Received ability from opponent:', abilityType);
 
     const abilities = Object.values(ABILITIES);
@@ -473,6 +751,9 @@ export function ServerAuthMultiplayerGame({
       effectManager.activateEffect(abilityType, ability.duration);
       updateActiveEffects();
     }
+
+    queueBoardAbilityFx(abilityType, 'self');
+    triggerBoardAbilityVisual(abilityType, 'self');
   };
 
   // Update active effects display
@@ -726,7 +1007,7 @@ export function ServerAuthMultiplayerGame({
               width={250}
               height={500}
               style={{
-                border: '2px solid #00d4ff',
+                border: `2px solid ${selfBoardFx?.borderColor || '#00d4ff'}`,
                 backgroundColor: 'rgba(5,5,15,0.8)',
                 maxHeight: 'calc(100dvh - 110px)',
                 maxWidth: '100%',
@@ -734,7 +1015,7 @@ export function ServerAuthMultiplayerGame({
                 width: 'auto',
                 objectFit: 'contain',
                 borderRadius: 'clamp(6px, 1.5vw, 10px)',
-                boxShadow: '0 0 20px rgba(0, 212, 255, 0.5), 0 0 40px rgba(0, 212, 255, 0.2), inset 0 0 20px rgba(0, 212, 255, 0.05)',
+                boxShadow: selfBoardFx?.glow || '0 0 20px rgba(0, 212, 255, 0.5), 0 0 40px rgba(0, 212, 255, 0.2), inset 0 0 20px rgba(0, 212, 255, 0.05)',
               }}
             />
           </motion.div>
@@ -885,12 +1166,12 @@ export function ServerAuthMultiplayerGame({
               width={80}
               height={160}
               style={{
-                border: '1px solid rgba(255, 0, 110, 0.5)',
+                border: `1px solid ${opponentBoardFx?.borderColor || 'rgba(255, 0, 110, 0.5)'}`,
                 backgroundColor: 'rgba(5,5,15,0.8)',
                 width: 'clamp(65px, 17vw, 80px)',
                 height: 'clamp(130px, 34vw, 160px)',
                 borderRadius: 'clamp(4px, 1vw, 6px)',
-                boxShadow: '0 0 10px rgba(255, 0, 110, 0.3), inset 0 0 10px rgba(255, 0, 110, 0.05)',
+                boxShadow: opponentBoardFx?.glow || '0 0 10px rgba(255, 0, 110, 0.3), inset 0 0 10px rgba(255, 0, 110, 0.05)',
               }}
             />
             {opponentState && (
@@ -1390,7 +1671,8 @@ export function ServerAuthMultiplayerGame({
           key={particles.id}
           x={particles.x}
           y={particles.y}
-          count={50}
+          count={particles.count ?? 50}
+          colors={particles.colors}
           onComplete={() => setParticles(null)}
         />
       )}

@@ -29,6 +29,8 @@ const getInitialAbilities = (): Ability[] => {
   return getRandomAbilities(3);
 };
 
+const VALID_ABILITY_IDS = new Set(Object.keys(ABILITIES));
+
 export const useAbilityStore = create<AbilityState>((set, get) => ({
   availableAbilities: getInitialAbilities(),
   lastRefreshTime: Date.now(),
@@ -36,23 +38,24 @@ export const useAbilityStore = create<AbilityState>((set, get) => ({
   loadout: [],
 
   setLoadout: (loadout: string[]) => {
-    console.log('[ABILITY STORE] Setting loadout:', loadout);
+    const sanitizedLoadout = (loadout || []).filter(id => VALID_ABILITY_IDS.has(id));
+    console.log('[ABILITY STORE] Setting loadout:', sanitizedLoadout);
 
     // Safety check: if loadout is empty or invalid, don't update
-    if (!loadout || loadout.length === 0) {
+    if (!sanitizedLoadout || sanitizedLoadout.length === 0) {
       console.warn('[ABILITY STORE] Empty loadout received, ignoring');
       return;
     }
 
     // Get abilities from loadout
-    const abilities = loadout
+    const abilities = sanitizedLoadout
       .map(id => ABILITIES[id as keyof typeof ABILITIES])
       .filter(Boolean) as Ability[];
 
     console.log('[ABILITY STORE] Loadout abilities:', abilities);
 
     set({
-      loadout,
+      loadout: sanitizedLoadout,
       availableAbilities: abilities.length > 0 ? abilities : getRandomAbilities(3),
     });
   },

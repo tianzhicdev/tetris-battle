@@ -127,48 +127,6 @@ describe('ServerGameState - Buff Abilities', () => {
     });
   });
 
-  describe('Deflect Shield', () => {
-    it('should block next incoming debuff', () => {
-      state.applyAbility('deflect_shield');
-
-      // Try to apply a debuff
-      const tickRateBefore = state.tickRate;
-      state.applyAbility('speed_up_opponent');
-
-      // Should still be normal speed (shield blocked it)
-      expect(state.tickRate).toBe(tickRateBefore);
-
-      // Shield should be consumed
-      // Next debuff should work
-      state.applyAbility('speed_up_opponent');
-      expect(state.tickRate).not.toBe(tickRateBefore);
-    });
-
-    it('should not block buffs, only debuffs', () => {
-      state.applyAbility('deflect_shield');
-
-      // Buffs should still work
-      state.applyAbility('cascade_multiplier');
-      expect(state.getActiveEffects()).toContain('cascade_multiplier');
-    });
-  });
-
-  describe('Piece Preview Plus', () => {
-    it('should activate preview effect', () => {
-      state.applyAbility('piece_preview_plus');
-
-      expect(state.getActiveEffects()).toContain('piece_preview_plus');
-    });
-
-    it('should expire after 15s', () => {
-      state.applyAbility('piece_preview_plus');
-
-      state.activeEffects.set('piece_preview_plus', Date.now() - 1000);
-
-      expect(state.getActiveEffects()).not.toContain('piece_preview_plus');
-    });
-  });
-
   describe('Weird Shapes - Fixed', () => {
     it('should stay pending across state broadcasts until consumed', () => {
       state.applyAbility('weird_shapes');
@@ -197,15 +155,29 @@ describe('ServerGameState - Buff Abilities', () => {
       expect(piece.shape.length).toBe(4);
       expect(piece.shape[0].length).toBe(4);
 
-      // Should be hollowed (center 2x2 empty)
-      expect(piece.shape[1][1]).toBe(0);
-      expect(piece.shape[1][2]).toBe(0);
-      expect(piece.shape[2][1]).toBe(0);
-      expect(piece.shape[2][2]).toBe(0);
-
-      // Outer edges should be filled
-      expect(piece.shape[0][0]).toBe(1);
-      expect(piece.shape[3][3]).toBe(1);
+      // Should match one of the supported hollowed 4x4 variants.
+      const shapeJson = JSON.stringify(piece.shape);
+      const allowed = new Set([
+        JSON.stringify([
+          [1, 1, 1, 1],
+          [1, 0, 0, 1],
+          [1, 0, 0, 1],
+          [1, 1, 1, 1],
+        ]),
+        JSON.stringify([
+          [0, 1, 1, 0],
+          [1, 0, 0, 1],
+          [1, 0, 0, 1],
+          [1, 1, 1, 1],
+        ]),
+        JSON.stringify([
+          [0, 1, 1, 0],
+          [1, 0, 0, 1],
+          [1, 0, 0, 1],
+          [0, 1, 1, 0],
+        ]),
+      ]);
+      expect(allowed.has(shapeJson)).toBe(true);
     });
 
     it('should only affect next piece', () => {
