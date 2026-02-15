@@ -14,13 +14,6 @@ export function AbilityShop({ profile, onClose, onProfileUpdate }: AbilityShopPr
   const [selectedAbility, setSelectedAbility] = useState<string | null>(null);
   const [unlocking, setUnlocking] = useState(false);
 
-  const tiers = [
-    { name: 'Starter', tier: 1, cost: 0, description: 'Free for all players' },
-    { name: 'Bronze', tier: 2, cost: 500, description: '500 coins each' },
-    { name: 'Silver', tier: 3, cost: 1000, description: '1,000 coins each' },
-    { name: 'Gold', tier: 4, cost: 2000, description: '2,000 coins each' },
-    { name: 'Platinum', tier: 5, cost: 3500, description: '3,500 coins each' },
-  ];
 
   const handleUnlock = async (abilityId: string, cost: number) => {
     if (unlocking) return;
@@ -124,31 +117,12 @@ export function AbilityShop({ profile, onClose, onProfileUpdate }: AbilityShopPr
           overflowY: 'auto',
           padding: 'clamp(15px, 4vw, 20px)',
         }}>
-          {tiers.map(tier => {
-            const tierAbilities = ABILITY_UNLOCKS.filter(
-              unlock => unlock.level === tier.tier
-            );
-
-            if (tierAbilities.length === 0) return null;
-
-            return (
-              <div key={tier.name} style={{ marginBottom: 'clamp(20px, 5vw, 30px)' }}>
-                <h3 style={{
-                  color: '#00d4ff',
-                  marginBottom: 'clamp(10px, 2.5vw, 15px)',
-                  fontSize: 'clamp(16px, 4vw, 20px)',
-                  fontWeight: '700',
-                  textShadow: '0 0 10px rgba(0, 212, 255, 0.5)',
-                }}>
-                  {tier.name} ({tier.description})
-                </h3>
-
-                <div style={{
-                  display: 'grid',
-                  gridTemplateColumns: 'repeat(auto-fill, minmax(min(250px, 100%), 1fr))',
-                  gap: 'clamp(10px, 2.5vw, 12px)',
-                }}>
-                  {tierAbilities.map(unlock => {
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fill, minmax(min(250px, 100%), 1fr))',
+            gap: 'clamp(10px, 2.5vw, 12px)',
+          }}>
+            {ABILITY_UNLOCKS.map(unlock => {
                     const ability = Object.values(ABILITIES).find((a: any) => a.type === unlock.abilityId);
                     if (!ability) return null;
 
@@ -291,11 +265,8 @@ export function AbilityShop({ profile, onClose, onProfileUpdate }: AbilityShopPr
                         </div>
                       </div>
                     );
-                  })}
-                </div>
-              </div>
-            );
-          })}
+            })}
+          </div>
         </div>
       </div>
     </div>

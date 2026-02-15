@@ -440,7 +440,8 @@ export function ServerAuthMultiplayerGame({
       rendererRef.current.render(board, yourState.currentPiece, null, {
         showGrid: true,
         showGhost: false, // Server doesn't send ghost piece
-        isBomb: false,
+        isBomb: pendingBombVisualRef.current !== null,
+        bombType: pendingBombVisualRef.current as 'circle_bomb' | 'cross_firebomb' | undefined,
         blindSpotRows: blindSpotActive ? 4 : 0,
       });
 
@@ -719,6 +720,16 @@ export function ServerAuthMultiplayerGame({
       name: ability.name,
       category: ability.category
     });
+
+    // Show notification for the ability received
+    setAbilityNotification({
+      name: ability.name,
+      description: ability.description,
+      category: ability.category as 'buff' | 'debuff',
+    });
+    // Auto-dismiss notification after 3 seconds (instant abilities)
+    // Duration abilities will continue showing in AbilityEffects component
+    setTimeout(() => setAbilityNotification(null), 3000);
 
     audioManager.playSfx('ability_debuff_activate');
 

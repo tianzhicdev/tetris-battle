@@ -49,59 +49,12 @@ export function MainMenu({ onSelectMode, theme, profile, onProfileUpdate, onChal
         position: 'relative',
       }}
     >
-      {/* Progression HUD - Top */}
+      {/* User Button - Top Right */}
       <div style={{
         position: 'absolute',
         top: '10px',
-        left: '10px',
         right: '10px',
-        display: 'flex',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        gap: '8px',
-        flexWrap: 'wrap',
       }}>
-        <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-          {/* Coins */}
-          <div style={mergeGlass(glassGold(), {
-            padding: '8px 12px',
-            borderRadius: '8px',
-            minWidth: 'fit-content',
-          })}>
-            <div style={{ fontSize: '18px', color: '#ffd700', fontWeight: 'bold', textShadow: '0 0 10px rgba(255, 215, 0, 0.5)' }}>
-              💰 {profile.coins}
-            </div>
-          </div>
-
-          {/* Games Played */}
-          <div style={mergeGlass(glassBlue(), {
-            padding: '8px 12px',
-            borderRadius: '8px',
-            minWidth: 'fit-content',
-          })}>
-            <div style={{ fontSize: '11px', color: '#aaa', marginBottom: '2px' }}>
-              GAMES
-            </div>
-            <div style={{ fontSize: '16px', color: '#00ccff', fontWeight: 'bold', textShadow: '0 0 10px rgba(0, 204, 255, 0.5)' }}>
-              {profile.gamesPlayed}
-            </div>
-          </div>
-
-          {/* Win Rate */}
-          <div style={mergeGlass(glassSuccess(), {
-            padding: '8px 12px',
-            borderRadius: '8px',
-            minWidth: 'fit-content',
-          })}>
-            <div style={{ fontSize: '11px', color: '#aaa', marginBottom: '2px' }}>
-              WIN RATE
-            </div>
-            <div style={{ fontSize: '16px', color: '#00ff9d', fontWeight: 'bold', textShadow: '0 0 10px rgba(0, 255, 157, 0.5)' }}>
-              {profile.gamesPlayed > 0 ? Math.round((profile.gamesWon / profile.gamesPlayed) * 100) : 0}%
-            </div>
-          </div>
-        </div>
-
         <div style={mergeGlass(glassBlue(), {
           padding: '4px',
           borderRadius: '50%',

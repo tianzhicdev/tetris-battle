@@ -109,11 +109,8 @@ export function AbilityInfo({ onClose }: AbilityInfoProps) {
           justifyContent: 'space-between',
           alignItems: 'center',
           marginBottom: '30px',
-          position: 'sticky',
-          top: 0,
           background: 'linear-gradient(135deg, #0a0e27 0%, #1a1433 100%)',
           padding: '15px 0',
-          zIndex: 10,
           borderBottom: '2px solid rgba(0, 212, 255, 0.3)',
         }}>
           <h2 style={{
@@ -189,38 +186,6 @@ export function AbilityInfo({ onClose }: AbilityInfoProps) {
           }}>
             {debuffs.map(renderAbilityCard)}
           </div>
-        </div>
-
-        {/* Tips Section */}
-        <div style={{
-          marginTop: '40px',
-          background: 'transparent',
-          border: '1px solid rgba(0, 255, 136, 0.2)',
-          borderRadius: '12px',
-          padding: '20px',
-          boxShadow: 'none',
-        }}>
-          <h4 style={{
-            fontSize: '18px',
-            fontWeight: '700',
-            color: '#00ff88',
-            marginBottom: '12px',
-            textShadow: '0 0 10px rgba(0, 255, 136, 0.5)',
-          }}>
-            PRO TIPS
-          </h4>
-          <ul style={{
-            color: '#ffffff',
-            fontSize: '14px',
-            lineHeight: '1.6',
-            marginLeft: '20px',
-          }}>
-            <li>Earn stars by clearing lines and combos</li>
-            <li>Buffs help you, debuffs attack your opponent</li>
-            <li>Higher power rating = more impactful ability</li>
-            <li>Manage your stars wisely - save for powerful abilities!</li>
-            <li>Combine abilities strategically for maximum effect</li>
-          </ul>
         </div>
       </motion.div>
     </motion.div>

@@ -276,13 +276,102 @@ export class TetrisRenderer {
     }
   }
 
+  drawBombBlastRadius(piece: Tetromino, bombType: 'circle_bomb' | 'cross_firebomb'): void {
+    if (!piece) return;
+
+    // Calculate center of the piece (where bomb will explode)
+    const centerX = piece.position.x + 1; // Assume 2x2 or centered piece
+    const centerY = piece.position.y + 1;
+
+    const pulse = Math.sin(Date.now() / 300) * 0.3 + 0.7; // Pulsing effect
+    this.ctx.globalAlpha = 0.2 * pulse;
+
+    if (bombType === 'circle_bomb') {
+      // Circle bomb affects 3-cell radius
+      const radius = 3;
+      for (let dy = -radius; dy <= radius; dy++) {
+        for (let dx = -radius; dx <= radius; dx++) {
+          const distance = Math.sqrt(dx * dx + dy * dy);
+          if (distance <= radius) {
+            const cellX = centerX + dx;
+            const cellY = centerY + dy;
+            if (cellX >= 0 && cellY >= 0) {
+              this.ctx.fillStyle = '#ff6a00';
+              this.ctx.fillRect(
+                cellX * this.blockSize,
+                cellY * this.blockSize,
+                this.blockSize,
+                this.blockSize
+              );
+              // Draw border to make it more visible
+              this.ctx.strokeStyle = '#ff4400';
+              this.ctx.lineWidth = 2;
+              this.ctx.strokeRect(
+                cellX * this.blockSize,
+                cellY * this.blockSize,
+                this.blockSize,
+                this.blockSize
+              );
+            }
+          }
+        }
+      }
+    } else if (bombType === 'cross_firebomb') {
+      // Cross pattern - horizontal and vertical lines
+      const range = 5; // Extend 5 cells in each direction
+      this.ctx.fillStyle = '#ff6a00';
+      this.ctx.strokeStyle = '#ff4400';
+      this.ctx.lineWidth = 2;
+
+      // Horizontal line
+      for (let dx = -range; dx <= range; dx++) {
+        const cellX = centerX + dx;
+        if (cellX >= 0) {
+          this.ctx.fillRect(
+            cellX * this.blockSize,
+            centerY * this.blockSize,
+            this.blockSize,
+            this.blockSize
+          );
+          this.ctx.strokeRect(
+            cellX * this.blockSize,
+            centerY * this.blockSize,
+            this.blockSize,
+            this.blockSize
+          );
+        }
+      }
+
+      // Vertical line
+      for (let dy = -range; dy <= range; dy++) {
+        const cellY = centerY + dy;
+        if (cellY >= 0) {
+          this.ctx.fillRect(
+            centerX * this.blockSize,
+            cellY * this.blockSize,
+            this.blockSize,
+            this.blockSize
+          );
+          this.ctx.strokeRect(
+            centerX * this.blockSize,
+            cellY * this.blockSize,
+            this.blockSize,
+            this.blockSize
+          );
+        }
+      }
+    }
+
+    this.ctx.globalAlpha = 1.0;
+  }
+
   render(
     board: Board,
     currentPiece: Tetromino | null,
     ghostPiece: Tetromino | null,
-    options: RenderOptions & { isBomb?: boolean } = {}
+    options: RenderOptions & { isBomb?: boolean; bombType?: 'circle_bomb' | 'cross_firebomb' } = {}
   ): void {
-    const { showGrid = true, showGhost = true, blindSpotRows = 0, isBomb = false } = options;
+    const { showGrid = true, showGhost = true, blindSpotRows = 0, isBomb = false, bombType } = options;
 
     // Clear canvas
     this.clear();
@@ -297,6 +386,11 @@ export class TetrisRenderer {
 
     // Draw animations on top of locked blocks
     this.drawAnimations();
+
+    // Draw bomb blast radius preview (before pieces so it's behind them)
+    if (isBomb && bombType && currentPiece) {
+      this.drawBombBlastRadius(currentPiece, bombType);
+    }
 
     // Draw ghost piece (preview of where piece will land)
     if (showGhost && ghostPiece) {
