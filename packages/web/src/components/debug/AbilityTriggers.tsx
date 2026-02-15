@@ -1,40 +1,21 @@
 import { ABILITIES } from '@tetris-battle/game-core';
 
 interface AbilityTriggersProps {
-  selectedTarget: 'self' | 'opponent';
-  onTargetChange: (target: 'self' | 'opponent') => void;
   onTrigger: (abilityType: string, target: 'self' | 'opponent') => void;
 }
 
-export function AbilityTriggers({ selectedTarget, onTargetChange, onTrigger }: AbilityTriggersProps) {
+export function AbilityTriggers({ onTrigger }: AbilityTriggersProps) {
   const buffs = Object.values(ABILITIES).filter(a => a.category === 'buff');
   const debuffs = Object.values(ABILITIES).filter(a => a.category === 'debuff');
 
   const handleTrigger = (abilityType: string) => {
-    onTrigger(abilityType, selectedTarget);
+    const ability = ABILITIES[abilityType as keyof typeof ABILITIES];
+    const target = ability.category === 'buff' ? 'self' : 'opponent';
+    onTrigger(abilityType, target);
   };
 
   return (
     <div style={{ marginBottom: '12px', fontSize: '10px' }}>
-      {/* Target selector */}
-      <div style={{ marginBottom: '8px', display: 'flex', gap: '8px' }}>
-        <label style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px' }}>
-          <input
-            type="radio"
-            checked={selectedTarget === 'self'}
-            onChange={() => onTargetChange('self')}
-          />
-          Self
-        </label>
-        <label style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px' }}>
-          <input
-            type="radio"
-            checked={selectedTarget === 'opponent'}
-            onChange={() => onTargetChange('opponent')}
-          />
-          Opponent
-        </label>
-      </div>
 
       {/* Buffs */}
       <div style={{ marginBottom: '8px' }}>

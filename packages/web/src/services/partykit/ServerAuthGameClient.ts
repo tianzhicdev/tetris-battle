@@ -1,5 +1,6 @@
 import PartySocket from 'partysocket';
 import type { PlayerInputType } from '@tetris-battle/game-core';
+import { ABILITIES } from '@tetris-battle/game-core';
 import type { DebugLogger } from '../debug/DebugLogger';
 
 export interface GameStateUpdate {
@@ -77,6 +78,15 @@ export class ServerAuthGameClient {
         case 'ability_received':
           if (onAbilityReceived) {
             onAbilityReceived(data.abilityType, data.fromPlayerId);
+          }
+          // Log in debug mode
+          if (this.debugLogger) {
+            const ability = ABILITIES[data.abilityType as keyof typeof ABILITIES];
+            this.debugLogger.logEvent(
+              'ability_received',
+              `Received ${ability?.name || data.abilityType} from opponent`,
+              { abilityType: data.abilityType, from: data.fromPlayerId }
+            );
           }
           break;
 

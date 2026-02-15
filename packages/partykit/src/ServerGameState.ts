@@ -17,6 +17,11 @@ import {
   applyRowRotate,
   applyDeathCross,
   applyGoldDigger,
+  applyCircleBomb,
+  applyCrossBomb,
+  applyFillHoles,
+  createMiniBlock,
+  createWeirdShape,
   type GameState,
   type Tetromino,
   type PlayerInputType,
@@ -35,6 +40,11 @@ export class ServerGameState {
   lastTickTime: number = Date.now();
   loadout: string[] = [];
   activeEffects: Map<string, number> = new Map(); // abilityType → endTime
+
+  // Buff ability state
+  private bombMode: { type: 'circle' | 'cross' } | null = null;
+  private miniBlocksRemaining: number = 0;
+  private shieldActive: boolean = false;
 
   constructor(playerId: string, seed: number, loadout: string[]) {
     this.playerId = playerId;
@@ -183,6 +193,20 @@ export class ServerGameState {
     // Lock piece to board
     this.gameState.board = lockPiece(this.gameState.board, this.gameState.currentPiece);
 
+    // Check for bomb mode - apply bomb effect
+    if (this.bombMode) {
+      const centerX = this.gameState.currentPiece.position.x + 1;
+      const centerY = this.gameState.currentPiece.position.y + 1;
+
+      if (this.bombMode.type === 'circle') {
+        this.gameState.board = applyCircleBomb(this.gameState.board, centerX, centerY, 3);
+      } else {
+        this.gameState.board = applyCrossBomb(this.gameState.board, centerX, centerY);
+      }
+
+      this.bombMode = null;
+    }
+
     // Clear lines and update score
     const { board, linesCleared } = clearLines(this.gameState.board);
     this.gameState.board = board;
@@ -202,18 +226,37 @@ export class ServerGameState {
       }
       this.gameState.lastClearTime = now;
 
-      const starsEarned = calculateStars(linesCleared, this.gameState.comboCount);
+      let starsEarned = calculateStars(linesCleared, this.gameState.comboCount);
+
+      // Check for cascade multiplier
+      if (this.activeEffects.has('cascade_multiplier')) {
+        const endTime = this.activeEffects.get('cascade_multiplier')!;
+        if (Date.now() < endTime) {
+          starsEarned *= 2;
+        } else {
+          this.activeEffects.delete('cascade_multiplier');
+        }
+      }
+
       this.gameState.stars = Math.min(
         STAR_VALUES.maxCapacity,
         this.gameState.stars + starsEarned
       );
     }
 
-    // Spawn next piece
-    const nextType = this.gameState.nextPieces[0];
-    this.gameState.currentPiece = createTetromino(nextType, this.gameState.board.width);
-    this.gameState.nextPieces.shift();
-    this.gameState.nextPieces.push(getRandomTetrominoSeeded(this.rng));
+    // Spawn next piece - check for special piece modifiers
+    if (this.activeEffects.has('weird_shapes')) {
+      this.gameState.currentPiece = createWeirdShape(this.gameState.board.width);
+      this.activeEffects.delete('weird_shapes');
+    } else if (this.miniBlocksRemaining > 0) {
+      this.gameState.currentPiece = createMiniBlock(this.gameState.board.width);
+      this.miniBlocksRemaining--;
+    } else {
+      const nextType = this.gameState.nextPieces[0];
+      this.gameState.currentPiece = createTetromino(nextType, this.gameState.board.width);
+      this.gameState.nextPieces.shift();
+      this.gameState.nextPieces.push(getRandomTetrominoSeeded(this.rng));
+    }
 
     // Check game over
     if (!isValidPosition(this.gameState.board, this.gameState.currentPiece)) {
@@ -222,10 +265,18 @@ export class ServerGameState {
   }
 
   /**
-   * Apply ability effect from opponent
+   * Apply ability effect (can be buff or debuff)
    */
   applyAbility(abilityType: string): void {
+    // Check if shield blocks this debuff
+    if (this.shieldActive && this.isDebuff(abilityType)) {
+      console.log(`[ServerGameState] Shield blocked ${abilityType}`);
+      this.shieldActive = false;
+      return;
+    }
+
     switch (abilityType) {
+      // DEBUFF ABILITIES (from opponent)
       case 'earthquake':
         this.gameState.board = applyEarthquake(this.gameState.board);
         break;
@@ -252,7 +303,6 @@ export class ServerGameState {
         this.gameState.board = applyGoldDigger(this.gameState.board);
         break;
 
-      // Speed modifiers
       case 'speed_up_opponent':
         this.tickRate = 1000 / 3; // 3x faster
         this.activeEffects.set('speed_up_opponent', Date.now() + 10000);
@@ -262,7 +312,6 @@ export class ServerGameState {
         }, 10000);
         break;
 
-      // Duration-based effects (tracked for client)
       case 'reverse_controls':
         this.activeEffects.set('reverse_controls', Date.now() + 8000);
         break;
@@ -285,6 +334,35 @@ export class ServerGameState {
 
       case 'weird_shapes':
         this.activeEffects.set('weird_shapes', Date.now() + 1); // Next piece only
+        break;
+
+      // BUFF ABILITIES (self-targeting)
+      case 'circle_bomb':
+        this.bombMode = { type: 'circle' };
+        break;
+
+      case 'cross_firebomb':
+        this.bombMode = { type: 'cross' };
+        break;
+
+      case 'mini_blocks':
+        this.miniBlocksRemaining = 5;
+        break;
+
+      case 'fill_holes':
+        this.gameState.board = applyFillHoles(this.gameState.board);
+        break;
+
+      case 'cascade_multiplier':
+        this.activeEffects.set('cascade_multiplier', Date.now() + 15000);
+        break;
+
+      case 'deflect_shield':
+        this.shieldActive = true;
+        break;
+
+      case 'piece_preview_plus':
+        this.activeEffects.set('piece_preview_plus', Date.now() + 15000);
         break;
 
       default:
@@ -324,5 +402,18 @@ export class ServerGameState {
       isGameOver: this.gameState.isGameOver,
       activeEffects: this.getActiveEffects(),
     };
+  }
+
+  /**
+   * Check if an ability is a debuff (targets opponent)
+   */
+  private isDebuff(abilityType: string): boolean {
+    const debuffs = [
+      'earthquake', 'random_spawner', 'row_rotate', 'death_cross',
+      'gold_digger', 'speed_up_opponent', 'reverse_controls',
+      'rotation_lock', 'blind_spot', 'screen_shake', 'shrink_ceiling',
+      'weird_shapes', 'clear_rows'
+    ];
+    return debuffs.includes(abilityType);
   }
 }

@@ -450,7 +450,7 @@ export interface ActiveAbilityEffect {
   lastTriggerTime?: number;  // When it last triggered
 }
 
-export function createMiniBlock(): Tetromino {
+export function createMiniBlock(boardWidth: number = 10): Tetromino {
   // Create a 2-cell domino piece (horizontal or vertical)
   const isHorizontal = Math.random() > 0.5;
   const type: TetrominoType = ['I', 'O', 'T', 'S', 'Z', 'L', 'J'][Math.floor(Math.random() * 7)] as TetrominoType;
@@ -458,8 +458,23 @@ export function createMiniBlock(): Tetromino {
   return {
     type,
     shape: isHorizontal ? [[1, 1]] : [[1], [1]],
-    position: { x: 4, y: 0 },
+    position: { x: Math.floor(boardWidth / 2) - 1, y: 0 },
     rotation: 0,
+  };
+}
+
+export function createWeirdShape(boardWidth: number = 10): Tetromino {
+  // Create 4x4 hollowed square piece
+  return {
+    type: 'O' as TetrominoType,
+    position: { x: Math.floor(boardWidth / 2) - 2, y: 0 },
+    rotation: 0,
+    shape: [
+      [1, 1, 1, 1],
+      [1, 0, 0, 1],
+      [1, 0, 0, 1],
+      [1, 1, 1, 1],
+    ],
   };
 }
 

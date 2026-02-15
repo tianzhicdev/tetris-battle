@@ -28,12 +28,10 @@ export function DebugPanel({
     collapsedSections,
     eventLimit,
     autoScroll,
-    selectedTarget,
     pingHistory,
     togglePanel,
     setPosition,
     toggleSection,
-    setSelectedTarget,
     addPingResult,
     loadFromLocalStorage,
   } = useDebugStore();
@@ -203,8 +201,6 @@ export function DebugPanel({
         {/* Ability Triggers */}
         <Section title="Ability Triggers" collapsed={collapsedSections.has('abilities')} onToggle={() => toggleSection('abilities')}>
           <AbilityTriggers
-            selectedTarget={selectedTarget}
-            onTargetChange={setSelectedTarget}
             onTrigger={onAbilityTrigger}
           />
         </Section>
