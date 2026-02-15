@@ -22,6 +22,7 @@
   },
   "devDependencies": {
     "replicate": "^1.4.0",
-    "typescript": "^5.3.3"
+    "typescript": "^5.3.3",
+    "ws": "^8.19.0"
   }
 }
