@@ -27,9 +27,10 @@ export default class MatchmakingServer implements Party.Server {
       this.checkAIFallback();
     }, 2000);
 
-    // Schedule alarm to keep server alive and process queue (fire and forget)
-    this.scheduleNextAlarm().catch(err => {
-      console.error('[MATCHMAKING] Failed to schedule alarm:', err);
+    // Schedule initial alarm to keep server alive and process queue
+    const nextAlarmTime = Date.now() + 5000;
+    this.room.storage.setAlarm(nextAlarmTime).catch(err => {
+      console.error('[MATCHMAKING] Failed to schedule initial alarm:', err);
     });
   }
 
