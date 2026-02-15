@@ -69,7 +69,9 @@ export class ServerAuthGameClient {
     onOpponentDisconnected: () => void,
     onGameFinished: (winnerId: string) => void,
     onAbilityReceived?: (abilityType: string, fromPlayerId: string) => void,
-    onAbilityActivationResult?: (result: AbilityActivationResult) => void
+    onAbilityActivationResult?: (result: AbilityActivationResult) => void,
+    onInputConfirmed?: (confirmedSeq: number, serverState: any) => void,
+    onInputRejected?: (rejectedSeq: number, reason: string, serverState: any) => void
   ): void {
     this.socket.addEventListener('open', () => {
       console.log(`[SERVER-AUTH] Connected to game room: ${this.roomId}`);
@@ -126,6 +128,28 @@ export class ServerAuthGameClient {
           }
           break;
 
+        case 'input_confirmed':
+          if (onInputConfirmed) {
+            onInputConfirmed(data.confirmedSeq, data.serverState);
+          }
+          this.debugLogger?.logEvent(
+            'input_confirmed',
+            `Input seq ${data.confirmedSeq} confirmed`,
+            data
+          );
+          break;
+
+        case 'input_rejected':
+          if (onInputRejected) {
+            onInputRejected(data.rejectedSeq, data.reason, data.serverState);
+          }
+          this.debugLogger?.logEvent(
+            'input_rejected',
+            `Input seq ${data.rejectedSeq} rejected: ${data.reason}`,
+            data
+          );
+          break;
+
         case 'server_error':
           console.error('[SERVER-AUTH] Server error:', data);
           this.debugLogger?.logEvent('server_error', data.message || 'Server error', data);
@@ -158,13 +182,20 @@ export class ServerAuthGameClient {
   /**
    * Send player input to server
    */
-  sendInput(input: PlayerInputType): void {
-    this.send({
+  sendInput(input: PlayerInputType, seq: number | null = null): void {
+    const payload: any = {
       type: 'player_input',
       playerId: this.playerId,
       input,
       timestamp: Date.now(),
-    });
+    };
+
+    // Include seq number if provided (prediction mode)
+    if (seq !== null) {
+      payload.seq = seq;
+    }
+
+    this.send(payload);
   }
 
   /**
