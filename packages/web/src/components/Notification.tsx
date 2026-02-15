@@ -24,7 +24,7 @@ export function Notification({
   variant = 'info',
   actions,
   countdown,
-  onDismiss
+  onDismiss: _onDismiss
 }: NotificationProps) {
   const getColors = () => {
     switch (variant) {
