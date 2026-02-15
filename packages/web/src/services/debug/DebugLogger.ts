@@ -1,8 +1,9 @@
 export interface DebugEvent {
   timestamp: number;
-  direction: 'in' | 'out';
+  direction: 'in' | 'out' | 'event';
   type: string;
   data: any;
+  humanReadable?: string; // For displaying nice event descriptions
 }
 
 export class DebugLogger {
@@ -16,6 +17,16 @@ export class DebugLogger {
 
   logOutgoing(data: any): void {
     this.addEvent({ timestamp: Date.now(), direction: 'out', type: data.type, data });
+  }
+
+  logEvent(type: string, description: string, data?: any): void {
+    this.addEvent({
+      timestamp: Date.now(),
+      direction: 'event',
+      type,
+      data: data || {},
+      humanReadable: description
+    });
   }
 
   private addEvent(event: DebugEvent): void {

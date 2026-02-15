@@ -219,6 +219,78 @@ export function ServerAuthMultiplayerGame({
     }
   }, [opponentState]);
 
+  // Track opponent state changes for debug logging
+  const prevOpponentStateRef = useRef<any>(null);
+  useEffect(() => {
+    if (!opponentState || !debugLogger) return;
+
+    const prev = prevOpponentStateRef.current;
+    if (!prev) {
+      prevOpponentStateRef.current = opponentState;
+      return;
+    }
+
+    // Detect opponent piece movement (position changes)
+    if (prev.currentPiece && opponentState.currentPiece) {
+      const prevX = prev.currentPiece.x;
+      const prevY = prev.currentPiece.y;
+      const prevRotation = prev.currentPiece.rotation;
+      const currX = opponentState.currentPiece.x;
+      const currY = opponentState.currentPiece.y;
+      const currRotation = opponentState.currentPiece.rotation;
+
+      // Rotation change
+      if (prevRotation !== currRotation) {
+        debugLogger.logEvent('opponent_rotate', `Opponent rotated piece`, { rotation: currRotation });
+      }
+
+      // Horizontal movement
+      if (prevX !== currX) {
+        const direction = currX > prevX ? 'right' : 'left';
+        debugLogger.logEvent('opponent_move', `Opponent moved ${direction}`, { x: currX });
+      }
+
+      // Vertical movement (soft drop)
+      if (prevY !== currY && currY > prevY) {
+        debugLogger.logEvent('opponent_drop', `Opponent soft dropped`, { y: currY });
+      }
+    }
+
+    // Detect opponent piece placement (new piece spawned)
+    if (prev.currentPiece?.type !== opponentState.currentPiece?.type) {
+      debugLogger.logEvent('opponent_place', `Opponent placed piece (${prev.currentPiece?.type})`, {
+        piece: prev.currentPiece?.type,
+        newPiece: opponentState.currentPiece?.type
+      });
+    }
+
+    // Detect opponent line clears
+    if (opponentState.linesCleared > prev.linesCleared) {
+      const linesDiff = opponentState.linesCleared - prev.linesCleared;
+      const label = linesDiff >= 4 ? 'TETRIS' : linesDiff === 3 ? 'Triple' : linesDiff === 2 ? 'Double' : 'Single';
+      debugLogger.logEvent('opponent_clear', `Opponent cleared ${linesDiff} line${linesDiff > 1 ? 's' : ''} (${label})`, {
+        lines: linesDiff,
+        total: opponentState.linesCleared
+      });
+    }
+
+    // Detect opponent score changes
+    if (opponentState.score > prev.score) {
+      const scoreDiff = opponentState.score - prev.score;
+      debugLogger.logEvent('opponent_score', `Opponent scored +${scoreDiff} points`, {
+        points: scoreDiff,
+        total: opponentState.score
+      });
+    }
+
+    // Detect opponent game over
+    if (!prev.isGameOver && opponentState.isGameOver) {
+      debugLogger.logEvent('opponent_gameover', `Opponent's game ended`, {});
+    }
+
+    prevOpponentStateRef.current = opponentState;
+  }, [opponentState, debugLogger]);
+
   // Track line clears from server for effects
   const prevLinesRef = useRef(0);
   useEffect(() => {
@@ -264,6 +336,17 @@ export function ServerAuthMultiplayerGame({
 
     console.log('[SERVER-AUTH] Activating ability:', ability.name);
 
+    // Log ability usage in debug mode
+    if (debugLogger) {
+      const target = ability.category === 'buff' ? 'self' : 'opponent';
+      debugLogger.logEvent('ability_used', `You used ${ability.name} (${ability.shortName}) on ${target}`, {
+        ability: ability.type,
+        name: ability.name,
+        category: ability.category,
+        target
+      });
+    }
+
     // Track ability usage
     setAbilitiesUsedCount(prev => prev + 1);
 
@@ -300,6 +383,15 @@ export function ServerAuthMultiplayerGame({
     const ability = abilities.find((a: any) => a.type === abilityType);
 
     if (!ability) return;
+
+    // Log ability received in debug mode
+    if (debugLogger) {
+      debugLogger.logEvent('opponent_ability', `Opponent used ${ability.name} (${ability.shortName}) on you`, {
+        ability: abilityType,
+        name: ability.name,
+        category: ability.category
+      });
+    }
 
     audioManager.playSfx('ability_debuff_activate');
 
@@ -479,9 +571,19 @@ export function ServerAuthMultiplayerGame({
   useEffect(() => {
     if (gameFinished && winnerId && !matchRewards) {
       const isWin = winnerId === playerId;
+
+      // Log game result in debug mode
+      if (debugLogger) {
+        if (isWin) {
+          debugLogger.logEvent('game_win', `You won the game!`, { winnerId });
+        } else {
+          debugLogger.logEvent('game_lose', `Opponent won the game`, { winnerId });
+        }
+      }
+
       calculateMatchRewards(isWin);
     }
-  }, [gameFinished, winnerId, playerId, matchRewards, calculateMatchRewards]);
+  }, [gameFinished, winnerId, playerId, matchRewards, calculateMatchRewards, debugLogger]);
 
   // Play victory or defeat music
   useEffect(() => {

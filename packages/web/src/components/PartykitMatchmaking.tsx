@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { PartykitMatchmaking } from '../services/partykit/matchmaking';
 
 interface MatchmakingProps {
@@ -9,14 +9,39 @@ interface MatchmakingProps {
   theme: any;
 }
 
+interface WebSocketEvent {
+  timestamp: number;
+  type: 'sent' | 'received' | 'status';
+  data: any;
+}
+
 export function Matchmaking({ playerId, rank, onMatchFound, onCancel, theme }: MatchmakingProps) {
   const [queuePosition, setQueuePosition] = useState<number>(-1);
   const [queueDuration, setQueueDuration] = useState<number>(0);
   const [dots, setDots] = useState('');
-  const [matchmaking] = useState(() => {
+  const [isDebugMode, setIsDebugMode] = useState(false);
+  const [wsStatus, setWsStatus] = useState<'connecting' | 'connected' | 'disconnected'>('connecting');
+  const [wsEvents, setWsEvents] = useState<WebSocketEvent[]>([]);
+  const matchmakingRef = useRef<PartykitMatchmaking | null>(null);
+
+  // Initialize debug mode
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const debugEnabled = params.get('debug') === 'true';
+    setIsDebugMode(debugEnabled);
+  }, []);
+
+  // Helper to add WebSocket event to debug log
+  const addWsEvent = useCallback((type: 'sent' | 'received' | 'status', data: any) => {
+    setWsEvents(prev => [...prev.slice(-19), { timestamp: Date.now(), type, data }]);
+  }, []);
+
+  // Initialize matchmaking service
+  if (!matchmakingRef.current) {
     const host = import.meta.env.VITE_PARTYKIT_HOST || 'localhost:1999';
-    return new PartykitMatchmaking(playerId, host, rank);
-  });
+    matchmakingRef.current = new PartykitMatchmaking(playerId, host, rank, addWsEvent);
+  }
+  const matchmaking = matchmakingRef.current;
 
   useEffect(() => {
     // Animated dots
@@ -45,6 +70,9 @@ export function Matchmaking({ playerId, rank, onMatchFound, onCancel, theme }: M
       },
       (position) => {
         setQueuePosition(position);
+      },
+      (status) => {
+        setWsStatus(status);
       }
     );
 
@@ -147,6 +175,118 @@ export function Matchmaking({ playerId, rank, onMatchFound, onCancel, theme }: M
           Cancel
         </button>
       </div>
+
+      {/* Debug Panel */}
+      {isDebugMode && (
+        <div style={{
+          position: 'fixed',
+          bottom: '20px',
+          right: '20px',
+          background: 'rgba(0, 0, 0, 0.95)',
+          backdropFilter: 'blur(20px)',
+          border: '1px solid rgba(0, 212, 255, 0.4)',
+          borderRadius: '8px',
+          padding: '16px',
+          maxWidth: '400px',
+          maxHeight: '60vh',
+          overflow: 'auto',
+          fontFamily: 'monospace',
+          fontSize: '11px',
+          color: '#00ff88',
+          boxShadow: '0 8px 32px rgba(0, 212, 255, 0.3)',
+          zIndex: 1000,
+        }}>
+          <div style={{
+            marginBottom: '12px',
+            paddingBottom: '8px',
+            borderBottom: '1px solid rgba(0, 212, 255, 0.3)',
+            fontWeight: 'bold',
+            color: '#00d4ff',
+          }}>
+            🐛 Matchmaking Debug
+          </div>
+
+          <div style={{ marginBottom: '12px' }}>
+            <div style={{ marginBottom: '6px' }}>
+              <span style={{ color: '#aaa' }}>Connection Status:</span>{' '}
+              <span style={{
+                color: wsStatus === 'connected' ? '#00ff88' : wsStatus === 'connecting' ? '#ffa500' : '#ff6e6e',
+                fontWeight: 'bold'
+              }}>
+                {wsStatus.toUpperCase()}
+              </span>
+            </div>
+            <div style={{ marginBottom: '6px' }}>
+              <span style={{ color: '#aaa' }}>Queue Position:</span>{' '}
+              <span style={{ color: '#00d4ff', fontWeight: 'bold' }}>
+                {queuePosition > 0 ? `#${queuePosition}` : '-'}
+              </span>
+            </div>
+            <div style={{ marginBottom: '6px' }}>
+              <span style={{ color: '#aaa' }}>Time Waiting:</span>{' '}
+              <span style={{ color: '#c942ff', fontWeight: 'bold' }}>
+                {queueDuration}s
+              </span>
+            </div>
+            <div style={{ marginBottom: '6px' }}>
+              <span style={{ color: '#aaa' }}>Player ID:</span>{' '}
+              <span style={{ color: '#fff', fontSize: '10px' }}>
+                {playerId}
+              </span>
+            </div>
+            <div>
+              <span style={{ color: '#aaa' }}>Rank:</span>{' '}
+              <span style={{ color: '#ffd700', fontWeight: 'bold' }}>
+                {rank}
+              </span>
+            </div>
+          </div>
+
+          <div style={{
+            marginTop: '12px',
+            paddingTop: '8px',
+            borderTop: '1px solid rgba(0, 212, 255, 0.3)'
+          }}>
+            <div style={{
+              marginBottom: '8px',
+              color: '#00d4ff',
+              fontWeight: 'bold'
+            }}>
+              WebSocket Events ({wsEvents.length})
+            </div>
+            <div style={{
+              maxHeight: '200px',
+              overflow: 'auto',
+              fontSize: '10px'
+            }}>
+              {wsEvents.length === 0 ? (
+                <div style={{ color: '#666', fontStyle: 'italic' }}>No events yet...</div>
+              ) : (
+                wsEvents.slice().reverse().map((event, idx) => {
+                  const time = new Date(event.timestamp).toLocaleTimeString();
+                  const color = event.type === 'sent' ? '#ffa500' : event.type === 'received' ? '#00ff88' : '#00d4ff';
+                  return (
+                    <div key={idx} style={{
+                      marginBottom: '8px',
+                      padding: '6px',
+                      background: 'rgba(255, 255, 255, 0.03)',
+                      borderLeft: `3px solid ${color}`,
+                      borderRadius: '4px'
+                    }}>
+                      <div style={{ color: '#aaa', marginBottom: '4px' }}>
+                        {time} <span style={{ color, fontWeight: 'bold' }}>[{event.type.toUpperCase()}]</span>
+                      </div>
+                      <div style={{ color: '#fff', wordBreak: 'break-all' }}>
+                        {JSON.stringify(event.data, null, 2)}
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

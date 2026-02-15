@@ -27,8 +27,15 @@ export function EventsLog({ events, autoScroll, onClear, onExport }: EventsLogPr
   const getEventColor = (event: DebugEvent): string => {
     if (event.type.includes('error')) return '#ff0000';
     if (event.type.includes('ability')) return '#ffaa00';
+    if (event.direction === 'event') return '#00ff88'; // Bright green for custom events
     if (event.direction === 'in') return '#00aaff';
     return '#ffaa00';
+  };
+
+  const getEventIcon = (event: DebugEvent): string => {
+    if (event.direction === 'event') return '★';
+    if (event.direction === 'in') return '↓';
+    return '↑';
   };
 
   const formatTime = (timestamp: number): string => {
@@ -80,7 +87,7 @@ export function EventsLog({ events, autoScroll, onClear, onExport }: EventsLogPr
             }}
           >
             <div>
-              [{formatTime(event.timestamp)}] {event.direction === 'in' ? '↓' : '↑'} {event.type}
+              [{formatTime(event.timestamp)}] {getEventIcon(event)} {event.humanReadable || event.type}
             </div>
             {expandedIndex === i && (
               <pre style={{ fontSize: '9px', marginTop: '4px', color: '#aaa', whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
