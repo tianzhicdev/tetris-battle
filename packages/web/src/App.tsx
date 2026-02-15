@@ -153,19 +153,19 @@ function GameApp({ profile: initialProfile }: { profile: UserProfile }) {
     }
   };
 
-  const handleMatchFound = (roomId: string, player1Id: string, player2Id: string, aiOpponent?: any) => {
+  const handleMatchFound = useCallback((roomId: string, player1Id: string, player2Id: string, aiOpponent?: any) => {
     setGameMatch({ roomId, player1Id, player2Id, aiOpponent });
     setMode('multiplayer');
-  };
+  }, []);
 
-  const handleExitGame = () => {
+  const handleExitGame = useCallback(() => {
     setGameMatch(null);
     setMode('menu');
-  };
+  }, []);
 
-  const handleCancelMatchmaking = () => {
+  const handleCancelMatchmaking = useCallback(() => {
     setMode('menu');
-  };
+  }, []);
 
   // Challenge handlers
   const handleChallenge = useCallback(async (friendUserId: string, friendUsername: string) => {
