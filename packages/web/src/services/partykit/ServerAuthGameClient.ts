@@ -1,5 +1,6 @@
 import PartySocket from 'partysocket';
 import type { PlayerInputType } from '@tetris-battle/game-core';
+import type { DebugLogger } from '../debug/DebugLogger';
 
 export interface GameStateUpdate {
   timestamp: number;
@@ -34,11 +35,13 @@ export class ServerAuthGameClient {
   private playerId: string;
   private roomId: string;
   private loadout: string[];
+  private debugLogger: DebugLogger | null = null;
 
-  constructor(roomId: string, playerId: string, host: string, loadout: string[], _aiOpponent?: any) {
+  constructor(roomId: string, playerId: string, host: string, loadout: string[], _aiOpponent?: any, debugLogger?: DebugLogger) {
     this.roomId = roomId;
     this.playerId = playerId;
     this.loadout = loadout;
+    this.debugLogger = debugLogger || null;
 
     this.socket = new PartySocket({
       host,
@@ -60,6 +63,7 @@ export class ServerAuthGameClient {
 
     this.socket.addEventListener('message', (event) => {
       const data = JSON.parse(event.data);
+      this.debugLogger?.logIncoming(data);
 
       switch (data.type) {
         case 'game_start':
@@ -126,8 +130,26 @@ export class ServerAuthGameClient {
 
   private send(data: any): void {
     if (this.socket.readyState === WebSocket.OPEN) {
+      this.debugLogger?.logOutgoing(data);
       this.socket.send(JSON.stringify(data));
     }
+  }
+
+  /**
+   * Send ping for RTT measurement
+   */
+  sendPing(callback: (rtt: number) => void): void {
+    const timestamp = Date.now();
+    const handler = (event: MessageEvent) => {
+      const data = JSON.parse(event.data);
+      if (data.type === 'debug_pong' && data.timestamp === timestamp) {
+        const rtt = Date.now() - timestamp;
+        callback(rtt);
+        this.socket.removeEventListener('message', handler);
+      }
+    };
+    this.socket.addEventListener('message', handler);
+    this.send({ type: 'debug_ping', timestamp });
   }
 
   disconnect(): void {

@@ -120,6 +120,16 @@ export default class GameRoomServer implements Party.Server {
   onMessage(message: string, sender: Party.Connection) {
     const data = JSON.parse(message);
 
+    // Debug ping/pong support
+    if (data.type === 'debug_ping') {
+      sender.send(JSON.stringify({
+        type: 'debug_pong',
+        timestamp: data.timestamp,
+        serverTime: Date.now(),
+      }));
+      return;
+    }
+
     switch (data.type) {
       case 'join_game':
         this.handleJoinGame(data.playerId, sender, data.loadout, data.aiOpponent);

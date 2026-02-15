@@ -66,10 +66,34 @@ export class ServerGameState {
       return false;
     }
 
+    // Check for rotation lock
+    if (this.activeEffects.has('rotation_lock')) {
+      const endTime = this.activeEffects.get('rotation_lock')!;
+      if (Date.now() < endTime) {
+        if (input === 'rotate_cw' || input === 'rotate_ccw') {
+          return false; // Block rotation
+        }
+      } else {
+        this.activeEffects.delete('rotation_lock');
+      }
+    }
+
+    // Check for reverse controls
+    let effectiveInput = input;
+    if (this.activeEffects.has('reverse_controls')) {
+      const endTime = this.activeEffects.get('reverse_controls')!;
+      if (Date.now() < endTime) {
+        if (input === 'move_left') effectiveInput = 'move_right';
+        else if (input === 'move_right') effectiveInput = 'move_left';
+      } else {
+        this.activeEffects.delete('reverse_controls');
+      }
+    }
+
     let newPiece = this.gameState.currentPiece;
     let stateChanged = false;
 
-    switch (input) {
+    switch (effectiveInput) {
       case 'move_left':
         newPiece = movePiece(newPiece, -1, 0);
         if (isValidPosition(this.gameState.board, newPiece)) {

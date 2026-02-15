@@ -1,0 +1,699 @@
+# Client-Side Prediction Implementation Guide
+
+**Problem**: Server-authoritative architecture causes input lag (100-150ms delay feels sluggish)
+
+**Solution**: Predict moves locally, render instantly, reconcile with server when response arrives
+
+---
+
+## How It Works
+
+```
+User presses "Rotate"
+  ↓
+Client IMMEDIATELY rotates piece locally (0ms perceived lag)
+  ↓
+Client sends { type: "input", action: "rotate_cw", seq: 123 } to server
+  ↓
+Client continues playing with predicted state
+  ↓
+Server receives input 50-75ms later
+  ↓
+Server validates: Is rotation legal?
+  ↓
+  ├─ Valid → Server confirms { seq: 123, state: {...} }
+  └─ Invalid → Server rejects { seq: 123, correction: {...} }
+  ↓
+Client receives response 100-150ms after original input
+  ↓
+Client reconciles:
+  ├─ If matches prediction → No visual change (perfect!)
+  └─ If differs → Snap to server state, replay pending inputs
+```
+
+**Key Insight**: User sees instant feedback (client prediction). Server validates but correction is rare (<1% of inputs).
+
+---
+
+## Architecture Changes
+
+### Current (Laggy) Flow
+
+```typescript
+// ❌ CURRENT: Wait for server
+user presses rotate
+  → send to server
+  → wait 150ms
+  → server responds
+  → update UI ← USER SEES DELAY HERE
+```
+
+### New (Instant) Flow
+
+```typescript
+// ✅ NEW: Predict immediately
+user presses rotate
+  → predict locally
+  → update UI ← INSTANT (0ms)
+  → send to server
+  → (150ms later) server confirms
+  → reconcile if needed (usually no-op)
+```
+
+---
+
+## Implementation
+
+### Step 1: Add Prediction State to gameStore.ts
+
+```typescript
+// packages/web/src/stores/gameStore.ts
+
+interface PendingInput {
+  seq: number;
+  action: InputAction;
+  predictedState: GameState;
+  timestamp: number;
+}
+
+interface GameStore {
+  // Existing
+  gameState: GameState;
+
+  // NEW: Prediction state
+  serverState: GameState | null;  // Last confirmed state from server
+  predictedState: GameState;      // Current optimistic state
+  pendingInputs: PendingInput[];  // Inputs awaiting server confirmation
+  inputSequence: number;           // Monotonic counter for inputs
+
+  // NEW: Prediction actions
+  predictInput: (action: InputAction) => void;
+  reconcileWithServer: (confirmedSeq: number, serverState: GameState) => void;
+}
+
+export const useGameStore = create<GameStore>((set, get) => ({
+  gameState: createInitialGameState(),
+
+  // NEW
+  serverState: null,
+  predictedState: createInitialGameState(),
+  pendingInputs: [],
+  inputSequence: 0,
+
+  // ... existing actions ...
+
+  // NEW: Predict input locally
+  predictInput: (action: InputAction) => {
+    const { predictedState, inputSequence } = get();
+    const seq = inputSequence + 1;
+
+    // Apply action locally (instant)
+    const newPredictedState = applyInputAction(predictedState, action);
+
+    // Store prediction
+    set({
+      predictedState: newPredictedState,
+      inputSequence: seq,
+      pendingInputs: [
+        ...get().pendingInputs,
+        {
+          seq,
+          action,
+          predictedState: newPredictedState,
+          timestamp: Date.now(),
+        },
+      ],
+    });
+
+    // Send to server (async, don't wait)
+    gameSync.sendInput(action, seq);
+  },
+
+  // NEW: Reconcile when server responds
+  reconcileWithServer: (confirmedSeq: number, serverState: GameState) => {
+    const { pendingInputs, predictedState } = get();
+
+    // Remove confirmed inputs
+    const remaining = pendingInputs.filter(input => input.seq > confirmedSeq);
+
+    // Check if prediction matches server
+    const serverMatches = areStatesEqual(serverState, predictedState);
+
+    if (serverMatches && remaining.length === 0) {
+      // Perfect prediction! No correction needed.
+      set({
+        serverState,
+        pendingInputs: remaining,
+      });
+      return;
+    }
+
+    // Server state differs from prediction - need to reconcile
+    console.log('[RECONCILE] Server state differs, replaying pending inputs', {
+      confirmedSeq,
+      pendingCount: remaining.length,
+    });
+
+    // Start from server truth
+    let reconciledState = serverState;
+
+    // Replay pending inputs on top of server state
+    for (const input of remaining) {
+      reconciledState = applyInputAction(reconciledState, input.action);
+    }
+
+    set({
+      serverState,
+      predictedState: reconciledState,
+      pendingInputs: remaining,
+    });
+  },
+}));
+
+// Helper: Apply input action to state
+function applyInputAction(state: GameState, action: InputAction): GameState {
+  switch (action.type) {
+    case 'move_left':
+      return applyMoveLeft(state);
+    case 'move_right':
+      return applyMoveRight(state);
+    case 'rotate_cw':
+      return applyRotateCW(state);
+    case 'rotate_ccw':
+      return applyRotateCCW(state);
+    case 'soft_drop':
+      return applySoftDrop(state);
+    case 'hard_drop':
+      return applyHardDrop(state);
+    default:
+      return state;
+  }
+}
+
+function applyMoveLeft(state: GameState): GameState {
+  if (!state.currentPiece) return state;
+
+  const newPiece = movePiece(state.currentPiece, -1, 0);
+  if (!isValidPosition(state.board, newPiece)) return state; // Invalid, no change
+
+  return {
+    ...state,
+    currentPiece: newPiece,
+  };
+}
+
+function applyRotateCW(state: GameState): GameState {
+  if (!state.currentPiece) return state;
+
+  const newPiece = rotatePiece(state.currentPiece, true);
+  if (!isValidPosition(state.board, newPiece)) return state;
+
+  return {
+    ...state,
+    currentPiece: newPiece,
+  };
+}
+
+// ... similar for other actions ...
+
+function areStatesEqual(s1: GameState, s2: GameState): boolean {
+  // Compare critical fields (not deep equality - too slow)
+  return (
+    s1.currentPiece?.position.x === s2.currentPiece?.position.x &&
+    s1.currentPiece?.position.y === s2.currentPiece?.position.y &&
+    s1.currentPiece?.rotation === s2.currentPiece?.rotation &&
+    s1.score === s2.score &&
+    s1.stars === s2.stars
+  );
+}
+```
+
+---
+
+### Step 2: Update Input Handlers
+
+```typescript
+// Replace direct state mutations with predictInput calls
+
+// BEFORE (laggy)
+movePieceLeft: () => {
+  const { gameState } = get();
+  const newPiece = movePiece(gameState.currentPiece, -1, 0);
+  if (isValidPosition(gameState.board, newPiece)) {
+    set({ gameState: { ...gameState, currentPiece: newPiece } });
+    gameSync.sendInput({ type: 'move_left' }); // Wait for server
+  }
+},
+
+// AFTER (instant)
+movePieceLeft: () => {
+  get().predictInput({ type: 'move_left' }); // Predict + send
+},
+
+rotatePieceClockwise: () => {
+  get().predictInput({ type: 'rotate_cw' });
+},
+
+movePieceRight: () => {
+  get().predictInput({ type: 'move_right' });
+},
+
+hardDrop: () => {
+  get().predictInput({ type: 'hard_drop' });
+},
+```
+
+---
+
+### Step 3: Update gameSync.ts to Send Inputs
+
+```typescript
+// packages/web/src/services/partykit/gameSync.ts
+
+export type InputAction =
+  | { type: 'move_left' }
+  | { type: 'move_right' }
+  | { type: 'move_down' }
+  | { type: 'rotate_cw' }
+  | { type: 'rotate_ccw' }
+  | { type: 'soft_drop' }
+  | { type: 'hard_drop' }
+  | { type: 'hold' };
+
+export class PartykitGameSync {
+  // ... existing code ...
+
+  // NEW: Send input (not full state)
+  sendInput(action: InputAction, seq: number): void {
+    this.send({
+      type: 'player_input',
+      playerId: this.playerId,
+      action,
+      seq, // Sequence number for reconciliation
+      timestamp: Date.now(),
+    });
+  }
+
+  // REPLACE: Instead of sending full state updates
+  // Remove or deprecate updateGameState()
+}
+```
+
+---
+
+### Step 4: Handle Server Confirmations
+
+```typescript
+// In gameSync.connect(), add handler for server confirmations
+
+this.socket.addEventListener('message', (event) => {
+  const data = JSON.parse(event.data);
+
+  switch (data.type) {
+    // NEW: Server confirms input
+    case 'input_confirmed':
+      useGameStore.getState().reconcileWithServer(
+        data.confirmedSeq,
+        data.serverState
+      );
+      break;
+
+    // NEW: Server rejected input
+    case 'input_rejected':
+      console.warn('[INPUT_REJECTED]', data.reason);
+      // Force reconciliation to server truth
+      useGameStore.getState().reconcileWithServer(
+        data.rejectedSeq,
+        data.serverState
+      );
+      // Optional: Show visual feedback (red flash)
+      break;
+
+    // Existing handlers...
+    case 'opponent_state_update':
+      onOpponentStateUpdate(data.state);
+      break;
+  }
+});
+```
+
+---
+
+### Step 5: Update Server to Process Inputs
+
+```typescript
+// packages/partykit/src/game.ts
+
+interface PlayerInput {
+  type: 'player_input';
+  playerId: string;
+  action: InputAction;
+  seq: number;
+  timestamp: number;
+}
+
+export default class GameRoomServer implements Party.Server {
+  // ... existing code ...
+
+  onMessage(message: string, sender: Party.Connection) {
+    const data = JSON.parse(message);
+
+    switch (data.type) {
+      case 'player_input':
+        this.handlePlayerInput(data, sender);
+        break;
+
+      // ... other handlers ...
+    }
+  }
+
+  handlePlayerInput(data: PlayerInput, sender: Party.Connection) {
+    const playerState = this.players.get(data.playerId);
+    if (!playerState || !playerState.gameState) return;
+
+    // Validate and apply input
+    const result = this.applyInput(playerState.gameState, data.action);
+
+    if (result.valid) {
+      // Update server state
+      playerState.gameState = result.newState;
+
+      // Confirm to client
+      sender.send(JSON.stringify({
+        type: 'input_confirmed',
+        confirmedSeq: data.seq,
+        serverState: result.newState,
+      }));
+
+      // Broadcast to opponent (they see your piece move)
+      this.broadcastOpponentUpdate(data.playerId, result.newState);
+
+    } else {
+      // Reject invalid input
+      sender.send(JSON.stringify({
+        type: 'input_rejected',
+        rejectedSeq: data.seq,
+        reason: result.error,
+        serverState: playerState.gameState, // Send current truth
+      }));
+    }
+  }
+
+  applyInput(state: GameState, action: InputAction): ValidationResult {
+    switch (action.type) {
+      case 'move_left':
+        return this.validateMoveLeft(state);
+      case 'rotate_cw':
+        return this.validateRotateCW(state);
+      // ... other actions ...
+      default:
+        return { valid: false, error: 'Unknown action' };
+    }
+  }
+
+  validateMoveLeft(state: GameState): ValidationResult {
+    if (!state.currentPiece) {
+      return { valid: false, error: 'No active piece' };
+    }
+
+    const newPiece = movePiece(state.currentPiece, -1, 0);
+
+    if (!isValidPosition(state.board, newPiece)) {
+      return { valid: false, error: 'Collision detected' };
+    }
+
+    return {
+      valid: true,
+      newState: {
+        ...state,
+        currentPiece: newPiece,
+      },
+    };
+  }
+
+  validateRotateCW(state: GameState): ValidationResult {
+    if (!state.currentPiece) {
+      return { valid: false, error: 'No active piece' };
+    }
+
+    const newPiece = rotatePiece(state.currentPiece, true);
+
+    if (!isValidPosition(state.board, newPiece)) {
+      return { valid: false, error: 'Rotation blocked' };
+    }
+
+    return {
+      valid: true,
+      newState: {
+        ...state,
+        currentPiece: newPiece,
+      },
+    };
+  }
+}
+
+interface ValidationResult {
+  valid: boolean;
+  newState?: GameState;
+  error?: string;
+}
+```
+
+---
+
+## Rendering: Use Predicted State
+
+```typescript
+// In your React component
+
+function TetrisBoard() {
+  // BEFORE: const gameState = useGameStore(state => state.gameState);
+
+  // AFTER: Use predicted state (not server state)
+  const predictedState = useGameStore(state => state.predictedState);
+
+  return (
+    <div className="tetris-board">
+      {predictedState.board.grid.map((row, y) =>
+        row.map((cell, x) => (
+          <Cell key={`${x}-${y}`} value={cell} />
+        ))
+      )}
+      {predictedState.currentPiece && (
+        <Piece piece={predictedState.currentPiece} />
+      )}
+    </div>
+  );
+}
+```
+
+---
+
+## Expected Behavior
+
+### Normal Case (99% of inputs)
+
+```
+User presses rotate
+  → Client shows rotation INSTANTLY
+  → 100ms later: Server confirms
+  → Client compares: Prediction matches!
+  → No visual change (seamless)
+```
+
+### Misprediction Case (<1% of inputs)
+
+```
+User rotates while opponent sends garbage
+  → Client predicts rotation (doesn't know about garbage yet)
+  → Shows rotated piece
+  → 100ms later: Server says "collision with new garbage, rotation invalid"
+  → Client snaps piece back to pre-rotation position
+  → Brief flash/shake to indicate correction
+```
+
+**Misprediction causes**:
+- Opponent ability affects board (garbage, freeze, etc.)
+- Network packet loss/reordering
+- Client/server clock drift
+
+**Frequency**: <0.5% of inputs with good network
+
+---
+
+## Visual Feedback for Corrections
+
+```typescript
+// Add to gameStore.ts
+
+reconcileWithServer: (confirmedSeq, serverState) => {
+  const { pendingInputs, predictedState } = get();
+
+  const serverMatches = areStatesEqual(serverState, predictedState);
+
+  if (!serverMatches) {
+    // MISPREDICTION DETECTED
+
+    // Visual feedback: Flash outline red
+    const boardEl = document.querySelector('.tetris-board');
+    boardEl?.classList.add('prediction-correction');
+    setTimeout(() => {
+      boardEl?.classList.remove('prediction-correction');
+    }, 200);
+
+    // Audio feedback (subtle)
+    audioManager.play('correction_beep');
+  }
+
+  // ... reconciliation logic ...
+},
+```
+
+```css
+/* Add to your CSS */
+.tetris-board.prediction-correction {
+  outline: 2px solid rgba(255, 0, 0, 0.3);
+  animation: shake 0.2s ease-in-out;
+}
+
+@keyframes shake {
+  0%, 100% { transform: translateX(0); }
+  25% { transform: translateX(-2px); }
+  75% { transform: translateX(2px); }
+}
+```
+
+---
+
+## Performance Optimization
+
+### Limit Pending Inputs Queue
+
+```typescript
+// Prevent memory leak from unconfirmed inputs
+
+const MAX_PENDING_INPUTS = 50; // ~2.5 seconds at 20 inputs/sec
+
+predictInput: (action) => {
+  let { pendingInputs } = get();
+
+  // Drop oldest if queue too long (network issue)
+  if (pendingInputs.length > MAX_PENDING_INPUTS) {
+    console.warn('[PREDICTION] Dropping old inputs, network lag detected');
+    pendingInputs = pendingInputs.slice(-MAX_PENDING_INPUTS);
+  }
+
+  // ... rest of prediction logic ...
+},
+```
+
+### Debounce Reconciliation
+
+```typescript
+// Avoid reconciling on every server message (batch updates)
+
+let reconcileTimeout: ReturnType<typeof setTimeout> | null = null;
+
+reconcileWithServer: (confirmedSeq, serverState) => {
+  // Clear existing timeout
+  if (reconcileTimeout) clearTimeout(reconcileTimeout);
+
+  // Batch reconciliations (5ms window)
+  reconcileTimeout = setTimeout(() => {
+    performReconciliation(confirmedSeq, serverState);
+  }, 5);
+},
+```
+
+---
+
+## Testing Prediction
+
+### Simulate Network Latency
+
+```typescript
+// Add artificial delay to test prediction feels right
+
+const SIMULATE_LATENCY = 150; // ms
+
+sendInput(action: InputAction, seq: number): void {
+  setTimeout(() => {
+    this.send({ type: 'player_input', playerId, action, seq });
+  }, SIMULATE_LATENCY);
+}
+```
+
+### Log Mispredictions
+
+```typescript
+// Track how often predictions fail
+
+let mispredictionCount = 0;
+let totalInputs = 0;
+
+reconcileWithServer: (confirmedSeq, serverState) => {
+  totalInputs++;
+
+  if (!areStatesEqual(serverState, predictedState)) {
+    mispredictionCount++;
+    console.warn('[STATS] Misprediction rate:',
+      (mispredictionCount / totalInputs * 100).toFixed(2) + '%'
+    );
+  }
+
+  // ... reconciliation ...
+},
+```
+
+**Target**: <1% misprediction rate with good network
+
+---
+
+## Migration Checklist
+
+- [ ] Add prediction state to gameStore (serverState, predictedState, pendingInputs)
+- [ ] Implement `predictInput()` function
+- [ ] Implement `reconcileWithServer()` function
+- [ ] Replace action handlers to use `predictInput()`
+- [ ] Update gameSync to send inputs (not full state)
+- [ ] Add server input handlers (validate and confirm)
+- [ ] Update rendering to use `predictedState`
+- [ ] Add visual feedback for corrections
+- [ ] Test with simulated latency (150ms)
+- [ ] Monitor misprediction rate in production
+
+---
+
+## Expected Results
+
+**Before (Server-Authoritative, No Prediction)**:
+- Input lag: 100-150ms
+- User experience: "Feels sluggish, like playing through mud"
+- Playability: Acceptable but not great
+
+**After (With Client Prediction)**:
+- Perceived lag: <10ms (instant)
+- User experience: "Feels native, like single-player"
+- Misprediction corrections: <0.5% of inputs (barely noticeable)
+- Playability: Excellent, competitive-grade
+
+---
+
+## Summary
+
+**The industry solution** is exactly what you described:
+
+> "User takes action → immediately reflected on screen → only corrected if server sends diff data"
+
+This is called **Client-Side Prediction** with **Server Reconciliation**, and it's how all modern multiplayer games handle latency.
+
+**Key Components**:
+1. **Predict locally** - Apply input immediately (0ms feedback)
+2. **Send to server** - Asynchronously validate
+3. **Reconcile** - Fix rare mispredictions when server disagrees
+4. **Replay pending** - Reapply unconfirmed inputs after correction
+
+**Implementation time**: ~2-3 days
+**Result**: Indistinguishable from local play
+
+🎮 **You'll go from "this feels laggy" to "this feels amazing"** with ~500 lines of code.

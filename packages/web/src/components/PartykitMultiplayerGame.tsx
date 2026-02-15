@@ -10,6 +10,8 @@ import { ParticleEffect } from './ParticleEffect';
 import { FlashOverlay } from './FlashOverlay';
 import { AbilityNotification } from './AbilityNotification';
 import { UserButton } from '@clerk/clerk-react';
+import { DebugLogger } from '../services/debug/DebugLogger';
+import { DebugPanel } from './debug/DebugPanel';
 import {
   AbilityEffectManager,
   ABILITIES,
@@ -78,6 +80,8 @@ export function MultiplayerGame({ roomId, playerId, opponentId, theme, profile, 
   const [abilitiesUsedCount, setAbilitiesUsedCount] = useState(0);
   const [opponentProfile, setOpponentProfile] = useState<UserProfile | null>(null);
   const matchStartTimeRef = useRef<number>(Date.now());
+  const [debugLogger, setDebugLogger] = useState<DebugLogger | null>(null);
+  const [isDebugMode, setIsDebugMode] = useState(false);
 
   const { availableAbilities, setLoadout } = useAbilityStore();
 
@@ -109,10 +113,20 @@ export function MultiplayerGame({ roomId, playerId, opponentId, theme, profile, 
     setLoadout(profile.loadout);
   }, [profile.loadout, setLoadout]);
 
+  // Initialize debug mode
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const debugEnabled = params.get('debug') === 'true';
+    setIsDebugMode(debugEnabled);
+    if (debugEnabled) {
+      setDebugLogger(new DebugLogger());
+    }
+  }, []);
+
   // Initialize game sync
   useEffect(() => {
     const host = import.meta.env.VITE_PARTYKIT_HOST || 'localhost:1999';
-    const sync = new PartykitGameSync(roomId, playerId, host, aiOpponent);
+    const sync = new PartykitGameSync(roomId, playerId, host, aiOpponent, debugLogger || undefined);
     gameSyncRef.current = sync;
 
     sync.connect(
@@ -463,6 +477,13 @@ export function MultiplayerGame({ roomId, playerId, opponentId, theme, profile, 
         case 'cascade_multiplier':
           // Duration-based effects handled by AbilityEffectManager
           break;
+
+        case 'deflect_shield':
+          // Activate shield with infinite duration (until consumed)
+          effectManager.activateEffect('deflect_shield', 999999999); // Very long duration, consumed on use
+          updateActiveEffects();
+          console.log('Deflect shield activated - next debuff will be blocked');
+          break;
       }
     } else {
       // Send debuff to opponent
@@ -479,6 +500,25 @@ export function MultiplayerGame({ roomId, playerId, opponentId, theme, profile, 
     const ability = abilities.find((a: any) => a.type === abilityType);
 
     if (!ability) return;
+
+    // Check for deflect shield FIRST
+    if (effectManager.isEffectActive('deflect_shield')) {
+      // Shield blocks this debuff
+      effectManager.clearEffect('deflect_shield');
+
+      // Show "Deflected!" notification
+      setAbilityNotification({
+        name: 'Deflected: ' + (ability?.name || abilityType),
+        description: 'Your shield blocked the attack!',
+        category: 'buff',
+      });
+      setTimeout(() => setAbilityNotification(null), 3000);
+
+      audioManager.playSfx('ability_buff_activate'); // Success sound
+      haptics.medium();
+
+      return; // Don't apply the debuff
+    }
 
     // Play debuff sound (we're receiving a debuff from opponent)
     audioManager.playSfx('ability_debuff_activate');
@@ -1679,6 +1719,23 @@ export function MultiplayerGame({ roomId, playerId, opponentId, theme, profile, 
         description={abilityNotification?.description || null}
         category={abilityNotification?.category || null}
       />
+
+      {/* Debug Panel */}
+      {isDebugMode && debugLogger && (
+        <DebugPanel
+          debugLogger={debugLogger}
+          gameClient={gameSyncRef.current}
+          yourState={gameState}
+          opponentState={opponentState}
+          onAbilityTrigger={(abilityType, target) => {
+            const ability = ABILITIES[abilityType as keyof typeof ABILITIES];
+            if (!ability) return;
+
+            console.log('[DEBUG] Triggering ability:', abilityType, 'on', target);
+            handleAbilityActivate(ability);
+          }}
+        />
+      )}
     </div>
   );
 }

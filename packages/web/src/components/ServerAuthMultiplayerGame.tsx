@@ -9,6 +9,8 @@ import { ParticleEffect } from './ParticleEffect';
 import { FlashOverlay } from './FlashOverlay';
 import { AbilityNotification } from './AbilityNotification';
 import { UserButton } from '@clerk/clerk-react';
+import { DebugLogger } from '../services/debug/DebugLogger';
+import { DebugPanel } from './debug/DebugPanel';
 import {
   AbilityEffectManager,
   ABILITIES,
@@ -86,6 +88,8 @@ export function ServerAuthMultiplayerGame({
   const [abilitiesUsedCount, setAbilitiesUsedCount] = useState(0);
   const [opponentProfile, setOpponentProfile] = useState<UserProfile | null>(null);
   const matchStartTimeRef = useRef<number>(Date.now());
+  const [debugLogger, setDebugLogger] = useState<DebugLogger | null>(null);
+  const [isDebugMode, setIsDebugMode] = useState(false);
 
   const { availableAbilities, setLoadout } = useAbilityStore();
 
@@ -95,10 +99,20 @@ export function ServerAuthMultiplayerGame({
     setLoadout(profile.loadout);
   }, [profile.loadout, setLoadout]);
 
+  // Initialize debug mode
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const debugEnabled = params.get('debug') === 'true';
+    setIsDebugMode(debugEnabled);
+    if (debugEnabled) {
+      setDebugLogger(new DebugLogger());
+    }
+  }, []);
+
   // Initialize server-authoritative game client
   useEffect(() => {
     const host = import.meta.env.VITE_PARTYKIT_HOST || 'localhost:1999';
-    const client = new ServerAuthGameClient(roomId, playerId, host, profile.loadout, aiOpponent);
+    const client = new ServerAuthGameClient(roomId, playerId, host, profile.loadout, aiOpponent, debugLogger || undefined);
     gameClientRef.current = client;
 
     client.connect(
@@ -236,8 +250,8 @@ export function ServerAuthMultiplayerGame({
   const handleAbilityActivate = (ability: Ability) => {
     if (!gameClientRef.current || !yourState) return;
 
-    // Check if player has enough stars (client-side check, server validates too)
-    if (yourState.stars < ability.cost) {
+    // In debug mode, bypass star cost check
+    if (!isDebugMode && yourState.stars < ability.cost) {
       console.warn('[SERVER-AUTH] Not enough stars for ability');
       return;
     }
@@ -1213,6 +1227,28 @@ export function ServerAuthMultiplayerGame({
         description={abilityNotification?.description || null}
         category={abilityNotification?.category || null}
       />
+
+      {/* Debug Panel */}
+      {isDebugMode && debugLogger && (
+        <DebugPanel
+          debugLogger={debugLogger}
+          gameClient={gameClientRef.current}
+          yourState={yourState}
+          opponentState={opponentState}
+          onAbilityTrigger={(abilityType, target) => {
+            const ability = ABILITIES[abilityType as keyof typeof ABILITIES];
+            if (!ability) return;
+
+            if (target === 'opponent') {
+              handleAbilityActivate(ability);
+            } else {
+              // Self-targeting abilities (buffs) - trigger on own state
+              // For now, just log (server-auth doesn't support self-buffs yet)
+              console.log('[DEBUG] Self-ability trigger not implemented in server-auth mode:', abilityType);
+            }
+          }}
+        />
+      )}
     </div>
   );
 }

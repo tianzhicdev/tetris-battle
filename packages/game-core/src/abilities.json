@@ -31,7 +31,7 @@
       "shortName": "REVERSE",
       "description": "Opponent's left/right inputs are swapped",
       "cost": 35,
-      "duration": 12000,
+      "duration": 8000,
       "category": "debuff",
       "unlockLevel": 1,
       "unlockCost": 0
@@ -78,7 +78,7 @@
       "shortName": "SPEED 3X",
       "description": "Opponent's pieces fall 3x faster",
       "cost": 35,
-      "duration": 15000,
+      "duration": 10000,
       "category": "debuff",
       "unlockLevel": 2,
       "unlockCost": 100
@@ -102,7 +102,7 @@
       "shortName": "BLIND",
       "description": "Bottom 4 rows become invisible",
       "cost": 85,
-      "duration": 20000,
+      "duration": 6000,
       "category": "debuff",
       "unlockLevel": 4,
       "unlockCost": 200
@@ -137,7 +137,7 @@
       "shortName": "NO SPIN",
       "description": "Opponent cannot rotate pieces",
       "cost": 60,
-      "duration": 20000,
+      "duration": 5000,
       "category": "debuff",
       "unlockLevel": 7,
       "unlockCost": 350
@@ -149,7 +149,7 @@
       "shortName": "SHRINK",
       "description": "Playable area shortened by 4 rows from top",
       "cost": 50,
-      "duration": 15000,
+      "duration": 8000,
       "category": "debuff",
       "unlockLevel": 8,
       "unlockCost": 400
@@ -205,10 +205,33 @@
       "shortName": "2X STARS",
       "description": "Double all stars earned",
       "cost": 90,
-      "duration": 20000,
+      "duration": 15000,
       "category": "buff",
       "unlockLevel": 13,
       "unlockCost": 650
+    },
+    "deflect_shield": {
+      "id": "deflect_shield",
+      "type": "deflect_shield",
+      "name": "Deflect Shield",
+      "shortName": "SHIELD",
+      "description": "Block the next incoming debuff",
+      "cost": 35,
+      "category": "buff",
+      "unlockLevel": 1,
+      "unlockCost": 0
+    },
+    "piece_preview_plus": {
+      "id": "piece_preview_plus",
+      "type": "piece_preview_plus",
+      "name": "Piece Preview Plus",
+      "shortName": "PREVIEW+",
+      "description": "See next 5 pieces instead of 3",
+      "cost": 30,
+      "duration": 15000,
+      "category": "buff",
+      "unlockLevel": 1,
+      "unlockCost": 0
     }
   }
 }

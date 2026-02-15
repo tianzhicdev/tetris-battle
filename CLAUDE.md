@@ -12,6 +12,12 @@ Tetris Battle is a multiplayer Tetris game with friend challenges, matchmaking, 
 - Testing: Vitest
 - Package Manager: pnpm (workspaces)
 
+**Debug Mode:**
+- Accessible via URL parameter: `?debug=true`
+- Keyboard shortcut: `Ctrl+Shift+D` to toggle panel
+- Provides events log, network stats, ability triggers, and state inspector
+- Bypasses star cost for ability testing
+
 ## Architecture
 
 ### Monorepo Structure
@@ -275,11 +281,70 @@ setInterval(() => {
 
 ## Common Tasks
 
+### Ability System Overview
+
+**20 Abilities Total** (as of Spec 007):
+- **8 Buffs**: cascade_multiplier, deflect_shield, piece_preview_plus, cross_firebomb, circle_bomb, clear_rows, mini_blocks, fill_holes
+- **12 Debuffs**: speed_up_opponent, reverse_controls, rotation_lock, blind_spot, screen_shake, shrink_ceiling, random_spawner, gold_digger, earthquake, death_cross, row_rotate, weird_shapes
+
+**Key Implementations:**
+- `cascade_multiplier`: Doubles stars on line clears (gameStore.ts:242)
+- `deflect_shield`: Blocks next incoming debuff (PartykitMultiplayerGame.tsx:484)
+- `reverse_controls`: Swaps left/right inputs (client: line 803, server: ServerGameState.ts:83)
+- `rotation_lock`: Blocks rotation inputs (client: line 834, server: ServerGameState.ts:70)
+- `random_spawner`/`gold_digger`: Periodic triggers every 2s (PartykitMultiplayerGame.tsx:774, 786)
+
+**Durations** (updated Spec 007):
+- speed_up_opponent: 10s, reverse_controls: 8s, rotation_lock: 5s
+- blind_spot: 6s, shrink_ceiling: 8s, cascade_multiplier: 15s
+
 ### Adding a New Ability
-1. Define in `packages/game-core/src/abilities.json`
-2. Implement effect in `packages/game-core/src/abilityEffects.ts`
-3. Add to `ABILITIES` in `packages/game-core/src/abilities.ts`
-4. Handle in `PartykitMultiplayerGame.tsx` (client) and `game.ts` (server)
+
+1. **Define in `packages/game-core/src/abilities.json`:**
+```json
+{
+  "new_ability": {
+    "id": "new_ability",
+    "type": "new_ability",
+    "name": "Ability Name",
+    "shortName": "SHORT",
+    "description": "What it does",
+    "cost": 50,
+    "duration": 10000,
+    "category": "buff",
+    "unlockLevel": 1,
+    "unlockCost": 0
+  }
+}
+```
+
+2. **Add to type union in `packages/game-core/src/types.ts`:**
+```typescript
+export type AbilityType =
+  | 'existing_ability'
+  | 'new_ability'  // Add here
+  | ...;
+```
+
+3. **Implement effect in `packages/game-core/src/abilityEffects.ts` (if instant board effect):**
+```typescript
+export function applyNewAbility(board: Board): Board {
+  const newGrid = board.grid.map(row => [...row]);
+  // ... modify newGrid
+  return { ...board, grid: newGrid };
+}
+```
+
+4. **Handle in client `PartykitMultiplayerGame.tsx`:**
+   - For buffs: Add case in `handleAbilityActivate` (~line 396)
+   - For debuffs: Add case in `handleAbilityReceived` (~line 493)
+
+5. **Handle in server `ServerGameState.ts`** (line 203+):
+```typescript
+case 'new_ability':
+  this.gameState.board = applyNewAbility(this.gameState.board);
+  break;
+```
 
 ### Debugging Multiplayer Issues
 1. Check browser console for `[SYNC]` and `[GAME LOOP]` logs
@@ -329,3 +394,101 @@ Both architectures coexist:
 ### When to Use Each Mode?
 - **Server-Authoritative (new):** Ranked matches, tournaments, competitive play
 - **Client-Authoritative (legacy):** Casual play, friend matches, testing
+
+## Debug Panel (Spec 008)
+
+### Overview
+Development tool for testing and debugging multiplayer features. Provides visibility into server events, network performance, ability testing, and state inspection.
+
+### Activation
+- **URL Parameter:** `?debug=true`
+- **Keyboard Shortcut:** `Ctrl+Shift+D` (toggles panel on/off)
+- **Persistence:** Panel position saved to localStorage
+
+### Features
+
+**Events Log:**
+- Real-time WebSocket message log (incoming ↓ / outgoing ↑)
+- Timestamps with millisecond precision
+- Color coding by message type
+- Expandable rows to view full JSON payload
+- Filter by message type
+- Export to JSON file
+- Keyboard shortcut: `Ctrl+Shift+L` to clear
+
+**Network Stats:**
+- RTT (Round-Trip Time) measurement via ping/pong
+- Average/min/max RTT tracking
+- Connection status indicator
+- Ping test button (`Ctrl+Shift+P`)
+
+**Ability Triggers:**
+- Instant activation of any ability (bypasses star cost)
+- All 20 abilities available (not just loadout)
+- Target selector: Self / Opponent
+- Works in both server-auth and legacy modes
+
+**Game State Inspector:**
+- View your board state as JSON
+- View opponent board state as JSON
+- Copy to clipboard
+- Active effects viewer
+
+**Keyboard Shortcuts:**
+- `Ctrl+Shift+D` - Toggle debug panel
+- `Ctrl+Shift+L` - Clear events log
+- `Ctrl+Shift+P` - Run ping test
+- `Ctrl+Shift+E` - Export events to JSON
+
+### Implementation Files
+
+**Services:**
+- `packages/web/src/services/debug/DebugLogger.ts` - Event logging service
+
+**State:**
+- `packages/web/src/stores/debugStore.ts` - Zustand store for panel state
+
+**Components:**
+- `packages/web/src/components/debug/DebugPanel.tsx` - Main panel component
+- `packages/web/src/components/debug/EventsLog.tsx` - Events log section
+- `packages/web/src/components/debug/NetworkStats.tsx` - Network metrics section
+- `packages/web/src/components/debug/AbilityTriggers.tsx` - Ability buttons section
+- `packages/web/src/components/debug/GameStateInspector.tsx` - State viewer section
+
+**Integration:**
+- `packages/web/src/components/ServerAuthMultiplayerGame.tsx` - Server-auth mode integration
+- `packages/web/src/components/PartykitMultiplayerGame.tsx` - Legacy mode integration
+- `packages/web/src/services/partykit/ServerAuthGameClient.ts` - Debug logging integration
+- `packages/web/src/services/partykit/gameSync.ts` - Debug logging integration
+- `packages/partykit/src/game.ts` - Ping/pong message handler
+
+### Usage
+
+**Enable debug mode:**
+```
+http://localhost:5173/?debug=true
+http://localhost:5173/?debug=true&serverAuth=true  (server-auth mode)
+```
+
+**Testing abilities:**
+1. Open debug panel (`Ctrl+Shift+D`)
+2. Expand "Ability Triggers" section
+3. Select target (Self/Opponent)
+4. Click ability button (no star cost required)
+5. Ability activates immediately
+
+**Monitoring network:**
+1. Click "Ping Test" button
+2. View RTT, avg, min, max values
+3. Check connection status
+
+**Viewing events:**
+1. Expand "Events Log" section
+2. Click on any event to see full JSON
+3. Use filter box to search by type
+4. Click "Export" to download JSON file
+
+### Testing
+- Unit tests: `pnpm --filter web test debugLogger`
+- Unit tests: `pnpm --filter web test debugStore`
+- All debug tests passing (14 tests)

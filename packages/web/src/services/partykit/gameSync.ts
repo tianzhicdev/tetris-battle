@@ -1,5 +1,6 @@
 import PartySocket from 'partysocket';
 import type { Board } from '@tetris-battle/game-core';
+import type { DebugLogger } from '../debug/DebugLogger';
 
 export class PartykitGameSync {
   private socket: PartySocket;
@@ -8,11 +9,13 @@ export class PartykitGameSync {
   private aiOpponent?: any;
   private lastSyncTime: number = 0;
   private minSyncInterval: number = 100; // Minimum 100ms between syncs
+  private debugLogger: DebugLogger | null = null;
 
-  constructor(roomId: string, playerId: string, host: string, aiOpponent?: any) {
+  constructor(roomId: string, playerId: string, host: string, aiOpponent?: any, debugLogger?: DebugLogger) {
     this.roomId = roomId;
     this.playerId = playerId;
     this.aiOpponent = aiOpponent;
+    this.debugLogger = debugLogger || null;
 
     this.socket = new PartySocket({
       host,
@@ -34,6 +37,7 @@ export class PartykitGameSync {
 
     this.socket.addEventListener('message', (event) => {
       const data = JSON.parse(event.data);
+      this.debugLogger?.logIncoming(data);
 
       switch (data.type) {
         case 'room_state':
@@ -148,8 +152,26 @@ export class PartykitGameSync {
 
   private send(data: any): void {
     if (this.socket.readyState === WebSocket.OPEN) {
+      this.debugLogger?.logOutgoing(data);
       this.socket.send(JSON.stringify(data));
     }
+  }
+
+  /**
+   * Send ping for RTT measurement
+   */
+  sendPing(callback: (rtt: number) => void): void {
+    const timestamp = Date.now();
+    const handler = (event: MessageEvent) => {
+      const data = JSON.parse(event.data);
+      if (data.type === 'debug_pong' && data.timestamp === timestamp) {
+        const rtt = Date.now() - timestamp;
+        callback(rtt);
+        this.socket.removeEventListener('message', handler);
+      }
+    };
+    this.socket.addEventListener('message', handler);
+    this.send({ type: 'debug_ping', timestamp });
   }
 
   getDebugInfo(): { lastSyncTime: number; minSyncInterval: number } {

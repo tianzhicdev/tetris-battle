@@ -445,6 +445,9 @@ export interface ActiveAbilityEffect {
   startTime: number;
   endTime: number;
   data?: any;
+  // For periodic abilities (random_spawner, gold_digger)
+  intervalMs?: number;  // How often to trigger (e.g., 2000 for every 2 seconds)
+  lastTriggerTime?: number;  // When it last triggered
 }
 
 export function createMiniBlock(): Tetromino {
@@ -464,13 +467,15 @@ export class AbilityEffectManager {
   private activeEffects: Map<string, ActiveAbilityEffect> = new Map();
   public miniBlocksRemaining: number = 0;
 
-  activateEffect(abilityType: string, duration: number, data?: any): void {
+  activateEffect(abilityType: string, duration: number, data?: any, intervalMs?: number): void {
     const now = Date.now();
     this.activeEffects.set(abilityType, {
       abilityType,
       startTime: now,
       endTime: now + duration,
       data,
+      intervalMs,
+      lastTriggerTime: intervalMs ? now : undefined,
     });
 
     // Special handling for mini_blocks (duration is number of pieces, not time)
@@ -534,5 +539,27 @@ export class AbilityEffectManager {
 
   clearAllEffects(): void {
     this.activeEffects.clear();
+  }
+
+  shouldTriggerPeriodic(abilityType: string): boolean {
+    const effect = this.activeEffects.get(abilityType);
+    if (!effect || !effect.intervalMs) return false;
+
+    const now = Date.now();
+
+    // Check if effect is still active
+    if (now > effect.endTime) {
+      this.activeEffects.delete(abilityType);
+      return false;
+    }
+
+    // Check if enough time has passed since last trigger
+    const timeSinceLastTrigger = now - (effect.lastTriggerTime || effect.startTime);
+    if (timeSinceLastTrigger >= effect.intervalMs) {
+      effect.lastTriggerTime = now;
+      return true;
+    }
+
+    return false;
   }
 }
