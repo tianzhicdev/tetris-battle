@@ -7,6 +7,7 @@ import { Notification } from './components/Notification';
 import { audioManager } from './services/audioManager';
 import { ChallengeWaiting } from './components/ChallengeWaiting';
 import { AuthWrapper } from './components/AuthWrapper';
+import { AbilityEffectsDemo } from './components/AbilityEffectsDemo';
 import { DEFAULT_THEME } from './themes';
 import { progressionService } from './lib/supabase';
 import { friendService } from './services/friendService';
@@ -307,6 +308,14 @@ function GameApp({ profile: initialProfile }: { profile: UserProfile }) {
 }
 
 function App() {
+  // Check if demo mode is enabled via URL parameter
+  const params = new URLSearchParams(window.location.search);
+  const isDemo = params.get('demo') === 'abilities';
+
+  if (isDemo) {
+    return <AbilityEffectsDemo />;
+  }
+
   return (
     <AuthWrapper>
       {(profile) => <GameApp profile={profile} />}
