@@ -5,7 +5,8 @@
   "main": "./src/server.ts",
   "scripts": {
     "dev": "partykit dev",
-    "deploy": "partykit deploy"
+    "deploy": "partykit deploy",
+    "test": "vitest run"
   },
   "dependencies": {
     "@tetris-battle/game-core": "workspace:*",
@@ -13,6 +14,7 @@
   },
   "devDependencies": {
     "@types/node": "^20.10.0",
-    "typescript": "^5.3.3"
+    "typescript": "^5.3.3",
+    "vitest": "^4.0.18"
   }
 }

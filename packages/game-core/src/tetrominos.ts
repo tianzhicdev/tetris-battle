@@ -1,4 +1,5 @@
 import type { TetrominoType } from './types';
+import { SeededRandom } from './SeededRandom';
 
 // Tetromino shapes with rotation states (SRS - Super Rotation System)
 export const TETROMINO_SHAPES: Record<TetrominoType, number[][][]> = {
@@ -60,6 +61,14 @@ export const TETROMINO_TYPES: TetrominoType[] = ['I', 'O', 'T', 'S', 'Z', 'L', '
 
 export function getRandomTetromino(): TetrominoType {
   return TETROMINO_TYPES[Math.floor(Math.random() * TETROMINO_TYPES.length)];
+}
+
+/**
+ * Get a random tetromino type using a seeded RNG
+ * This ensures deterministic piece generation for server-authoritative mode
+ */
+export function getRandomTetrominoSeeded(rng: SeededRandom): TetrominoType {
+  return TETROMINO_TYPES[rng.nextInt(TETROMINO_TYPES.length)];
 }
 
 export function createTetromino(type: TetrominoType, boardWidth: number): import('./types').Tetromino {

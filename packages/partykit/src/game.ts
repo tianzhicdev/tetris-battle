@@ -18,6 +18,11 @@ import {
   applyRowRotate,
   applyDeathCross,
   applyGoldDigger,
+  applyAddJunkRows,
+  applyScrambleBoard,
+  applyGravityFlip,
+  applyCrossBomb,
+  applyCircleBomb,
   calculateStars,
   STAR_VALUES,
   type AIPersona,
@@ -26,7 +31,9 @@ import {
   type Board,
   type AIMove,
   type PlayerMetrics,
+  type PlayerInputType,
 } from '@tetris-battle/game-core';
+import { ServerGameState } from './ServerGameState';
 
 interface GameState {
   board: any;
@@ -63,10 +70,20 @@ export default class GameRoomServer implements Party.Server {
   aiFreezeTimeout: ReturnType<typeof setTimeout> | null = null;
   aiLastClearTime: number = 0;
 
+  // Server-authoritative mode
+  serverGameStates: Map<string, ServerGameState> = new Map();
+  gameLoops: Map<string, ReturnType<typeof setTimeout>> = new Map();
+  lastBroadcastTime: number = 0;
+  broadcastThrottle: number = 16; // 60fps = 16ms
+  roomSeed: number = 0; // Deterministic seed for this room
+
   // Debug: Track message frequency
   messageCounters: Map<string, { count: number; lastReset: number }> = new Map();
 
-  constructor(readonly room: Party.Room) {}
+  constructor(readonly room: Party.Room) {
+    // Generate deterministic seed from room ID
+    this.roomSeed = parseInt(room.id.substring(0, 8), 36) || 12345;
+  }
 
   private trackMessage(playerId: string, messageType: string): void {
     const now = Date.now();
@@ -105,7 +122,10 @@ export default class GameRoomServer implements Party.Server {
 
     switch (data.type) {
       case 'join_game':
-        this.handleJoinGame(data.playerId, sender, data.aiOpponent);
+        this.handleJoinGame(data.playerId, sender, data.loadout, data.aiOpponent);
+        break;
+      case 'player_input':
+        this.handlePlayerInput(data.playerId, data.input);
         break;
       case 'game_state_update':
         this.handleGameStateUpdate(data.playerId, data.state, sender);
@@ -122,26 +142,34 @@ export default class GameRoomServer implements Party.Server {
     }
   }
 
-  handleJoinGame(playerId: string, conn: Party.Connection, aiOpponent?: AIPersona) {
+  handleJoinGame(playerId: string, conn: Party.Connection, loadout?: string[], aiOpponent?: AIPersona) {
+    // Create player entry
     this.players.set(playerId, {
       playerId,
       connectionId: conn.id,
-      gameState: null,
+      gameState: null, // Not used in server-authoritative mode
       metrics: createInitialPlayerMetrics(),
       lastPieceLockTime: Date.now(),
     });
 
-    // If AI opponent provided, set it up
+    // Initialize server-side game state for this player
+    const playerLoadout: string[] = loadout || [];
+    const serverState = new ServerGameState(playerId, this.roomSeed, playerLoadout);
+    this.serverGameStates.set(playerId, serverState);
+
+    console.log(`[GAME] Player ${playerId} joined with server-side state`);
+
+    // If AI opponent provided, set it up (keep existing AI logic)
     if (aiOpponent) {
       this.aiPlayer = aiOpponent;
       this.players.set(aiOpponent.id, {
         playerId: aiOpponent.id,
-        connectionId: 'ai', // Fake connection ID for AI
+        connectionId: 'ai',
         gameState: null,
         metrics: createInitialPlayerMetrics(),
         lastPieceLockTime: Date.now(),
       });
-      console.log(`AI opponent ${aiOpponent.id} (rank: ${aiOpponent.rank}) added to game`);
+      console.log(`AI opponent ${aiOpponent.id} added to game`);
     }
 
     console.log(`Player ${playerId} joined. Total players: ${this.players.size}`);
@@ -150,11 +178,12 @@ export default class GameRoomServer implements Party.Server {
     if (this.players.size === 2 && this.roomStatus === 'waiting') {
       this.roomStatus = 'playing';
 
-      console.log(`[GAME] Starting game with players:`, {
+      console.log(`[GAME] Starting server-authoritative game`, {
         player1: Array.from(this.players.keys())[0],
         player2: Array.from(this.players.keys())[1],
         hasAI: !!this.aiPlayer,
         roomId: this.room.id,
+        seed: this.roomSeed,
       });
 
       this.broadcast({
@@ -162,10 +191,18 @@ export default class GameRoomServer implements Party.Server {
         players: Array.from(this.players.keys()),
       });
 
+      // Start game loops for all non-AI players
+      for (const [pid] of this.serverGameStates) {
+        this.startGameLoop(pid);
+      }
+
       // Start AI game loop if this is an AI match
       if (this.aiPlayer) {
         this.startAIGameLoop();
       }
+
+      // Initial state broadcast
+      this.broadcastState();
     }
 
     // Send opponent info if available
@@ -177,6 +214,116 @@ export default class GameRoomServer implements Party.Server {
         opponentState: opponent.gameState,
       }));
     }
+  }
+
+  private handlePlayerInput(playerId: string, input: PlayerInputType): void {
+    const serverState = this.serverGameStates.get(playerId);
+    if (!serverState) {
+      console.warn(`[INPUT] No server state for player ${playerId}`);
+      return;
+    }
+
+    const stateChanged = serverState.processInput(input);
+    if (stateChanged) {
+      this.broadcastState();
+    }
+  }
+
+  private startGameLoop(playerId: string): void {
+    const serverState = this.serverGameStates.get(playerId);
+    if (!serverState) return;
+
+    const loop = () => {
+      // Tick the game
+      const stateChanged = serverState.tick();
+
+      if (stateChanged) {
+        // Check for game over
+        if (serverState.gameState.isGameOver) {
+          this.handleGameOver(playerId);
+          this.stopGameLoop(playerId);
+          return;
+        }
+
+        this.broadcastState();
+      }
+
+      // Schedule next tick (using current tick rate)
+      this.gameLoops.set(playerId, setTimeout(loop, serverState.tickRate));
+    };
+
+    // Start the loop
+    console.log(`[GAME LOOP] Starting for player ${playerId}`);
+    this.gameLoops.set(playerId, setTimeout(loop, serverState.tickRate));
+  }
+
+  private stopGameLoop(playerId: string): void {
+    const loop = this.gameLoops.get(playerId);
+    if (loop) {
+      clearTimeout(loop);
+      this.gameLoops.delete(playerId);
+      console.log(`[GAME LOOP] Stopped for player ${playerId}`);
+    }
+  }
+
+  private broadcastState(): void {
+    // Throttle to 60fps
+    const now = Date.now();
+    if (now - this.lastBroadcastTime < this.broadcastThrottle) {
+      return;
+    }
+    this.lastBroadcastTime = now;
+
+    // Get all player states
+    const playerStates: Record<string, any> = {};
+    for (const [playerId, serverState] of this.serverGameStates) {
+      playerStates[playerId] = serverState.getPublicState();
+    }
+
+    // Include AI state if present
+    if (this.aiPlayer && this.aiGameState) {
+      playerStates[this.aiPlayer.id] = {
+        board: this.aiGameState.board.grid,
+        currentPiece: this.aiGameState.currentPiece,
+        score: this.aiGameState.score,
+        stars: this.aiGameState.stars,
+        linesCleared: this.aiGameState.linesCleared,
+        comboCount: this.aiGameState.comboCount,
+        isGameOver: this.aiGameState.isGameOver,
+        activeEffects: [], // AI doesn't track effects
+      };
+    }
+
+    // Send to each player: their state + opponent state
+    for (const [playerId, playerState] of this.players) {
+      if (playerId === this.aiPlayer?.id) continue; // Skip AI
+
+      const conn = this.getConnection(playerState.connectionId);
+      if (!conn) continue;
+
+      // Find opponent
+      const opponentId = this.getOpponentId(playerId);
+      if (!opponentId) continue;
+
+      const yourState = playerStates[playerId];
+      const opponentState = playerStates[opponentId];
+
+      if (!yourState || !opponentState) continue;
+
+      conn.send(JSON.stringify({
+        type: 'state_update',
+        timestamp: now,
+        yourState,
+        opponentState,
+      }));
+    }
+  }
+
+  private getOpponentId(playerId: string): string | null {
+    for (const id of this.players.keys()) {
+      if (id !== playerId) return id;
+    }
+    return null;
   }
 
   startAIGameLoop() {
@@ -411,8 +558,32 @@ export default class GameRoomServer implements Party.Server {
   }
 
   handleAbilityActivation(playerId: string, abilityType: string, targetPlayerId: string) {
+    // Validate: does player have enough stars?
+    const playerState = this.serverGameStates.get(playerId);
+    if (playerState) {
+      // Server-authoritative mode: validate stars
+      const abilityCost = this.getAbilityCost(abilityType);
+
+      if (playerState.gameState.stars < abilityCost) {
+        console.warn(`[ABILITY] Player ${playerId} has insufficient stars (${playerState.gameState.stars}/${abilityCost})`);
+        return; // Reject
+      }
+
+      // Deduct stars
+      playerState.gameState.stars -= abilityCost;
+      console.log(`[ABILITY] Player ${playerId} used ${abilityType}, stars: ${playerState.gameState.stars}`);
+    }
+
     const targetPlayer = this.players.get(targetPlayerId);
     if (!targetPlayer) return;
+
+    // Apply ability to target player's server-side state
+    const targetServerState = this.serverGameStates.get(targetPlayerId);
+    if (targetServerState) {
+      targetServerState.applyAbility(abilityType);
+      this.broadcastState();
+      return;
+    }
 
     // If target is AI, apply ability to AI board directly
     if (this.aiPlayer && targetPlayerId === this.aiPlayer.id && this.aiGameState) {
@@ -420,7 +591,7 @@ export default class GameRoomServer implements Party.Server {
       return;
     }
 
-    // If target is human player, send ability_received message
+    // Legacy fallback: If target is human player in client-authoritative mode, send ability_received message
     const targetConn = this.getConnection(targetPlayer.connectionId);
     if (targetConn) {
       targetConn.send(JSON.stringify({
@@ -727,6 +898,10 @@ export default class GameRoomServer implements Party.Server {
     // Find and remove player
     for (const [playerId, player] of this.players) {
       if (player.connectionId === conn.id) {
+        // Clean up server game state
+        this.stopGameLoop(playerId);
+        this.serverGameStates.delete(playerId);
+
         this.players.delete(playerId);
         console.log(`Player ${playerId} disconnected`);
 

@@ -3,6 +3,7 @@ import { MainMenu } from './components/MainMenu';
 import { TetrisGame } from './components/TetrisGame';
 import { Matchmaking } from './components/PartykitMatchmaking';
 import { MultiplayerGame } from './components/PartykitMultiplayerGame';
+import { ServerAuthMultiplayerGame } from './components/ServerAuthMultiplayerGame';
 import { ChallengeNotification } from './components/ChallengeNotification';
 import { ChallengeWaiting } from './components/ChallengeWaiting';
 import { AuthWrapper } from './components/AuthWrapper';
@@ -28,6 +29,13 @@ function GameApp({ profile: initialProfile }: { profile: UserProfile }) {
   const [gameMatch, setGameMatch] = useState<GameMatch | null>(null);
   const [profile, setProfile] = useState<UserProfile>(initialProfile);
   const presenceRef = useRef<PartykitPresence | null>(null);
+
+  // Feature flag for server-authoritative mode
+  const [useServerAuth] = useState(() => {
+    // Check URL parameter: ?serverAuth=true
+    const params = new URLSearchParams(window.location.search);
+    return params.get('serverAuth') === 'true';
+  });
 
   const {
     loadFriends,
@@ -239,7 +247,17 @@ function GameApp({ profile: initialProfile }: { profile: UserProfile }) {
 
       {mode === 'multiplayer' && gameMatch && (() => {
         const opponentId = gameMatch.player1Id === playerId ? gameMatch.player2Id : gameMatch.player1Id;
-        return (
+        return useServerAuth ? (
+          <ServerAuthMultiplayerGame
+            roomId={gameMatch.roomId}
+            playerId={playerId}
+            opponentId={opponentId}
+            theme={currentTheme}
+            profile={profile}
+            onExit={handleExitGame}
+            aiOpponent={gameMatch.aiOpponent}
+          />
+        ) : (
           <MultiplayerGame
             roomId={gameMatch.roomId}
             playerId={playerId}
