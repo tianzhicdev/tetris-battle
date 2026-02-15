@@ -12,17 +12,48 @@ export default class MatchmakingServer implements Party.Server {
   queue: QueuedPlayer[] = [];
   aiFallbackInterval: ReturnType<typeof setInterval> | null = null;
 
+  // Configure server options to prevent hibernation
+  static options: Party.ServerOptions = {
+    hibernate: false, // Disable hibernation to keep matchmaking state
+  };
+
   constructor(readonly room: Party.Room) {
-    console.log('[MATCHMAKING] Server initialized');
+    console.log('[MATCHMAKING] Server initialized at', new Date().toISOString());
+    console.log('[MATCHMAKING] Hibernation disabled - server will persist');
+
     // Check for AI fallback every 2 seconds
     this.aiFallbackInterval = setInterval(() => {
       console.log(`[MATCHMAKING] AI fallback check - Queue size: ${this.queue.length}`);
       this.checkAIFallback();
     }, 2000);
+
+    // Schedule alarm to keep server alive and process queue
+    this.scheduleNextAlarm();
+  }
+
+  // Alarm API to prevent hibernation and process queue
+  async onAlarm() {
+    console.log(`[MATCHMAKING ALARM] Triggered at ${new Date().toISOString()} - Queue size: ${this.queue.length}`);
+
+    // Process any pending matches
+    if (this.queue.length >= 2) {
+      console.log('[MATCHMAKING ALARM] Attempting to match players');
+      this.tryMatch();
+    }
+
+    // Schedule next alarm
+    this.scheduleNextAlarm();
+  }
+
+  private scheduleNextAlarm() {
+    // Schedule alarm for 5 seconds from now
+    this.room.storage.setAlarm(Date.now() + 5000);
   }
 
   onConnect(conn: Party.Connection, ctx: Party.ConnectionContext) {
-    console.log(`Player connected: ${conn.id}`);
+    console.log(`[MATCHMAKING] Player connected: ${conn.id} at ${new Date().toISOString()}`);
+    console.log(`[MATCHMAKING] Active connections: ${[...this.room.getConnections()].length}`);
+    console.log(`[MATCHMAKING] Current queue size: ${this.queue.length}`);
   }
 
   onMessage(message: string, sender: Party.Connection) {
@@ -36,10 +67,13 @@ export default class MatchmakingServer implements Party.Server {
   }
 
   handleJoinQueue(playerId: string, rank: number | undefined, conn: Party.Connection) {
-    console.log(`[MATCHMAKING SERVER] Player ${playerId} joined with rank: ${rank}`);
+    console.log(`[MATCHMAKING JOIN] Player ${playerId} (rank: ${rank}) joining queue at ${new Date().toISOString()}`);
+    console.log(`[MATCHMAKING JOIN] Connection ID: ${conn.id}`);
+    console.log(`[MATCHMAKING JOIN] Queue before join:`, this.queue.map(p => `${p.id} (${p.connectionId})`));
 
     // Check if already in queue
     if (this.queue.find(p => p.id === playerId)) {
+      console.log(`[MATCHMAKING JOIN] Player ${playerId} already in queue - rejecting`);
       conn.send(JSON.stringify({ type: 'already_in_queue' }));
       return;
     }
@@ -52,7 +86,8 @@ export default class MatchmakingServer implements Party.Server {
       rank,
     });
 
-    console.log(`Queue size: ${this.queue.length}`);
+    console.log(`[MATCHMAKING JOIN] Player ${playerId} added to queue. New queue size: ${this.queue.length}`);
+    console.log(`[MATCHMAKING JOIN] Queue after join:`, this.queue.map(p => `${p.id} (${p.connectionId})`));
 
     // Send queue position
     conn.send(JSON.stringify({
@@ -60,7 +95,8 @@ export default class MatchmakingServer implements Party.Server {
       position: this.queue.length,
     }));
 
-    // Try to match
+    // Try to match immediately
+    console.log(`[MATCHMAKING JOIN] Calling tryMatch() with queue size ${this.queue.length}`);
     this.tryMatch();
   }
 
@@ -168,7 +204,16 @@ export default class MatchmakingServer implements Party.Server {
   }
 
   onClose(conn: Party.Connection) {
+    console.log(`[MATCHMAKING CLOSE] Connection closed: ${conn.id} at ${new Date().toISOString()}`);
+    const removedPlayer = this.queue.find(p => p.connectionId === conn.id);
+    if (removedPlayer) {
+      console.log(`[MATCHMAKING CLOSE] Removing player ${removedPlayer.id} from queue`);
+    }
+
     // Remove from queue if disconnected
     this.queue = this.queue.filter(p => p.connectionId !== conn.id);
+
+    console.log(`[MATCHMAKING CLOSE] Queue size after removal: ${this.queue.length}`);
+    console.log(`[MATCHMAKING CLOSE] Remaining active connections: ${[...this.room.getConnections()].length}`);
   }
 }
