@@ -1,89 +1,72 @@
 import { progressionService } from './supabase';
-import { COIN_VALUES, XP_VALUES, calculateLevel } from '@tetris-battle/game-core';
+import { COIN_VALUES, ABILITIES } from '@tetris-battle/game-core';
 
 export interface MatchRewards {
   coins: number;
-  xp: number;
-  newLevel: number;
-  leveledUp: boolean;
+  newCoins: number;
   breakdown: {
     baseCoins: number;
-    performanceBonus: number;
-    streakBonus: number;
     firstWinBonus: number;
-    baseXp: number;
-    winBonus: number;
+    streakBonus: number;
+  };
+  nextUnlock?: {
+    abilityId: string;
+    abilityName: string;
+    coinsNeeded: number;
   };
 }
 
 export async function awardMatchRewards(
   userId: string,
-  outcome: 'win' | 'loss' | 'draw',
-  linesCleared: number,
-  abilitiesUsed: number,
+  outcome: 'win' | 'loss',
+  opponentType: 'human' | 'ai_easy' | 'ai_medium' | 'ai_hard',
   matchDuration: number,
-  opponentId: string,
-  isAiMatch: boolean = false
+  opponentId: string
 ): Promise<MatchRewards | null> {
   try {
     const profile = await progressionService.getUserProfile(userId);
     if (!profile) return null;
 
-    const oldLevel = profile.level;
+    // Calculate base coins based on opponent type
+    let baseCoins = 0;
 
-    // Calculate base coins
-    let baseCoins = COIN_VALUES[outcome];
-    let performanceBonus = 0;
-    let streakBonus = 0;
-    let firstWinBonus = 0;
-
-    // Add performance bonuses
-    if (linesCleared >= 40) {
-      performanceBonus += COIN_VALUES.lines40Plus;
-    } else if (linesCleared >= 20) {
-      performanceBonus += COIN_VALUES.lines20Plus;
-    }
-
-    if (abilitiesUsed >= 5) {
-      performanceBonus += COIN_VALUES.abilities5Plus;
-    } else if (abilitiesUsed === 0 && outcome === 'win') {
-      performanceBonus += COIN_VALUES.noAbilityWin;
-    }
-
-    // Check win streak (only for wins)
     if (outcome === 'win') {
-      const streak = await progressionService.getWinStreak(userId);
-      if (streak >= 10) {
-        streakBonus = COIN_VALUES.streak10;
-      } else if (streak >= 5) {
-        streakBonus = COIN_VALUES.streak5;
-      } else if (streak >= 3) {
-        streakBonus = COIN_VALUES.streak3;
+      if (opponentType === 'human') {
+        baseCoins = COIN_VALUES.humanWin;
+      } else if (opponentType === 'ai_easy') {
+        baseCoins = COIN_VALUES.aiEasyWin;
+      } else if (opponentType === 'ai_medium') {
+        baseCoins = COIN_VALUES.aiMediumWin;
+      } else if (opponentType === 'ai_hard') {
+        baseCoins = COIN_VALUES.aiHardWin;
       }
+    } else {
+      // Loss
+      if (opponentType === 'human') {
+        baseCoins = COIN_VALUES.humanLoss;
+      } else {
+        baseCoins = COIN_VALUES.aiLoss;
+      }
+    }
 
-      // Check first win of day
+    let firstWinBonus = 0;
+    let streakBonus = 0;
+
+    // Check first win of day (only for wins)
+    if (outcome === 'win') {
       const todayStats = await progressionService.getTodayStats(userId);
       if (todayStats.wins === 0) {
         firstWinBonus = COIN_VALUES.firstWinOfDay;
       }
+
+      // Check 5-game streak
+      const streak = await progressionService.getWinStreak(userId);
+      if (streak > 0 && streak % 5 === 0) {
+        streakBonus = COIN_VALUES.streak5;
+      }
     }
 
-    let totalCoins = baseCoins + performanceBonus + streakBonus + firstWinBonus;
-
-    // Calculate XP
-    let baseXp = XP_VALUES.matchComplete;
-    let winBonus = 0;
-    if (outcome === 'win') {
-      winBonus = XP_VALUES.matchWin;
-    }
-
-    let totalXp = baseXp + winBonus;
-
-    // Apply AI match penalty (50% rewards for bot matches)
-    if (isAiMatch) {
-      totalCoins = Math.floor(totalCoins * 0.5);
-      totalXp = Math.floor(totalXp * 0.5);
-    }
+    const totalCoins = baseCoins + firstWinBonus + streakBonus;
 
     // Save match result
     await progressionService.saveMatchResult({
@@ -91,42 +74,45 @@ export async function awardMatchRewards(
       userId,
       opponentId,
       outcome,
-      linesCleared,
-      abilitiesUsed,
+      linesCleared: 0,  // No longer tracked for rewards
+      abilitiesUsed: 0, // No longer tracked for rewards
       coinsEarned: totalCoins,
-      xpEarned: totalXp,
-      rankChange: 0, // Always 0 in this function (AI and human matches). Rank calculated in separate ELO system
-      rankAfter: profile.rank,
-      opponentRank: 1000, // Default, not used in legacy function
+      rankChange: 0,
+      rankAfter: profile.matchmakingRating,
+      opponentRank: 1000,
       duration: matchDuration,
       timestamp: Date.now(),
     });
 
     // Update user profile
-    const newCoins = Math.min(profile.coins + totalCoins, 999999); // Max coins cap
-    const newXp = profile.xp + totalXp;
-    const newLevel = calculateLevel(newXp);
-    const leveledUp = newLevel > oldLevel;
+    const newCoins = Math.min(profile.coins + totalCoins, 999999);
+    const newGamesWon = outcome === 'win' ? profile.gamesWon + 1 : profile.gamesWon;
 
     await progressionService.updateUserProfile(userId, {
       coins: newCoins,
-      xp: newXp,
-      level: newLevel,
+      gamesWon: newGamesWon,
     });
+
+    // Find next unlock suggestion
+    const availableAbilities = Object.values(ABILITIES)
+      .filter(a => !profile.unlockedAbilities.includes(a.id))
+      .sort((a, b) => a.unlockCost - b.unlockCost);
+
+    const nextUnlock = availableAbilities.length > 0 ? {
+      abilityId: availableAbilities[0].id,
+      abilityName: availableAbilities[0].name,
+      coinsNeeded: Math.max(0, availableAbilities[0].unlockCost - newCoins),
+    } : undefined;
 
     return {
       coins: totalCoins,
-      xp: totalXp,
-      newLevel,
-      leveledUp,
+      newCoins,
       breakdown: {
         baseCoins,
-        performanceBonus,
-        streakBonus,
         firstWinBonus,
-        baseXp,
-        winBonus,
+        streakBonus,
       },
+      nextUnlock,
     };
   } catch (error) {
     console.error('Error awarding match rewards:', error);

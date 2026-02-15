@@ -138,14 +138,13 @@ export class ProgressionService {
     const profile: UserProfile = {
       userId,
       username,
-      level: 1,
-      xp: 0,
       coins: 0,
-      rank: 1000,
+      matchmakingRating: 1000,
       gamesPlayed: 0,
+      gamesWon: 0,
       lastActiveAt: now,
       unlockedAbilities: starterAbilities,
-      loadout: starterAbilities, // All 6 starter abilities in loadout by default
+      loadout: starterAbilities, // All 4 starter abilities in loadout by default
       createdAt: now,
       updatedAt: now,
     };

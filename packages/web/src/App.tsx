@@ -170,8 +170,8 @@ function GameApp({ profile: initialProfile }: { profile: UserProfile }) {
       challengeId,
       friendUserId,
       profile.username,
-      profile.rank,
-      profile.level
+      profile.matchmakingRating,
+      0 // level no longer exists
     );
 
     // Set outgoing challenge in store
@@ -231,7 +231,7 @@ function GameApp({ profile: initialProfile }: { profile: UserProfile }) {
       {mode === 'matchmaking' && (
         <Matchmaking
           playerId={playerId}
-          rank={profile.rank}
+          rank={profile.matchmakingRating}
           onMatchFound={handleMatchFound}
           onCancel={handleCancelMatchmaking}
           theme={currentTheme}

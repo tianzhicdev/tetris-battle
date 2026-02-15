@@ -2,13 +2,12 @@ import { useState, useEffect } from 'react';
 import type { MatchRewards } from '../lib/rewards';
 
 interface PostMatchScreenProps {
-  outcome: 'win' | 'loss' | 'draw';
+  outcome: 'win' | 'loss';
   rewards: MatchRewards;
   onContinue: () => void;
-  isAiMatch?: boolean;
 }
 
-export function PostMatchScreen({ outcome, rewards, onContinue, isAiMatch = false }: PostMatchScreenProps) {
+export function PostMatchScreen({ outcome, rewards, onContinue }: PostMatchScreenProps) {
   const [showRewards, setShowRewards] = useState(false);
 
   useEffect(() => {
@@ -17,8 +16,8 @@ export function PostMatchScreen({ outcome, rewards, onContinue, isAiMatch = fals
     return () => clearTimeout(timer);
   }, []);
 
-  const outcomeColor = outcome === 'win' ? '#00ff00' : outcome === 'loss' ? '#ff0000' : '#ffff00';
-  const outcomeText = outcome === 'win' ? 'VICTORY' : outcome === 'loss' ? 'DEFEAT' : 'DRAW';
+  const outcomeColor = outcome === 'win' ? '#00ff00' : '#ff0000';
+  const outcomeText = outcome === 'win' ? 'VICTORY' : 'DEFEAT';
 
   return (
     <div style={{
@@ -53,26 +52,6 @@ export function PostMatchScreen({ outcome, rewards, onContinue, isAiMatch = fals
           {outcomeText}
         </h1>
 
-        {/* Level Up Banner */}
-        {rewards.leveledUp && (
-          <div style={{
-            background: 'linear-gradient(90deg, #ff00ff, #00ffff)',
-            padding: '15px',
-            borderRadius: '8px',
-            marginBottom: '30px',
-            textAlign: 'center',
-            animation: 'pulse 1s infinite',
-          }}>
-            <div style={{
-              fontSize: '32px',
-              fontWeight: 'bold',
-              color: '#000',
-            }}>
-              LEVEL UP! → {rewards.newLevel}
-            </div>
-          </div>
-        )}
-
         {/* Rewards Breakdown */}
         {showRewards && (
           <div style={{ marginBottom: '30px' }}>
@@ -91,7 +70,7 @@ export function PostMatchScreen({ outcome, rewards, onContinue, isAiMatch = fals
                 color: '#ffaa00',
                 marginBottom: '10px',
               }}>
-                🪙 +{rewards.coins} Coins{isAiMatch ? ' (AI Match - 50%)' : ''}
+                💰 +{rewards.coins} Coins
               </div>
 
               <div style={{
@@ -99,44 +78,45 @@ export function PostMatchScreen({ outcome, rewards, onContinue, isAiMatch = fals
                 color: '#888',
                 paddingLeft: '20px',
               }}>
-                {rewards.breakdown.baseCoins > 0 && (
-                  <div>Base reward: +{rewards.breakdown.baseCoins}</div>
-                )}
-                {rewards.breakdown.performanceBonus > 0 && (
-                  <div>Performance bonus: +{rewards.breakdown.performanceBonus}</div>
+                <div>Base reward: +{rewards.breakdown.baseCoins}</div>
+                {rewards.breakdown.firstWinBonus > 0 && (
+                  <div>First win of day: +{rewards.breakdown.firstWinBonus}</div>
                 )}
                 {rewards.breakdown.streakBonus > 0 && (
                   <div>Win streak bonus: +{rewards.breakdown.streakBonus}</div>
                 )}
-                {rewards.breakdown.firstWinBonus > 0 && (
-                  <div>First win of day: +{rewards.breakdown.firstWinBonus}</div>
-                )}
-              </div>
-            </div>
-
-            {/* XP */}
-            <div style={{ marginBottom: '20px' }}>
-              <div style={{
-                fontSize: '20px',
-                color: '#00ffff',
-                marginBottom: '10px',
-              }}>
-                ⭐ +{rewards.xp} XP{isAiMatch ? ' (AI Match - 50%)' : ''}
               </div>
 
               <div style={{
-                fontSize: '14px',
-                color: '#888',
-                paddingLeft: '20px',
+                fontSize: '18px',
+                color: '#ffd700',
+                marginTop: '15px',
+                fontWeight: 'bold',
               }}>
-                {rewards.breakdown.baseXp > 0 && (
-                  <div>Match complete: +{rewards.breakdown.baseXp}</div>
-                )}
-                {rewards.breakdown.winBonus > 0 && (
-                  <div>Victory bonus: +{rewards.breakdown.winBonus}</div>
-                )}
+                Total Balance: {rewards.newCoins} 💰
               </div>
             </div>
+
+            {/* Next Unlock */}
+            {rewards.nextUnlock && rewards.nextUnlock.coinsNeeded > 0 && (
+              <div style={{
+                background: 'rgba(0, 255, 136, 0.1)',
+                border: '1px solid rgba(0, 255, 136, 0.3)',
+                borderRadius: '8px',
+                padding: '15px',
+                marginBottom: '20px',
+              }}>
+                <div style={{ fontSize: '14px', color: '#aaa', marginBottom: '5px' }}>
+                  NEXT UNLOCK
+                </div>
+                <div style={{ fontSize: '18px', color: '#00ff88', fontWeight: 'bold' }}>
+                  {rewards.nextUnlock.abilityName}
+                </div>
+                <div style={{ fontSize: '14px', color: '#888', marginTop: '5px' }}>
+                  {rewards.nextUnlock.coinsNeeded} more coins needed
+                </div>
+              </div>
+            )}
           </div>
         )}
 
@@ -148,7 +128,7 @@ export function PostMatchScreen({ outcome, rewards, onContinue, isAiMatch = fals
             padding: '15px',
             fontSize: '20px',
             background: outcomeColor,
-            color: outcome === 'draw' ? '#000' : '#000',
+            color: '#000',
             border: 'none',
             borderRadius: '8px',
             cursor: 'pointer',

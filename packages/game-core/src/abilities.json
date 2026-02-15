@@ -8,11 +8,11 @@
       "shortName": "BIG 4X4",
       "description": "Opponent's next piece is a big 4x4 hollowed shape",
       "technical_description": "Opponent's next piece is a big 4x4 hollowed shape - triangle, square or circle",
-      "cost": 80,
+      "cost": 100,
       "duration": 1,
       "category": "debuff",
-      "unlockLevel": 1,
-      "unlockCost": 0
+      "unlockLevel": 4,
+      "unlockCost": 2000
     },
     "death_cross": {
       "id": "death_cross",
@@ -20,10 +20,10 @@
       "name": "Death Cross",
       "shortName": "X DEATH",
       "description": "Diagonal lines toggle blocks: filled become empty, empty become filled",
-      "cost": 75,
+      "cost": 80,
       "category": "debuff",
-      "unlockLevel": 1,
-      "unlockCost": 0
+      "unlockLevel": 3,
+      "unlockCost": 1000
     },
     "reverse_controls": {
       "id": "reverse_controls",
@@ -31,11 +31,11 @@
       "name": "Reverse Controls",
       "shortName": "REVERSE",
       "description": "Opponent's left/right inputs are swapped",
-      "cost": 35,
+      "cost": 80,
       "duration": 8000,
       "category": "debuff",
-      "unlockLevel": 1,
-      "unlockCost": 0
+      "unlockLevel": 4,
+      "unlockCost": 2000
     },
     "screen_shake": {
       "id": "screen_shake",
@@ -43,11 +43,11 @@
       "name": "Screen Shake",
       "shortName": "SHAKE",
       "description": "Opponent's board vibrates violently. Visual chaos",
-      "cost": 25,
+      "cost": 60,
       "duration": 10000,
       "category": "debuff",
-      "unlockLevel": 1,
-      "unlockCost": 0
+      "unlockLevel": 5,
+      "unlockCost": 3500
     },
     "mini_blocks": {
       "id": "mini_blocks",
@@ -68,10 +68,10 @@
       "shortName": "X BOMB",
       "description": "Piece becomes a bomb. Clears 3 rows and 3 columns in cross pattern",
       "technical_description": "Piece becomes a bomb. Clears 3 rows and 3 columns in cross pattern, cells not on those rows and columns are not affected",
-      "cost": 45,
+      "cost": 100,
       "category": "buff",
-      "unlockLevel": 1,
-      "unlockCost": 0
+      "unlockLevel": 2,
+      "unlockCost": 500
     },
     "speed_up_opponent": {
       "id": "speed_up_opponent",
@@ -79,11 +79,11 @@
       "name": "Speed Up",
       "shortName": "SPEED 3X",
       "description": "Opponent's pieces fall 3x faster",
-      "cost": 35,
+      "cost": 70,
       "duration": 10000,
       "category": "debuff",
-      "unlockLevel": 2,
-      "unlockCost": 100
+      "unlockLevel": 4,
+      "unlockCost": 2000
     },
     "random_spawner": {
       "id": "random_spawner",
@@ -92,11 +92,11 @@
       "shortName": "SPAWN",
       "description": "Random garbage blocks appear every 2 seconds",
       "technical_description": "every 2 secs one random empty cell becomes filled",
-      "cost": 50,
+      "cost": 60,
       "duration": 20000,
       "category": "debuff",
-      "unlockLevel": 3,
-      "unlockCost": 150
+      "unlockLevel": 2,
+      "unlockCost": 500
     },
     "blind_spot": {
       "id": "blind_spot",
@@ -104,11 +104,11 @@
       "name": "Blind Spot",
       "shortName": "BLIND",
       "description": "Bottom 4 rows become invisible",
-      "cost": 85,
+      "cost": 100,
       "duration": 6000,
       "category": "debuff",
-      "unlockLevel": 4,
-      "unlockCost": 200
+      "unlockLevel": 5,
+      "unlockCost": 3500
     },
     "gold_digger": {
       "id": "gold_digger",
@@ -117,11 +117,11 @@
       "shortName": "DIG",
       "description": "Random blocks disappear every 2 seconds",
       "technical_description": "every 2 secs one random filled cell becomes empty",
-      "cost": 55,
+      "cost": 90,
       "duration": 20000,
       "category": "debuff",
-      "unlockLevel": 5,
-      "unlockCost": 250
+      "unlockLevel": 3,
+      "unlockCost": 1000
     },
     "circle_bomb": {
       "id": "circle_bomb",
@@ -130,10 +130,10 @@
       "shortName": "O BOMB",
       "description": "Piece becomes a bomb. Clears all blocks within radius of 3 cells",
       "technical_description": "Piece becomes a bomb. Clears all blocks within radius of 3 cells. cells not within 3 cells are not affected",
-      "cost": 50,
+      "cost": 75,
       "category": "buff",
-      "unlockLevel": 6,
-      "unlockCost": 300
+      "unlockLevel": 2,
+      "unlockCost": 500
     },
     "rotation_lock": {
       "id": "rotation_lock",
@@ -141,11 +141,11 @@
       "name": "Rotation Lock",
       "shortName": "NO SPIN",
       "description": "Opponent cannot rotate pieces",
-      "cost": 60,
+      "cost": 90,
       "duration": 5000,
       "category": "debuff",
-      "unlockLevel": 7,
-      "unlockCost": 350
+      "unlockLevel": 5,
+      "unlockCost": 3500
     },
     "shrink_ceiling": {
       "id": "shrink_ceiling",
@@ -153,11 +153,11 @@
       "name": "Shrink Ceiling",
       "shortName": "SHRINK",
       "description": "Playable area shortened by 4 rows from top",
-      "cost": 50,
+      "cost": 120,
       "duration": 8000,
       "category": "debuff",
-      "unlockLevel": 8,
-      "unlockCost": 400
+      "unlockLevel": 5,
+      "unlockCost": 3500
     },
     "fill_holes": {
       "id": "fill_holes",
@@ -165,10 +165,10 @@
       "name": "Fill Holes",
       "shortName": "FILL",
       "description": "Fill all empty spaces surrounded by blocks",
-      "cost": 70,
+      "cost": 100,
       "category": "buff",
-      "unlockLevel": 9,
-      "unlockCost": 450
+      "unlockLevel": 1,
+      "unlockCost": 0
     },
     "row_rotate": {
       "id": "row_rotate",
@@ -176,9 +176,9 @@
       "name": "Row Rotate",
       "shortName": "ROTATE",
       "description": "Each row randomly rotates 1-8 positions left or right",
-      "cost": 60,
+      "cost": 70,
       "category": "debuff",
-      "unlockLevel": 10,
+      "unlockLevel": 2,
       "unlockCost": 500
     },
     "clear_rows": {
@@ -187,10 +187,10 @@
       "name": "Clear 5 Rows",
       "shortName": "CLEAR 5",
       "description": "Instantly clear 5 rows from the bottom",
-      "cost": 60,
+      "cost": 100,
       "category": "buff",
-      "unlockLevel": 11,
-      "unlockCost": 550
+      "unlockLevel": 1,
+      "unlockCost": 0
     },
     "earthquake": {
       "id": "earthquake",
@@ -198,10 +198,10 @@
       "name": "Earthquake",
       "shortName": "QUAKE",
       "description": "Every row randomly shifts 1-2 cells, creating gaps",
-      "cost": 65,
+      "cost": 50,
       "category": "debuff",
-      "unlockLevel": 12,
-      "unlockCost": 600
+      "unlockLevel": 1,
+      "unlockCost": 0
     },
     "cascade_multiplier": {
       "id": "cascade_multiplier",
@@ -209,11 +209,11 @@
       "name": "Cascade Multiplier",
       "shortName": "2X STARS",
       "description": "Double all stars earned",
-      "cost": 90,
+      "cost": 75,
       "duration": 15000,
       "category": "buff",
-      "unlockLevel": 13,
-      "unlockCost": 650
+      "unlockLevel": 3,
+      "unlockCost": 1000
     }
   }
 }

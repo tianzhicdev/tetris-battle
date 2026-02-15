@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { ABILITIES } from '@tetris-battle/game-core';
-import { ABILITY_UNLOCKS, canUnlockAbility } from '@tetris-battle/game-core';
+import { ABILITY_UNLOCKS } from '@tetris-battle/game-core';
 import type { UserProfile } from '@tetris-battle/game-core';
 import { progressionService } from '../lib/supabase';
 
@@ -14,12 +14,12 @@ export function AbilityShop({ profile, onClose, onProfileUpdate }: AbilityShopPr
   const [selectedAbility, setSelectedAbility] = useState<string | null>(null);
   const [unlocking, setUnlocking] = useState(false);
 
-  const stages = [
-    { name: 'Rookie', levels: '1-5', minLevel: 1 },
-    { name: 'Contender', levels: '6-10', minLevel: 6 },
-    { name: 'Challenger', levels: '11-15', minLevel: 11 },
-    { name: 'Veteran', levels: '16-20', minLevel: 16 },
-    { name: 'Master', levels: '21-25', minLevel: 21 },
+  const tiers = [
+    { name: 'Starter', tier: 1, cost: 0, description: 'Free for all players' },
+    { name: 'Bronze', tier: 2, cost: 500, description: '500 coins each' },
+    { name: 'Silver', tier: 3, cost: 1000, description: '1,000 coins each' },
+    { name: 'Gold', tier: 4, cost: 2000, description: '2,000 coins each' },
+    { name: 'Platinum', tier: 5, cost: 3500, description: '3,500 coins each' },
   ];
 
   const handleUnlock = async (abilityId: string, cost: number) => {
@@ -124,25 +124,23 @@ export function AbilityShop({ profile, onClose, onProfileUpdate }: AbilityShopPr
           overflowY: 'auto',
           padding: 'clamp(15px, 4vw, 20px)',
         }}>
-          {stages.map(stage => {
-            const stageAbilities = ABILITY_UNLOCKS.filter(
-              unlock => unlock.level >= stage.minLevel && unlock.level < (stage.minLevel + 5)
+          {tiers.map(tier => {
+            const tierAbilities = ABILITY_UNLOCKS.filter(
+              unlock => unlock.level === tier.tier
             );
 
-            if (stageAbilities.length === 0) return null;
-
-            const isLocked = profile.level < stage.minLevel;
+            if (tierAbilities.length === 0) return null;
 
             return (
-              <div key={stage.name} style={{ marginBottom: 'clamp(20px, 5vw, 30px)' }}>
+              <div key={tier.name} style={{ marginBottom: 'clamp(20px, 5vw, 30px)' }}>
                 <h3 style={{
-                  color: isLocked ? '#666' : '#00d4ff',
+                  color: '#00d4ff',
                   marginBottom: 'clamp(10px, 2.5vw, 15px)',
                   fontSize: 'clamp(16px, 4vw, 20px)',
                   fontWeight: '700',
-                  textShadow: isLocked ? 'none' : '0 0 10px rgba(0, 212, 255, 0.5)',
+                  textShadow: '0 0 10px rgba(0, 212, 255, 0.5)',
                 }}>
-                  {stage.name} (Levels {stage.levels}) {isLocked && '🔒'}
+                  {tier.name} ({tier.description})
                 </h3>
 
                 <div style={{
@@ -150,12 +148,13 @@ export function AbilityShop({ profile, onClose, onProfileUpdate }: AbilityShopPr
                   gridTemplateColumns: 'repeat(auto-fill, minmax(min(250px, 100%), 1fr))',
                   gap: 'clamp(10px, 2.5vw, 12px)',
                 }}>
-                  {stageAbilities.map(unlock => {
+                  {tierAbilities.map(unlock => {
                     const ability = Object.values(ABILITIES).find((a: any) => a.type === unlock.abilityId);
                     if (!ability) return null;
 
                     const isUnlocked = profile.unlockedAbilities.includes(unlock.abilityId);
-                    const canUnlock = canUnlockAbility(unlock.abilityId, profile.level, profile.coins, profile.unlockedAbilities);
+                    const canAfford = profile.coins >= unlock.cost;
+                    const canUnlock = !isUnlocked && canAfford;
                     const inLoadout = profile.loadout.includes(unlock.abilityId);
 
                     return (
@@ -171,7 +170,7 @@ export function AbilityShop({ profile, onClose, onProfileUpdate }: AbilityShopPr
                           borderRadius: 'clamp(6px, 1.5vw, 8px)',
                           padding: 'clamp(10px, 2.5vw, 12px)',
                           cursor: 'pointer',
-                          opacity: isLocked ? 0.5 : 1,
+                          opacity: 1,
                           boxShadow: selectedAbility === unlock.abilityId
                             ? '0 4px 20px rgba(0, 255, 136, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.1)'
                             : '0 2px 10px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.05)',
@@ -270,7 +269,7 @@ export function AbilityShop({ profile, onClose, onProfileUpdate }: AbilityShopPr
                             </button>
                           )}
 
-                          {!isUnlocked && !canUnlock && profile.level >= unlock.level && (
+                          {!isUnlocked && !canUnlock && (
                             <div style={{
                               color: '#ff6e6e',
                               fontSize: 'clamp(10px, 2.5vw, 11px)',
@@ -280,7 +279,7 @@ export function AbilityShop({ profile, onClose, onProfileUpdate }: AbilityShopPr
                             </div>
                           )}
 
-                          {!isUnlocked && profile.level < unlock.level && (
+                          {!isUnlocked && false && (
                             <div style={{
                               color: '#888',
                               fontSize: 'clamp(10px, 2.5vw, 11px)',

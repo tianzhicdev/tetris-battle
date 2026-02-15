@@ -19,15 +19,9 @@ import { useDebugStore } from '../stores/debugStore';
 import {
   AbilityEffectManager,
   ABILITIES,
-  COIN_VALUES,
-  XP_VALUES,
-  calculateLevel,
-  getAvailableAbilities,
-  calculateRankChange,
-  isInPlacement,
 } from '@tetris-battle/game-core';
-import type { Ability, UserProfile, MatchResult } from '@tetris-battle/game-core';
-import { progressionService } from '../lib/supabase';
+import type { Ability, UserProfile } from '@tetris-battle/game-core';
+import { awardMatchRewards, type MatchRewards } from '../lib/rewards';
 import type { Theme } from '../themes';
 import { audioManager } from '../services/audioManager';
 import { normalizePartykitHost } from '../services/partykit/host';
@@ -174,18 +168,7 @@ export function ServerAuthMultiplayerGame({
   const [selfBoardFx, setSelfBoardFx] = useState<BoardFxState | null>(null);
   const [opponentBoardFx, setOpponentBoardFx] = useState<BoardFxState | null>(null);
   const [abilityNotification, setAbilityNotification] = useState<{ name: string; description: string; category: 'buff' | 'debuff' } | null>(null);
-  const [matchRewards, setMatchRewards] = useState<{
-    coinsEarned: number;
-    xpEarned: number;
-    rankChange: number;
-    rankAfter: number;
-    leveledUp: boolean;
-    newLevel: number;
-    newAbilities: string[];
-    isPlacement: boolean;
-  } | null>(null);
-  const [abilitiesUsedCount, setAbilitiesUsedCount] = useState(0);
-  const [opponentProfile, setOpponentProfile] = useState<UserProfile | null>(null);
+  const [matchRewards, setMatchRewards] = useState<MatchRewards | null>(null);
   const matchStartTimeRef = useRef<number>(Date.now());
   const pendingAbilityActivationsRef = useRef(new Map<string, { ability: Ability; target: 'self' | 'opponent' }>());
   const abilityResponseTimeoutsRef = useRef(new Map<string, ReturnType<typeof setTimeout>>());
@@ -421,13 +404,7 @@ export function ServerAuthMultiplayerGame({
 
   // Fetch opponent's profile for Rank calculation
   useEffect(() => {
-    const fetchOpponentProfile = async () => {
-      const profile = await progressionService.getUserProfile(opponentId);
-      if (profile) {
-        setOpponentProfile(profile);
-      }
-    };
-    fetchOpponentProfile();
+    // Opponent profile fetching removed - no longer needed
   }, [opponentId]);
 
   // Initialize renderers
@@ -699,7 +676,6 @@ export function ServerAuthMultiplayerGame({
           triggerBoardAbilityVisual(ability.type, target);
         }
       }
-      setAbilitiesUsedCount(prev => prev + 1);
       debugLoggerRef.current?.logEvent(
         'ability_used',
         `Ability accepted: ${ability?.name || result.abilityType} on ${target}`,
@@ -765,101 +741,34 @@ export function ServerAuthMultiplayerGame({
   const calculateMatchRewards = useCallback(async (isWin: boolean) => {
     if (!yourState) return;
 
-    console.log('[SERVER-AUTH REWARDS] Starting reward calculation...', { isWin, opponentProfile, profile });
-
-    let currentOpponentProfile = opponentProfile;
-    if (!currentOpponentProfile) {
-      const fetchedProfile = await progressionService.getUserProfile(opponentId);
-      if (fetchedProfile) {
-        setOpponentProfile(fetchedProfile);
-        currentOpponentProfile = fetchedProfile;
-      } else {
-        currentOpponentProfile = { rank: 1000 } as UserProfile;
-      }
-    }
+    console.log('[SERVER-AUTH REWARDS] Starting reward calculation...', { isWin, aiOpponent, profile });
 
     const outcome: 'win' | 'loss' = isWin ? 'win' : 'loss';
     const matchDuration = Math.floor((Date.now() - matchStartTimeRef.current) / 1000);
 
-    const opponentRank = currentOpponentProfile?.rank || 1000;
-    const rankChange = calculateRankChange(
-      profile.rank,
-      opponentRank,
+    // Determine opponent type
+    let opponentType: 'human' | 'ai_easy' | 'ai_medium' | 'ai_hard';
+    if (aiOpponent) {
+      // AI opponent - use difficulty from aiOpponent object
+      opponentType = aiOpponent.difficulty || 'ai_medium';
+    } else {
+      // Human opponent
+      opponentType = 'human';
+    }
+
+    // Call new reward system
+    const rewards = await awardMatchRewards(
+      profile.userId,
       outcome,
-      profile.gamesPlayed
+      opponentType,
+      matchDuration,
+      opponentId
     );
-    const rankAfter = profile.rank + rankChange;
-    const isPlacementMatch = isInPlacement(profile.gamesPlayed);
 
-    let coinsEarned = isWin ? COIN_VALUES.win : COIN_VALUES.loss;
-
-    if (yourState.linesCleared >= 40) {
-      coinsEarned += COIN_VALUES.lines40Plus;
-    } else if (yourState.linesCleared >= 20) {
-      coinsEarned += COIN_VALUES.lines20Plus;
+    if (rewards) {
+      setMatchRewards(rewards);
     }
-
-    if (abilitiesUsedCount >= 5) {
-      coinsEarned += COIN_VALUES.abilities5Plus;
-    } else if (abilitiesUsedCount === 0 && isWin) {
-      coinsEarned += COIN_VALUES.noAbilityWin;
-    }
-
-    let xpEarned = XP_VALUES.matchComplete;
-    if (isWin) {
-      xpEarned += XP_VALUES.matchWin;
-    }
-
-    const newCoins = profile.coins + coinsEarned;
-    const newXp = profile.xp + xpEarned;
-    const oldLevel = profile.level;
-    const newLevel = calculateLevel(newXp);
-    const leveledUp = newLevel > oldLevel;
-
-    const availableAbilitiesBefore = getAvailableAbilities(oldLevel);
-    const availableAbilitiesAfter = getAvailableAbilities(newLevel);
-    const newAbilities = availableAbilitiesAfter
-      .filter(unlock => !availableAbilitiesBefore.find(u => u.abilityId === unlock.abilityId))
-      .map(unlock => unlock.abilityId);
-
-    await progressionService.updateUserProfile(profile.userId, {
-      coins: newCoins,
-      xp: newXp,
-      level: newLevel,
-      rank: rankAfter,
-      gamesPlayed: profile.gamesPlayed + 1,
-      lastActiveAt: Date.now(),
-    });
-
-    const matchResult: MatchResult = {
-      id: `${profile.userId}-${Date.now()}`,
-      userId: profile.userId,
-      opponentId: opponentId,
-      outcome,
-      linesCleared: yourState.linesCleared,
-      abilitiesUsed: abilitiesUsedCount,
-      coinsEarned,
-      xpEarned,
-      rankChange,
-      rankAfter,
-      opponentRank,
-      duration: matchDuration,
-      timestamp: Date.now(),
-    };
-
-    await progressionService.saveMatchResult(matchResult);
-
-    setMatchRewards({
-      coinsEarned,
-      xpEarned,
-      rankChange,
-      rankAfter,
-      leveledUp,
-      newLevel,
-      newAbilities,
-      isPlacement: isPlacementMatch,
-    });
-  }, [opponentProfile, profile, opponentId, yourState, abilitiesUsedCount]);
+  }, [profile, opponentId, yourState, aiOpponent]);
 
   // Update active effects periodically
   useEffect(() => {
@@ -1582,45 +1491,44 @@ export function ServerAuthMultiplayerGame({
                     gap: 'clamp(6px, 1.5vw, 8px)',
                   }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <span style={{ color: '#fff', fontSize: 'clamp(13px, 3.2vw, 16px)' }}>Coins</span>
+                      <span style={{ color: '#fff', fontSize: 'clamp(13px, 3.2vw, 16px)' }}>Coins Earned</span>
                       <span style={{ color: '#ffd700', fontWeight: '700', fontSize: 'clamp(13px, 3.2vw, 16px)' }}>
-                        +{matchRewards.coinsEarned}
+                        +{matchRewards.coins}
                       </span>
                     </div>
+                    {matchRewards.breakdown.firstWinBonus > 0 && (
+                      <div style={{ fontSize: 'clamp(11px, 2.75vw, 13px)', color: '#aaa', paddingLeft: 'clamp(8px, 2vw, 12px)' }}>
+                        + First win bonus: {matchRewards.breakdown.firstWinBonus}
+                      </div>
+                    )}
+                    {matchRewards.breakdown.streakBonus > 0 && (
+                      <div style={{ fontSize: 'clamp(11px, 2.75vw, 13px)', color: '#aaa', paddingLeft: 'clamp(8px, 2vw, 12px)' }}>
+                        + Win streak bonus: {matchRewards.breakdown.streakBonus}
+                      </div>
+                    )}
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <span style={{ color: '#fff', fontSize: 'clamp(13px, 3.2vw, 16px)' }}>XP</span>
-                      <span style={{ color: '#00d4ff', fontWeight: '700', fontSize: 'clamp(13px, 3.2vw, 16px)' }}>
-                        +{matchRewards.xpEarned}
+                      <span style={{ color: '#fff', fontSize: 'clamp(13px, 3.2vw, 16px)' }}>Total Balance</span>
+                      <span style={{ color: '#ffd700', fontWeight: '700', fontSize: 'clamp(13px, 3.2vw, 16px)' }}>
+                        {matchRewards.newCoins} 💰
                       </span>
                     </div>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <span style={{ color: '#fff', fontSize: 'clamp(13px, 3.2vw, 16px)' }}>
-                        Rank {matchRewards.isPlacement && '(Placement)'}
-                      </span>
-                      <span style={{
-                        color: matchRewards.rankChange >= 0 ? '#00ff88' : '#ff006e',
-                        fontWeight: '700',
-                        fontSize: 'clamp(13px, 3.2vw, 16px)'
-                      }}>
-                        {matchRewards.rankChange >= 0 ? '+' : ''}{matchRewards.rankChange} → {matchRewards.rankAfter}
-                      </span>
-                    </div>
-                    {matchRewards.leveledUp && (
+                    {matchRewards.nextUnlock && matchRewards.nextUnlock.coinsNeeded > 0 && (
                       <div style={{
-                        marginTop: 'clamp(4px, 1vw, 6px)',
-                        padding: 'clamp(6px, 1.5vw, 8px)',
-                        background: 'rgba(255, 215, 0, 0.15)',
+                        marginTop: 'clamp(6px, 1.5vw, 8px)',
+                        padding: 'clamp(8px, 2vw, 10px)',
+                        background: 'rgba(0, 255, 136, 0.15)',
                         borderRadius: 'clamp(4px, 1vw, 6px)',
-                        textAlign: 'center',
+                        border: '1px solid rgba(0, 255, 136, 0.3)',
                       }}>
-                        <span style={{
-                          color: '#ffd700',
-                          fontWeight: '800',
-                          fontSize: 'clamp(14px, 3.5vw, 18px)',
-                          textShadow: '0 0 10px rgba(255, 215, 0, 0.6)',
-                        }}>
-                          LEVEL UP! → {matchRewards.newLevel}
-                        </span>
+                        <div style={{ fontSize: 'clamp(11px, 2.75vw, 13px)', color: '#aaa', marginBottom: 'clamp(2px, 0.5vw, 4px)' }}>
+                          NEXT UNLOCK
+                        </div>
+                        <div style={{ color: '#00ff88', fontWeight: '700', fontSize: 'clamp(13px, 3.2vw, 16px)' }}>
+                          {matchRewards.nextUnlock.abilityName}
+                        </div>
+                        <div style={{ fontSize: 'clamp(11px, 2.75vw, 13px)', color: '#aaa', marginTop: 'clamp(2px, 0.5vw, 4px)' }}>
+                          {matchRewards.nextUnlock.coinsNeeded} more coins needed
+                        </div>
                       </div>
                     )}
                   </div>

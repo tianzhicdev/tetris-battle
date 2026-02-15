@@ -1,6 +1,5 @@
 import { useState, useEffect } from 'react';
 import { UserButton } from '@clerk/clerk-react';
-import { getLevelStage } from '@tetris-battle/game-core';
 import type { UserProfile } from '@tetris-battle/game-core';
 import { AbilityShop } from './AbilityShop';
 import { LoadoutManager } from './LoadoutManager';
@@ -26,8 +25,6 @@ export function MainMenu({ onSelectMode, theme, profile, onProfileUpdate, onChal
   const [showAbilityInfo, setShowAbilityInfo] = useState(false);
   const [showFriends, setShowFriends] = useState(false);
   const pendingRequests = useFriendStore(state => state.pendingRequests);
-
-  const stage = getLevelStage(profile.level);
 
   // Play menu music on mount
   useEffect(() => {
@@ -65,26 +62,42 @@ export function MainMenu({ onSelectMode, theme, profile, onProfileUpdate, onChal
         flexWrap: 'wrap',
       }}>
         <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-          <div style={mergeGlass(glassSuccess(), {
-            padding: '8px 12px',
-            borderRadius: '8px',
-            minWidth: 'fit-content',
-          })}>
-            <div style={{ fontSize: '11px', color: '#aaa', marginBottom: '2px' }}>
-              {stage.toUpperCase()}
-            </div>
-            <div style={{ fontSize: '16px', color: '#00ff9d', fontWeight: 'bold', textShadow: '0 0 10px rgba(0, 255, 157, 0.5)' }}>
-              Lv {profile.level}
-            </div>
-          </div>
-
+          {/* Coins */}
           <div style={mergeGlass(glassGold(), {
             padding: '8px 12px',
             borderRadius: '8px',
             minWidth: 'fit-content',
           })}>
             <div style={{ fontSize: '18px', color: '#ffd700', fontWeight: 'bold', textShadow: '0 0 10px rgba(255, 215, 0, 0.5)' }}>
-              🪙 {profile.coins}
+              💰 {profile.coins}
+            </div>
+          </div>
+
+          {/* Games Played */}
+          <div style={mergeGlass(glassBlue(), {
+            padding: '8px 12px',
+            borderRadius: '8px',
+            minWidth: 'fit-content',
+          })}>
+            <div style={{ fontSize: '11px', color: '#aaa', marginBottom: '2px' }}>
+              GAMES
+            </div>
+            <div style={{ fontSize: '16px', color: '#00ccff', fontWeight: 'bold', textShadow: '0 0 10px rgba(0, 204, 255, 0.5)' }}>
+              {profile.gamesPlayed}
+            </div>
+          </div>
+
+          {/* Win Rate */}
+          <div style={mergeGlass(glassSuccess(), {
+            padding: '8px 12px',
+            borderRadius: '8px',
+            minWidth: 'fit-content',
+          })}>
+            <div style={{ fontSize: '11px', color: '#aaa', marginBottom: '2px' }}>
+              WIN RATE
+            </div>
+            <div style={{ fontSize: '16px', color: '#00ff9d', fontWeight: 'bold', textShadow: '0 0 10px rgba(0, 255, 157, 0.5)' }}>
+              {profile.gamesPlayed > 0 ? Math.round((profile.gamesWon / profile.gamesPlayed) * 100) : 0}%
             </div>
           </div>
         </div>

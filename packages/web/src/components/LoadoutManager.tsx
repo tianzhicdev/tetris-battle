@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ABILITIES, getLoadoutSlots } from '@tetris-battle/game-core';
+import { ABILITIES } from '@tetris-battle/game-core';
 import type { UserProfile } from '@tetris-battle/game-core';
 import { progressionService } from '../lib/supabase';
 
@@ -13,7 +13,7 @@ export function LoadoutManager({ profile, onClose, onProfileUpdate }: LoadoutMan
   const [loadout, setLoadout] = useState<string[]>([...profile.loadout]);
   const [saving, setSaving] = useState(false);
 
-  const maxSlots = getLoadoutSlots(profile.level);
+  const maxSlots = 6; // Everyone gets 6 loadout slots
 
   const handleToggleAbility = (abilityId: string) => {
     if (loadout.includes(abilityId)) {

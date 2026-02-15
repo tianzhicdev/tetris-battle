@@ -1,5 +1,4 @@
 import { useState, useEffect } from 'react';
-import { getLevelStage, getXpForNextLevel, LEVEL_THRESHOLDS, getRankTier, isInPlacement } from '@tetris-battle/game-core';
 import type { UserProfile, MatchResult } from '@tetris-battle/game-core';
 import { progressionService } from '../lib/supabase';
 
@@ -43,24 +42,10 @@ export function ProfilePage({ profile, onClose }: ProfilePageProps) {
     setLoading(false);
   };
 
-  const stage = getLevelStage(profile.level);
-  const xpForNext = getXpForNextLevel(profile.level);
-  const currentLevelThreshold = LEVEL_THRESHOLDS.find(l => l.level === profile.level);
-  const nextLevelThreshold = LEVEL_THRESHOLDS.find(l => l.level === profile.level + 1);
-  const xpInCurrentLevel = currentLevelThreshold ? profile.xp - currentLevelThreshold.xpRequired : 0;
-  const xpProgress = xpForNext > 0 ? (xpInCurrentLevel / xpForNext) * 100 : 100;
-
   const wins = matchHistory.filter(m => m.outcome === 'win').length;
   const losses = matchHistory.filter(m => m.outcome === 'loss').length;
-
-  const stageColors: Record<string, string> = {
-    rookie: '#999',
-    contender: '#00ff00',
-    challenger: '#00ffff',
-    veteran: '#ff00ff',
-    master: '#ffaa00',
-    legend: '#ff0000',
-  };
+  const totalGames = wins + losses;
+  const winRate = totalGames > 0 ? Math.round((wins / totalGames) * 100) : 0;
 
   return (
     <div style={{
@@ -102,18 +87,9 @@ export function ProfilePage({ profile, onClose }: ProfilePageProps) {
           flexWrap: 'wrap',
         }}>
           <div>
-            <h2 style={{ margin: '0 0 clamp(4px, 1vw, 5px) 0', color: '#00ff88', fontSize: 'clamp(22px, 5.5vw, 28px)', fontWeight: '700', textShadow: '0 0 15px rgba(0, 255, 136, 0.6)' }}>
+            <h2 style={{ margin: '0', color: '#00ff88', fontSize: 'clamp(22px, 5.5vw, 28px)', fontWeight: '700', textShadow: '0 0 15px rgba(0, 255, 136, 0.6)' }}>
               {profile.username}
             </h2>
-            <div style={{
-              color: stageColors[stage],
-              fontSize: 'clamp(14px, 3.5vw, 16px)',
-              textTransform: 'uppercase',
-              fontWeight: '600',
-              textShadow: `0 0 10px ${stageColors[stage]}80`,
-            }}>
-              {stage} • Level {profile.level}
-            </div>
           </div>
 
           <button
@@ -175,10 +151,10 @@ export function ProfilePage({ profile, onClose }: ProfilePageProps) {
               boxShadow: '0 4px 15px rgba(0, 212, 255, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.05)',
             }}>
               <div style={{ color: '#00d4ff', fontSize: 'clamp(26px, 6.5vw, 32px)', marginBottom: 'clamp(4px, 1vw, 5px)', fontWeight: '700', textShadow: '0 0 15px rgba(0, 212, 255, 0.5)' }}>
-                {profile.xp}
+                {totalGames}
               </div>
               <div style={{ color: '#aaa', fontSize: 'clamp(11px, 2.75vw, 12px)', fontWeight: '600' }}>
-                Total XP
+                Games Played
               </div>
             </div>
 
@@ -219,59 +195,20 @@ export function ProfilePage({ profile, onClose }: ProfilePageProps) {
             <div style={{
               background: 'rgba(10, 10, 30, 0.6)',
               backdropFilter: 'blur(20px)',
-              border: '1px solid rgba(0, 212, 255, 0.4)',
+              border: '1px solid rgba(138, 43, 226, 0.4)',
               borderRadius: 'clamp(6px, 1.5vw, 8px)',
               padding: 'clamp(12px, 3vw, 15px)',
               textAlign: 'center',
-              boxShadow: '0 4px 15px rgba(0, 212, 255, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.05)',
+              boxShadow: '0 4px 15px rgba(138, 43, 226, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.05)',
             }}>
-              <div style={{ color: '#00d4ff', fontSize: 'clamp(26px, 6.5vw, 32px)', marginBottom: 'clamp(4px, 1vw, 5px)', fontWeight: '700', textShadow: '0 0 15px rgba(0, 212, 255, 0.5)' }}>
-                {profile.rank}
+              <div style={{ color: '#8a2be2', fontSize: 'clamp(26px, 6.5vw, 32px)', marginBottom: 'clamp(4px, 1vw, 5px)', fontWeight: '700', textShadow: '0 0 15px rgba(138, 43, 226, 0.5)' }}>
+                {winRate}%
               </div>
               <div style={{ color: '#aaa', fontSize: 'clamp(11px, 2.75vw, 12px)', fontWeight: '600' }}>
-                Rank {isInPlacement(profile.gamesPlayed) && '(Placement)'}
-              </div>
-              <div style={{ color: '#00d4ff', fontSize: 'clamp(9px, 2.25vw, 10px)', textTransform: 'uppercase', marginTop: 'clamp(2px, 0.5vw, 3px)', fontWeight: '700', textShadow: '0 0 8px rgba(0, 212, 255, 0.4)' }}>
-                {getRankTier(profile.rank)}
+                Win Rate
               </div>
             </div>
           </div>
-
-          {/* XP Progress Bar */}
-          {nextLevelThreshold && (
-            <div style={{ marginBottom: 'clamp(20px, 5vw, 25px)' }}>
-              <div style={{
-                display: 'flex',
-                justifyContent: 'space-between',
-                marginBottom: 'clamp(6px, 1.5vw, 8px)',
-                color: '#00d4ff',
-                fontSize: 'clamp(12px, 3vw, 14px)',
-                fontWeight: '600',
-              }}>
-                <span>Level {profile.level}</span>
-                <span>{xpInCurrentLevel}/{xpForNext} XP</span>
-                <span>Level {profile.level + 1}</span>
-              </div>
-
-              <div style={{
-                background: 'rgba(10, 10, 30, 0.5)',
-                backdropFilter: 'blur(10px)',
-                height: 'clamp(16px, 4vw, 20px)',
-                borderRadius: 'clamp(8px, 2vw, 10px)',
-                overflow: 'hidden',
-                border: '1px solid rgba(0, 212, 255, 0.4)',
-                boxShadow: 'inset 0 2px 4px rgba(0, 0, 0, 0.3)',
-              }}>
-                <div style={{
-                  background: 'linear-gradient(90deg, #00d4ff, #00ff88)',
-                  height: '100%',
-                  width: `${xpProgress}%`,
-                  transition: 'width 0.3s',
-                  boxShadow: '0 0 10px rgba(0, 212, 255, 0.5)',
-                }}/>
-              </div>
-            </div>
-          )}
 
           {/* Match History */}
           <div>
@@ -297,7 +234,6 @@ export function ProfilePage({ profile, onClose }: ProfilePageProps) {
                   const outcomeColor = match.outcome === 'win' ? '#00ff88' : match.outcome === 'loss' ? '#ff6e6e' : '#ffaa00';
                   const date = new Date(match.timestamp).toLocaleDateString();
                   const opponent = opponentProfiles[match.opponentId];
-                  const rankChangeColor = match.rankChange >= 0 ? '#00ff88' : '#ff006e';
 
                   return (
                     <div
@@ -332,34 +268,12 @@ export function ProfilePage({ profile, onClose }: ProfilePageProps) {
                           <div style={{ color: '#aaa', fontSize: 'clamp(11px, 2.75vw, 12px)', fontWeight: '600' }}>
                             vs {opponent ? opponent.username : 'Unknown'}
                           </div>
-                          <div style={{ color: '#666', fontSize: 'clamp(10px, 2.5vw, 11px)', marginTop: 'clamp(1px, 0.25vw, 2px)', fontWeight: '600' }}>
-                            {opponent ? `Lvl ${opponent.level} • ${match.opponentRank} Rank` : `${match.opponentRank} Rank`}
-                          </div>
                         </div>
 
                         <div style={{ textAlign: 'right' }}>
-                          <div style={{ color: rankChangeColor, fontSize: 'clamp(14px, 3.5vw, 16px)', fontWeight: '700', textShadow: `0 0 10px ${rankChangeColor}60` }}>
-                            {match.rankChange >= 0 ? '+' : ''}{match.rankChange}
+                          <div style={{ color: '#ffd700', fontSize: 'clamp(14px, 3.5vw, 16px)', fontWeight: '700', textShadow: '0 0 10px rgba(255, 215, 0, 0.6)' }}>
+                            +{match.coinsEarned} 🪙
                           </div>
-                          <div style={{ color: '#aaa', fontSize: 'clamp(10px, 2.5vw, 11px)', fontWeight: '600' }}>
-                            → {match.rankAfter} Rank
-                          </div>
-                        </div>
-                      </div>
-
-                      <div style={{
-                        display: 'flex',
-                        justifyContent: 'space-between',
-                        paddingTop: 'clamp(6px, 1.5vw, 8px)',
-                        borderTop: '1px solid rgba(255, 255, 255, 0.1)',
-                        gap: 'clamp(10px, 2.5vw, 15px)',
-                        flexWrap: 'wrap',
-                      }}>
-                        <div style={{ color: '#aaa', fontSize: 'clamp(11px, 2.75vw, 12px)', fontWeight: '600' }}>
-                          {match.linesCleared} lines • {match.abilitiesUsed} abilities
-                        </div>
-                        <div style={{ color: '#ffd700', fontSize: 'clamp(11px, 2.75vw, 12px)', fontWeight: '600' }}>
-                          +{match.coinsEarned} 🪙 | +{match.xpEarned} XP
                         </div>
                       </div>
 
