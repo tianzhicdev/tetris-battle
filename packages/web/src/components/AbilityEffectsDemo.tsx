@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { TetrisRenderer } from '../renderer/TetrisRenderer';
 import { ABILITIES } from '@tetris-battle/game-core';
-import type { Board, Tetromino } from '@tetris-battle/game-core';
+import type { Board, Tetromino, CellValue } from '@tetris-battle/game-core';
 import { DEFAULT_THEME } from '../themes';
 import { audioManager } from '../services/audioManager';
 
@@ -14,15 +14,15 @@ export function AbilityEffectsDemo() {
 
   // Create a demo board with some filled cells
   const createDemoBoard = (): Board => {
-    const grid: (string | null)[][] = Array(20).fill(null).map(() => Array(10).fill(null));
+    const grid: CellValue[][] = Array(20).fill(null).map(() => Array(10).fill(null));
 
     // Add some interesting patterns
     // Bottom rows - scattered blocks
-    const colors = ['I', 'J', 'L', 'O', 'S', 'T', 'Z'];
+    const colors: CellValue[] = ['I', 'J', 'L', 'O', 'S', 'T', 'Z'];
     for (let y = 18; y < 20; y++) {
       for (let x = 0; x < 10; x++) {
         if (Math.random() > 0.3) {
-          grid[y][x] = colors[Math.floor(Math.random() * colors.length)];
+          grid[y][x] = colors[Math.floor(Math.random() * colors.length)] as CellValue;
         }
       }
     }
@@ -31,7 +31,7 @@ export function AbilityEffectsDemo() {
     for (let y = 15; y < 18; y++) {
       for (let x = 0; x < 10; x++) {
         if (Math.random() > 0.5) {
-          grid[y][x] = colors[Math.floor(Math.random() * colors.length)];
+          grid[y][x] = colors[Math.floor(Math.random() * colors.length)] as CellValue;
         }
       }
     }
@@ -56,6 +56,7 @@ export function AbilityEffectsDemo() {
       [1, 1, 1],
       [0, 0, 0],
     ],
+    rotation: 0,
   });
 
   // Initialize renderer
@@ -116,6 +117,7 @@ export function AbilityEffectsDemo() {
             type: newType,
             position: { x: 3, y: 0 },
             shape: prev.shape,
+            rotation: 0,
           };
         }
         return { ...prev, position: { ...prev.position, y: newY } };
@@ -144,10 +146,10 @@ export function AbilityEffectsDemo() {
     switch (abilityType) {
       case 'earthquake':
         // Flash blocks and animate shake
-        const allCells: [number, number][] = [];
+        const allCells: { x: number; y: number }[] = [];
         for (let y = 0; y < 20; y++) {
           for (let x = 0; x < 10; x++) {
-            if (board.grid[y][x]) allCells.push([x, y]);
+            if (board.grid[y][x]) allCells.push({ x, y });
           }
         }
         renderer.animationManager.animateBlocksFlashing(allCells, '#ff6a00');
@@ -162,7 +164,7 @@ export function AbilityEffectsDemo() {
         if (abilityType === 'circle_bomb') {
           // Circle explosion
           const radius = 3;
-          const affectedCells: [number, number][] = [];
+          const affectedCells: { x: number; y: number }[] = [];
           for (let dy = -radius; dy <= radius; dy++) {
             for (let dx = -radius; dx <= radius; dx++) {
               const distance = Math.sqrt(dx * dx + dy * dy);
@@ -170,7 +172,7 @@ export function AbilityEffectsDemo() {
                 const x = centerX + dx;
                 const y = centerY + dy;
                 if (x >= 0 && x < 10 && y >= 0 && y < 20) {
-                  affectedCells.push([x, y]);
+                  affectedCells.push({ x, y });
                 }
               }
             }
@@ -179,14 +181,14 @@ export function AbilityEffectsDemo() {
           renderer.animationManager.animateExplosion(centerX, centerY, 3, '#ff6a00');
         } else {
           // Cross explosion
-          const affectedCells: [number, number][] = [];
+          const affectedCells: { x: number; y: number }[] = [];
           for (let dx = -5; dx <= 5; dx++) {
             const x = centerX + dx;
-            if (x >= 0 && x < 10) affectedCells.push([x, centerY]);
+            if (x >= 0 && x < 10) affectedCells.push({ x, y: centerY });
           }
           for (let dy = -5; dy <= 5; dy++) {
             const y = centerY + dy;
-            if (y >= 0 && y < 20) affectedCells.push([centerX, y]);
+            if (y >= 0 && y < 20) affectedCells.push({ x: centerX, y });
           }
           renderer.animationManager.animateBlocksDisappearing(affectedCells, '#ff8c42');
           renderer.animationManager.animateExplosion(centerX, centerY, 2, '#ff4400');
@@ -196,32 +198,32 @@ export function AbilityEffectsDemo() {
 
       case 'death_cross':
         // Clear cross pattern
-        const crossCells: [number, number][] = [];
+        const crossCells: { x: number; y: number }[] = [];
         const pieceX = currentPiece.position.x + 1;
         const pieceY = currentPiece.position.y + 1;
-        for (let x = 0; x < 10; x++) crossCells.push([x, pieceY]);
-        for (let y = 0; y < 20; y++) crossCells.push([pieceX, y]);
+        for (let x = 0; x < 10; x++) crossCells.push({ x, y: pieceY });
+        for (let y = 0; y < 20; y++) crossCells.push({ x: pieceX, y });
         renderer.animationManager.animateBlocksDisappearing(crossCells, '#ff006e');
         break;
 
       case 'random_spawner':
         // Flash random blocks
-        const randomCells: [number, number][] = [];
+        const randomCells: { x: number; y: number }[] = [];
         for (let i = 0; i < 15; i++) {
-          randomCells.push([
-            Math.floor(Math.random() * 10),
-            Math.floor(Math.random() * 20)
-          ]);
+          randomCells.push({
+            x: Math.floor(Math.random() * 10),
+            y: Math.floor(Math.random() * 20)
+          });
         }
         renderer.animationManager.animateBlocksFlashing(randomCells, '#00d4ff');
         break;
 
       case 'fill_holes':
         // Flash empty cells
-        const emptyCells: [number, number][] = [];
+        const emptyCells: { x: number; y: number }[] = [];
         for (let y = 0; y < 20; y++) {
           for (let x = 0; x < 10; x++) {
-            if (!board.grid[y][x]) emptyCells.push([x, y]);
+            if (!board.grid[y][x]) emptyCells.push({ x, y });
           }
         }
         renderer.animationManager.animateBlocksFlashing(emptyCells.slice(0, 30), '#00ff88');
@@ -229,10 +231,10 @@ export function AbilityEffectsDemo() {
 
       case 'gold_digger':
         // Flash bottom rows
-        const bottomCells: [number, number][] = [];
+        const bottomCells: { x: number; y: number }[] = [];
         for (let y = 17; y < 20; y++) {
           for (let x = 0; x < 10; x++) {
-            bottomCells.push([x, y]);
+            bottomCells.push({ x, y });
           }
         }
         renderer.animationManager.animateBlocksDisappearing(bottomCells, '#ffd700');
@@ -240,21 +242,21 @@ export function AbilityEffectsDemo() {
 
       case 'row_rotate':
         // Flash a few rows
-        const rotateCells: [number, number][] = [];
+        const rotateCells: { x: number; y: number }[] = [];
         for (let x = 0; x < 10; x++) {
-          rotateCells.push([x, 15], [x, 16], [x, 17]);
+          rotateCells.push({ x, y: 15 }, { x, y: 16 }, { x, y: 17 });
         }
         renderer.animationManager.animateBlocksFlashing(rotateCells, '#c942ff');
         break;
 
       default:
         // Generic flash effect for other abilities
-        const someCells: [number, number][] = [];
+        const someCells: { x: number; y: number }[] = [];
         for (let i = 0; i < 20; i++) {
-          someCells.push([
-            Math.floor(Math.random() * 10),
-            Math.floor(Math.random() * 20)
-          ]);
+          someCells.push({
+            x: Math.floor(Math.random() * 10),
+            y: Math.floor(Math.random() * 20)
+          });
         }
         renderer.animationManager.animateBlocksFlashing(someCells, '#00d4ff');
         break;
@@ -274,6 +276,7 @@ export function AbilityEffectsDemo() {
         [1, 1, 1],
         [0, 0, 0],
       ],
+      rotation: 0,
     });
   };
 
