@@ -28,6 +28,7 @@ export class PartykitMatchmaking {
 
       switch (data.type) {
         case 'queue_joined':
+          console.log('[MATCHMAKING CLIENT] Queue joined, position:', data.position, 'playerId:', this.playerId);
           if (onQueueUpdate) {
             onQueueUpdate(data.position);
           }
@@ -45,7 +46,7 @@ export class PartykitMatchmaking {
     });
 
     this.socket.addEventListener('open', () => {
-      console.log('Connected to matchmaking');
+      console.log('[MATCHMAKING CLIENT] Connected to matchmaking, playerId:', this.playerId, 'rank:', this.rank);
       this.joinQueue();
     });
 
