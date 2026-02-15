@@ -16,6 +16,28 @@ interface PlayerState {
   metrics: PlayerMetrics;
 }
 
+type AbilityRejectReason =
+  | 'unknown_ability'
+  | 'invalid_target'
+  | 'source_player_missing'
+  | 'source_state_missing'
+  | 'ability_not_in_loadout'
+  | 'insufficient_stars'
+  | 'target_player_missing'
+  | 'target_state_missing';
+
+interface AbilityActivationResult {
+  type: 'ability_activation_result';
+  requestId?: string;
+  abilityType: string;
+  targetPlayerId: string;
+  accepted: boolean;
+  reason?: AbilityRejectReason;
+  message: string;
+  remainingStars?: number;
+  serverTime: number;
+}
+
 export default class GameRoomServer implements Party.Server {
   players: Map<string, PlayerState> = new Map();
   roomStatus: 'waiting' | 'playing' | 'finished' = 'waiting';
@@ -59,6 +81,12 @@ export default class GameRoomServer implements Party.Server {
       data = JSON.parse(message);
     } catch (error) {
       console.warn('[GAME] Ignoring non-JSON message:', message, error);
+      sender.send(JSON.stringify({
+        type: 'server_error',
+        code: 'invalid_json',
+        message: 'Message payload must be valid JSON',
+        serverTime: Date.now(),
+      }));
       return;
     }
 
@@ -80,10 +108,18 @@ export default class GameRoomServer implements Party.Server {
         this.handlePlayerInput(data.playerId, data.input);
         break;
       case 'ability_activation':
-        this.handleAbilityActivation(data.playerId, data.abilityType, data.targetPlayerId);
+        this.handleAbilityActivation(data.playerId, data.abilityType, data.targetPlayerId, data.requestId);
         break;
       case 'game_over':
         this.handleGameOver(data.playerId);
+        break;
+      default:
+        sender.send(JSON.stringify({
+          type: 'server_error',
+          code: 'unsupported_message_type',
+          message: `Unsupported message type: ${String(data.type)}`,
+          serverTime: Date.now(),
+        }));
         break;
     }
   }
@@ -388,61 +424,65 @@ export default class GameRoomServer implements Party.Server {
     return maxHeight;
   }
 
-  handleAbilityActivation(playerId: string, abilityType: string, targetPlayerId: string) {
+  handleAbilityActivation(playerId: string, abilityType: string, targetPlayerId: string, requestId?: string) {
     const ability = ABILITIES[abilityType as keyof typeof ABILITIES];
     if (!ability) {
-      console.warn(`[ABILITY] Unknown ability type: ${abilityType}`);
+      this.rejectAbilityActivation(playerId, abilityType, targetPlayerId, requestId, 'unknown_ability', `Unknown ability type: ${abilityType}`);
       return;
     }
 
     // Validate target category
     if (ability.category === 'buff' && targetPlayerId !== playerId) {
-      console.warn(`[ABILITY] Rejected ${abilityType}: buffs must target self`);
+      this.rejectAbilityActivation(playerId, abilityType, targetPlayerId, requestId, 'invalid_target', `Buff ${abilityType} must target self`);
       return;
     }
     if (ability.category === 'debuff' && targetPlayerId === playerId) {
-      console.warn(`[ABILITY] Rejected ${abilityType}: debuffs must target opponent`);
+      this.rejectAbilityActivation(playerId, abilityType, targetPlayerId, requestId, 'invalid_target', `Debuff ${abilityType} must target opponent`);
       return;
     }
 
     // Validate source player state and star cost
     const playerState = this.serverGameStates.get(playerId);
-    if (playerState) {
-      if (playerState.loadout.length > 0 && !playerState.loadout.includes(abilityType)) {
-        console.warn(`[ABILITY] Rejected ${abilityType}: not in loadout for ${playerId}`);
-        return;
-      }
-      if (playerState.gameState.stars < ability.cost) {
-        console.warn(`[ABILITY] Player ${playerId} has insufficient stars (${playerState.gameState.stars}/${ability.cost})`);
-        return;
-      }
-      playerState.gameState.stars -= ability.cost;
-      console.log(`[ABILITY] Player ${playerId} used ${abilityType}, stars: ${playerState.gameState.stars}`);
+    const sourcePlayer = this.players.get(playerId);
+    if (!sourcePlayer) {
+      this.rejectAbilityActivation(playerId, abilityType, targetPlayerId, requestId, 'source_player_missing', `Source player not found: ${playerId}`);
+      return;
     }
+    if (!playerState) {
+      this.rejectAbilityActivation(playerId, abilityType, targetPlayerId, requestId, 'source_state_missing', `Source server state not found for ${playerId}`);
+      return;
+    }
+    if (playerState.loadout.length > 0 && !playerState.loadout.includes(abilityType)) {
+      this.rejectAbilityActivation(playerId, abilityType, targetPlayerId, requestId, 'ability_not_in_loadout', `${abilityType} is not in ${playerId}'s loadout`);
+      return;
+    }
+    if (playerState.gameState.stars < ability.cost) {
+      this.rejectAbilityActivation(
+        playerId,
+        abilityType,
+        targetPlayerId,
+        requestId,
+        'insufficient_stars',
+        `Insufficient stars for ${abilityType}: ${playerState.gameState.stars}/${ability.cost}`
+      );
+      return;
+    }
+    playerState.gameState.stars -= ability.cost;
+    console.log(`[ABILITY] Player ${playerId} used ${abilityType}, stars: ${playerState.gameState.stars}`);
 
     const targetPlayer = this.players.get(targetPlayerId);
-    if (!targetPlayer) return;
-
-    // Apply ability to target player's server-side state
-    const targetServerState = this.serverGameStates.get(targetPlayerId);
-    if (targetServerState) {
-      targetServerState.applyAbility(abilityType);
-      const targetConn = this.getConnection(targetPlayer.connectionId);
-      if (targetConn) {
-        targetConn.send(JSON.stringify({
-          type: 'ability_received',
-          abilityType,
-          fromPlayerId: playerId,
-        }));
-      }
-      if (targetPlayerId === this.aiPlayer?.id) {
-        this.aiMoveQueue = [];
-      }
-      this.broadcastState();
+    if (!targetPlayer) {
+      this.rejectAbilityActivation(playerId, abilityType, targetPlayerId, requestId, 'target_player_missing', `Target player not found: ${targetPlayerId}`);
       return;
     }
 
-    // Legacy fallback: If target is human player in client-authoritative mode, send ability_received message
+    // Apply ability to target player's server-side state
+    const targetServerState = this.serverGameStates.get(targetPlayerId);
+    if (!targetServerState) {
+      this.rejectAbilityActivation(playerId, abilityType, targetPlayerId, requestId, 'target_state_missing', `Target server state not found for ${targetPlayerId}`);
+      return;
+    }
+    targetServerState.applyAbility(abilityType);
     const targetConn = this.getConnection(targetPlayer.connectionId);
     if (targetConn) {
       targetConn.send(JSON.stringify({
@@ -451,6 +491,22 @@ export default class GameRoomServer implements Party.Server {
         fromPlayerId: playerId,
       }));
     }
+    if (targetPlayerId === this.aiPlayer?.id) {
+      this.aiMoveQueue = [];
+    }
+
+    this.sendAbilityActivationResult(playerId, {
+      type: 'ability_activation_result',
+      requestId,
+      abilityType,
+      targetPlayerId,
+      accepted: true,
+      message: `${abilityType} applied to ${targetPlayerId}`,
+      remainingStars: playerState.gameState.stars,
+      serverTime: Date.now(),
+    });
+
+    this.broadcastState();
   }
 
   private getAbilityCost(abilityType: string): number {
@@ -598,6 +654,41 @@ export default class GameRoomServer implements Party.Server {
       if (conn.id === connectionId) return conn;
     }
     return null;
+  }
+
+  private sendToPlayer(playerId: string, data: any): void {
+    const player = this.players.get(playerId);
+    if (!player) return;
+    const conn = this.getConnection(player.connectionId);
+    if (!conn) return;
+    conn.send(JSON.stringify(data));
+  }
+
+  private sendAbilityActivationResult(playerId: string, result: AbilityActivationResult): void {
+    this.sendToPlayer(playerId, result);
+  }
+
+  private rejectAbilityActivation(
+    playerId: string,
+    abilityType: string,
+    targetPlayerId: string,
+    requestId: string | undefined,
+    reason: AbilityRejectReason,
+    message: string
+  ): void {
+    console.warn(`[ABILITY] Rejected ${abilityType} from ${playerId} -> ${targetPlayerId}: ${reason} (${message})`);
+    const playerState = this.serverGameStates.get(playerId);
+    this.sendAbilityActivationResult(playerId, {
+      type: 'ability_activation_result',
+      requestId,
+      abilityType,
+      targetPlayerId,
+      accepted: false,
+      reason,
+      message,
+      remainingStars: playerState?.gameState.stars,
+      serverTime: Date.now(),
+    });
   }
 
   broadcast(data: any) {

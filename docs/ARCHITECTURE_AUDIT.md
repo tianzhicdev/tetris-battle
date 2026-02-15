@@ -11,6 +11,8 @@ Resolved in latest code changes:
 - P0-3 AI abilities now apply through the authoritative ability path.
 - Server-authoritative mode is now default in web app; legacy PartyKit client-authoritative UI path removed.
 - Matchmaking client connection lifecycle hardened (host normalization, connection guard, close-code diagnostics, reduced reconnect churn from callback identity changes).
+- Ability activation now returns explicit server accept/reject results (with machine-readable reason) instead of silent drops.
+- `weird_shapes` is now pending-until-consumed and no longer expires before next spawn during state broadcasts.
 
 ## Critical Findings (P0)
 

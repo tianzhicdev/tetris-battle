@@ -27,6 +27,17 @@ export interface GameStateUpdate {
   };
 }
 
+export interface AbilityActivationResult {
+  requestId?: string;
+  abilityType: string;
+  targetPlayerId: string;
+  accepted: boolean;
+  reason?: string;
+  message: string;
+  remainingStars?: number;
+  serverTime: number;
+}
+
 /**
  * ServerAuthGameClient handles communication with the server-authoritative game server.
  * Sends inputs to server, receives state updates from server.
@@ -57,7 +68,8 @@ export class ServerAuthGameClient {
     onStateUpdate: (state: GameStateUpdate) => void,
     onOpponentDisconnected: () => void,
     onGameFinished: (winnerId: string) => void,
-    onAbilityReceived?: (abilityType: string, fromPlayerId: string) => void
+    onAbilityReceived?: (abilityType: string, fromPlayerId: string) => void,
+    onAbilityActivationResult?: (result: AbilityActivationResult) => void
   ): void {
     this.socket.addEventListener('open', () => {
       console.log(`[SERVER-AUTH] Connected to game room: ${this.roomId}`);
@@ -102,6 +114,23 @@ export class ServerAuthGameClient {
           }
           break;
 
+        case 'ability_activation_result':
+          onAbilityActivationResult?.(data as AbilityActivationResult);
+          if (this.debugLogger) {
+            const status = data.accepted ? 'accepted' : 'rejected';
+            this.debugLogger.logEvent(
+              'ability_activation_result',
+              `${data.abilityType} ${status}: ${data.message}`,
+              data
+            );
+          }
+          break;
+
+        case 'server_error':
+          console.error('[SERVER-AUTH] Server error:', data);
+          this.debugLogger?.logEvent('server_error', data.message || 'Server error', data);
+          break;
+
         case 'opponent_disconnected':
           onOpponentDisconnected();
           break;
@@ -141,21 +170,26 @@ export class ServerAuthGameClient {
   /**
    * Send ability activation to server
    */
-  activateAbility(abilityType: string, targetPlayerId: string): void {
-    this.send({
+  activateAbility(abilityType: string, targetPlayerId: string): string | null {
+    const requestId = `ability_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+    const sent = this.send({
       type: 'ability_activation',
       playerId: this.playerId,
       abilityType,
       targetPlayerId,
+      requestId,
       timestamp: Date.now(),
     });
+    return sent ? requestId : null;
   }
 
-  private send(data: any): void {
+  private send(data: any): boolean {
     if (this.socket.readyState === WebSocket.OPEN) {
       this.debugLogger?.logOutgoing(data);
       this.socket.send(JSON.stringify(data));
+      return true;
     }
+    return false;
   }
 
   /**

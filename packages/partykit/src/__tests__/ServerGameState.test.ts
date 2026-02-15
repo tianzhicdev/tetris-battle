@@ -272,10 +272,9 @@ describe('ServerGameState', () => {
       it('should apply weird_shapes - affects next piece', () => {
         state.applyAbility('weird_shapes');
 
-        // Effect should be tracked (very short duration)
+        // Effect should stay active until next spawn consumes it
         const activeEffects = state.getActiveEffects();
-        // May or may not be active due to 1ms duration
-        expect(activeEffects).toBeDefined();
+        expect(activeEffects).toContain('weird_shapes');
       });
     });
 

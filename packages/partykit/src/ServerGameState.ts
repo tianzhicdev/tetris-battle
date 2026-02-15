@@ -333,7 +333,8 @@ export class ServerGameState {
         break;
 
       case 'weird_shapes':
-        this.activeEffects.set('weird_shapes', Date.now() + 1); // Next piece only
+        // Single-use pending effect: stays active until next spawn consumes it.
+        this.activeEffects.set('weird_shapes', Number.POSITIVE_INFINITY);
         break;
 
       // BUFF ABILITIES (self-targeting)
@@ -378,6 +379,10 @@ export class ServerGameState {
     const active: string[] = [];
 
     for (const [ability, endTime] of this.activeEffects) {
+      if (ability === 'weird_shapes') {
+        active.push(ability);
+        continue;
+      }
       if (endTime > now) {
         active.push(ability);
       } else {

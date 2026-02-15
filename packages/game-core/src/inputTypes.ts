@@ -26,6 +26,7 @@ export interface AbilityInput {
   playerId: string;
   abilityType: string;
   targetPlayerId: string;
+  requestId?: string;
   timestamp: number;
 }
 

@@ -2,7 +2,11 @@ import { useEffect, useRef, useState, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAbilityStore } from '../stores/abilityStore';
 import { TetrisRenderer } from '../renderer/TetrisRenderer';
-import { ServerAuthGameClient, type GameStateUpdate } from '../services/partykit/ServerAuthGameClient';
+import {
+  ServerAuthGameClient,
+  type AbilityActivationResult,
+  type GameStateUpdate,
+} from '../services/partykit/ServerAuthGameClient';
 import { AbilityEffects } from './AbilityEffects';
 import { AbilityInfo } from './AbilityInfo';
 import { ParticleEffect } from './ParticleEffect';
@@ -90,6 +94,7 @@ export function ServerAuthMultiplayerGame({
   const [abilitiesUsedCount, setAbilitiesUsedCount] = useState(0);
   const [opponentProfile, setOpponentProfile] = useState<UserProfile | null>(null);
   const matchStartTimeRef = useRef<number>(Date.now());
+  const pendingAbilityActivationsRef = useRef(new Map<string, { ability: Ability; target: 'self' | 'opponent' }>());
   const [debugLogger, setDebugLogger] = useState<DebugLogger | null>(null);
   const [isDebugMode, setIsDebugMode] = useState(false);
 
@@ -143,6 +148,10 @@ export function ServerAuthMultiplayerGame({
       (abilityType, fromPlayerId) => {
         console.log(`[SERVER-AUTH] Received ability: ${abilityType} from ${fromPlayerId}`);
         handleAbilityReceived(abilityType);
+      },
+      // On ability activation result
+      (result) => {
+        handleAbilityActivationResult(result);
       }
     );
 
@@ -152,6 +161,7 @@ export function ServerAuthMultiplayerGame({
     audioManager.playMusic('gameplay_normal', true);
 
     return () => {
+      pendingAbilityActivationsRef.current.clear();
       client.disconnect();
       audioManager.stopMusic(true);
     };
@@ -336,44 +346,77 @@ export function ServerAuthMultiplayerGame({
     }
 
     console.log('[SERVER-AUTH] Activating ability:', ability.name);
+    const target: 'self' | 'opponent' = ability.category === 'buff' ? 'self' : 'opponent';
+    const targetPlayerId = target === 'self' ? playerId : opponentId;
+    const requestId = gameClientRef.current.activateAbility(ability.type, targetPlayerId);
 
-    // Log ability usage in debug mode
-    if (debugLogger) {
-      const target = ability.category === 'buff' ? 'self' : 'opponent';
-      debugLogger.logEvent('ability_used', `You used ${ability.name} (${ability.shortName}) on ${target}`, {
+    if (!requestId) {
+      console.warn('[SERVER-AUTH] Failed to send ability activation request');
+      debugLogger?.logEvent('ability_send_failed', `Failed to send ${ability.name} to server`, {
         ability: ability.type,
-        name: ability.name,
-        category: ability.category,
-        target
+        target,
       });
+      return;
     }
 
-    // Track ability usage
-    setAbilitiesUsedCount(prev => prev + 1);
-
-    // Show notification
-    setAbilityNotification({
+    pendingAbilityActivationsRef.current.set(requestId, { ability, target });
+    debugLogger?.logEvent('ability_attempted', `Attempted ${ability.name} (${ability.shortName}) on ${target}`, {
+      requestId,
+      ability: ability.type,
       name: ability.name,
-      description: ability.description,
-      category: ability.category as 'buff' | 'debuff',
+      category: ability.category,
+      target,
     });
-    setTimeout(() => setAbilityNotification(null), 3000);
+  };
 
-    // Play sound
-    if (ability.category === 'buff') {
-      audioManager.playSfx('ability_buff_activate');
-    } else if (ability.category === 'debuff') {
-      audioManager.playSfx('ability_debuff_activate');
+  // Handle server acceptance/rejection for your ability requests
+  const handleAbilityActivationResult = (result: AbilityActivationResult) => {
+    const pending = result.requestId ? pendingAbilityActivationsRef.current.get(result.requestId) : undefined;
+    if (result.requestId) {
+      pendingAbilityActivationsRef.current.delete(result.requestId);
     }
 
-    // Send to server
-    if (ability.category === 'buff') {
-      // Buff abilities target self
-      gameClientRef.current.activateAbility(ability.type, playerId);
-    } else {
-      // Debuff abilities target opponent
-      gameClientRef.current.activateAbility(ability.type, opponentId);
+    const abilityFromCatalog = ABILITIES[result.abilityType as keyof typeof ABILITIES];
+    const ability = pending?.ability || abilityFromCatalog;
+    const target = pending?.target || (result.targetPlayerId === playerId ? 'self' : 'opponent');
+
+    if (result.accepted) {
+      if (ability) {
+        setAbilityNotification({
+          name: ability.name,
+          description: ability.description,
+          category: ability.category as 'buff' | 'debuff',
+        });
+        setTimeout(() => setAbilityNotification(null), 3000);
+        if (ability.category === 'buff') {
+          audioManager.playSfx('ability_buff_activate');
+        } else if (ability.category === 'debuff') {
+          audioManager.playSfx('ability_debuff_activate');
+        }
+      }
+      setAbilitiesUsedCount(prev => prev + 1);
+      debugLogger?.logEvent(
+        'ability_used',
+        `Ability accepted: ${ability?.name || result.abilityType} on ${target}`,
+        {
+          ...result,
+          target,
+          abilityName: ability?.name,
+        }
+      );
+      return;
     }
+
+    console.warn('[SERVER-AUTH] Ability rejected:', result);
+    debugLogger?.logEvent(
+      'ability_rejected',
+      `Ability rejected: ${ability?.name || result.abilityType} (${result.reason || 'unknown'})`,
+      {
+        ...result,
+        target,
+        abilityName: ability?.name,
+      }
+    );
   };
 
   // Handle receiving ability from opponent

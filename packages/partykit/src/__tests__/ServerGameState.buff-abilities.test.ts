@@ -170,6 +170,21 @@ describe('ServerGameState - Buff Abilities', () => {
   });
 
   describe('Weird Shapes - Fixed', () => {
+    it('should stay pending across state broadcasts until consumed', () => {
+      state.applyAbility('weird_shapes');
+
+      // Simulate broadcast path that calls getPublicState/getActiveEffects.
+      state.getPublicState();
+      state.getPublicState();
+
+      expect(state.getActiveEffects()).toContain('weird_shapes');
+
+      // Consume on next spawn.
+      state.processInput('hard_drop');
+
+      expect(state.getActiveEffects()).not.toContain('weird_shapes');
+    });
+
     it('should spawn 4x4 hollowed piece', () => {
       state.applyAbility('weird_shapes');
 
