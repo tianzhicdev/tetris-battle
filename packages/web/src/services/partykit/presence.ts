@@ -1,5 +1,4 @@
 import PartySocket from 'partysocket';
-import { ReconnectionManager } from '../ReconnectionManager';
 
 export interface PresenceCallbacks {
   onPresenceUpdate: (userId: string, status: 'online' | 'in_game' | 'offline') => void;
@@ -28,10 +27,10 @@ export class PartykitPresence {
   private socket: PartySocket | null = null;
   private userId: string;
   private host: string;
-  private reconnectionManager: ReconnectionManager | null = null;
   private callbacks: PresenceCallbacks | null = null;
   private friendIds: string[] = [];
   private intentionallyDisconnected: boolean = false;
+  private currentStatus: 'menu' | 'in_queue' | 'in_game' = 'menu';
 
   constructor(userId: string, host: string) {
     this.userId = userId;
@@ -42,31 +41,20 @@ export class PartykitPresence {
     this.callbacks = callbacks;
     this.intentionallyDisconnected = false;
 
-    this.reconnectionManager = new ReconnectionManager(
-      {
-        maxAttempts: 10,
-        baseDelay: 1000,
-        maxDelay: 30000,
-        jitterFactor: 0.25,
-      },
-      {
-        onReconnecting: (attempt, delayMs) => {
-          console.log(`[PRESENCE] Reconnecting (attempt ${attempt}) in ${Math.ceil(delayMs / 1000)}s...`);
-        },
-        onReconnected: async () => {
-          console.log('[PRESENCE] Reconnected successfully');
-          await this.restoreState();
-        },
-        onFailed: () => {
-          console.error('[PRESENCE] Reconnection failed after max attempts');
-        },
-      }
-    );
+    // Avoid duplicate sockets. PartySocket handles reconnecting internally.
+    if (this.socket && this.socket.readyState !== WebSocket.CLOSED) {
+      console.log('[PRESENCE] Existing socket is active, skipping duplicate connect');
+      return;
+    }
 
     this.socket = new PartySocket({
       host: this.host,
       party: 'presence',
       room: 'global',
+      connectionTimeout: 8000,
+      minReconnectionDelay: 1000,
+      maxReconnectionDelay: 15000,
+      reconnectionDelayGrowFactor: 1.3,
     });
 
     this.socket.addEventListener('open', () => {
@@ -75,18 +63,29 @@ export class PartykitPresence {
         type: 'presence_connect',
         userId: this.userId,
       }));
+
+      // Re-sync subscriptions and state after initial connect and auto-reconnects.
+      if (this.friendIds.length > 0) {
+        this.subscribeFriends(this.friendIds);
+      }
+      this.updateStatus(this.currentStatus);
+      this.socket!.send(JSON.stringify({
+        type: 'request_pending_challenges',
+        userId: this.userId,
+      }));
     });
 
     this.socket.addEventListener('message', (event) => {
+      if (!this.callbacks) return;
       const data = JSON.parse(event.data);
 
       switch (data.type) {
         case 'presence_update':
-          callbacks.onPresenceUpdate(data.userId, data.status);
+          this.callbacks.onPresenceUpdate(data.userId, data.status);
           break;
 
         case 'friend_challenge_received':
-          callbacks.onChallengeReceived({
+          this.callbacks.onChallengeReceived({
             challengeId: data.challengeId,
             challengerId: data.challengerId,
             challengerUsername: data.challengerUsername,
@@ -97,7 +96,7 @@ export class PartykitPresence {
           break;
 
         case 'friend_challenge_accepted':
-          callbacks.onChallengeAccepted({
+          this.callbacks.onChallengeAccepted({
             challengeId: data.challengeId,
             roomId: data.roomId,
             player1: data.player1,
@@ -106,24 +105,24 @@ export class PartykitPresence {
           break;
 
         case 'friend_challenge_declined':
-          callbacks.onChallengeDeclined(data.challengeId);
+          this.callbacks.onChallengeDeclined(data.challengeId);
           break;
 
         case 'friend_challenge_expired':
-          callbacks.onChallengeExpired(data.challengeId);
+          this.callbacks.onChallengeExpired(data.challengeId);
           break;
 
         case 'friend_challenge_cancelled':
-          callbacks.onChallengeCancelled(data.challengeId);
+          this.callbacks.onChallengeCancelled(data.challengeId);
           break;
 
         case 'challenge_accept_failed':
           console.error('[PRESENCE] Challenge accept failed:', data.error);
-          callbacks.onChallengeAcceptFailed?.(data.challengeId, data.error);
+          this.callbacks.onChallengeAcceptFailed?.(data.challengeId, data.error);
           break;
 
         case 'challenge_ack_received':
-          callbacks.onChallengeAcknowledged?.(data.challengeId);
+          this.callbacks.onChallengeAcknowledged?.(data.challengeId);
           break;
       }
     });
@@ -138,29 +137,8 @@ export class PartykitPresence {
         console.log('[PRESENCE] Connection closed intentionally, not reconnecting');
         return;
       }
-
-      console.log('[PRESENCE] Connection closed, attempting reconnection...');
-      this.reconnectionManager?.reconnect(async () => {
-        return new Promise((resolve, reject) => {
-          if (!this.callbacks) {
-            reject(new Error('No callbacks set'));
-            return;
-          }
-          this.connect(this.callbacks);
-          // Wait for open event
-          const checkOpen = setInterval(() => {
-            if (this.socket?.readyState === WebSocket.OPEN) {
-              clearInterval(checkOpen);
-              resolve();
-            }
-          }, 100);
-          // Timeout after 5 seconds
-          setTimeout(() => {
-            clearInterval(checkOpen);
-            reject(new Error('Reconnection timeout'));
-          }, 5000);
-        });
-      });
+      // PartySocket already reconnects automatically.
+      console.log('[PRESENCE] Connection closed, waiting for PartySocket auto-reconnect');
     });
   }
 
@@ -175,6 +153,7 @@ export class PartykitPresence {
   }
 
   updateStatus(status: 'menu' | 'in_queue' | 'in_game'): void {
+    this.currentStatus = status;
     if (this.socket && this.socket.readyState === WebSocket.OPEN) {
       this.socket.send(JSON.stringify({
         type: 'presence_status_update',
@@ -240,38 +219,9 @@ export class PartykitPresence {
     }
   }
 
-  private async restoreState(): Promise<void> {
-    if (!this.socket || this.socket.readyState !== WebSocket.OPEN) return;
-
-    console.log('[PRESENCE] Restoring state after reconnection...');
-
-    // Re-send presence_connect
-    this.socket.send(JSON.stringify({
-      type: 'presence_connect',
-      userId: this.userId,
-    }));
-
-    // Re-subscribe to friends
-    if (this.friendIds.length > 0) {
-      this.subscribeFriends(this.friendIds);
-    }
-
-    // Request any pending challenges from server
-    this.socket.send(JSON.stringify({
-      type: 'request_pending_challenges',
-      userId: this.userId,
-    }));
-  }
-
   disconnect(): void {
     console.log('[PRESENCE] Disconnect called');
     this.intentionallyDisconnected = true;
-
-    // Stop reconnection manager
-    if (this.reconnectionManager) {
-      this.reconnectionManager.reset();
-      this.reconnectionManager = null;
-    }
 
     if (this.socket) {
       this.socket.close();

@@ -162,6 +162,13 @@ export default class PresenceServer implements Party.Server {
       this.disconnectTimers.delete(userId);
     }
 
+    // If the user already had another active connection, discard stale maps.
+    const previous = this.onlineUsers.get(userId);
+    if (previous && previous.connectionId !== conn.id) {
+      this.connectionToUser.delete(previous.connectionId);
+      this.subscriptions.delete(previous.connectionId);
+    }
+
     // Register user as online
     this.onlineUsers.set(userId, {
       connectedAt: Date.now(),
@@ -279,9 +286,9 @@ export default class PresenceServer implements Party.Server {
     if (!challenge) {
       // Fallback to database query (server may have restarted)
       console.warn('[PRESENCE] Challenge not in memory, querying database...');
-      challenge = await this.queryChallengeFromDB(challengeId);
+      const challengeFromDB = await this.queryChallengeFromDB(challengeId);
 
-      if (!challenge) {
+      if (!challengeFromDB) {
         // Challenge not found - send error to client
         sender.send(JSON.stringify({
           type: 'challenge_accept_failed',
@@ -292,6 +299,7 @@ export default class PresenceServer implements Party.Server {
         return;
       }
 
+      challenge = challengeFromDB;
       console.log('[PRESENCE] Challenge restored from database:', challengeId);
     }
 
@@ -488,11 +496,24 @@ export default class PresenceServer implements Party.Server {
 
     // Clean up subscriptions
     this.subscriptions.delete(conn.id);
+    this.connectionToUser.delete(conn.id);
+
+    // Ignore stale closes for non-current connections.
+    const currentUser = this.onlineUsers.get(userId);
+    if (!currentUser || currentUser.connectionId !== conn.id) {
+      return;
+    }
 
     // Start 10-second grace period for reconnection
+    const closingConnectionId = conn.id;
     const timer = setTimeout(() => {
+      const activeUser = this.onlineUsers.get(userId);
+      if (!activeUser || activeUser.connectionId !== closingConnectionId) {
+        this.disconnectTimers.delete(userId);
+        return;
+      }
+
       this.onlineUsers.delete(userId);
-      this.connectionToUser.delete(conn.id);
       this.disconnectTimers.delete(userId);
       console.log(`[PRESENCE] User ${userId} offline after grace period. Online: ${this.onlineUsers.size}`);
 
