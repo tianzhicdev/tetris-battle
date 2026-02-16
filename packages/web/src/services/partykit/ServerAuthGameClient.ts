@@ -2,6 +2,7 @@ import PartySocket from 'partysocket';
 import type { PlayerInputType } from '@tetris-battle/game-core';
 import { ABILITIES } from '@tetris-battle/game-core';
 import type { DebugLogger } from '../debug/DebugLogger';
+import { ConnectionMonitor, type ConnectionStats } from '../ConnectionMonitor';
 
 export interface GameStateUpdate {
   timestamp: number;
@@ -49,6 +50,7 @@ export class ServerAuthGameClient {
   private loadout: string[];
   private aiOpponent?: any;
   private debugLogger: DebugLogger | null = null;
+  private connectionMonitor: ConnectionMonitor | null = null;
 
   constructor(roomId: string, playerId: string, host: string, loadout: string[], _aiOpponent?: any, debugLogger?: DebugLogger) {
     this.roomId = roomId;
@@ -61,6 +63,11 @@ export class ServerAuthGameClient {
       host,
       party: 'game',
       room: roomId,
+    });
+
+    // Initialize connection monitor
+    this.connectionMonitor = new ConnectionMonitor((timestamp) => {
+      this.send({ type: 'ping', timestamp });
     });
   }
 
@@ -75,6 +82,7 @@ export class ServerAuthGameClient {
   ): void {
     this.socket.addEventListener('open', () => {
       console.log(`[SERVER-AUTH] Connected to game room: ${this.roomId}`);
+      this.connectionMonitor?.startMonitoring();
       this.joinGame();
     });
 
@@ -162,6 +170,11 @@ export class ServerAuthGameClient {
         case 'game_finished':
           onGameFinished(data.winnerId);
           break;
+
+        case 'pong':
+          this.connectionMonitor?.onPong(data.timestamp, data.serverTime);
+          this.debugLogger?.logEvent('pong', `RTT: ${Date.now() - data.timestamp}ms`, data);
+          break;
       }
     });
 
@@ -244,7 +257,16 @@ export class ServerAuthGameClient {
     this.debugLogger = debugLogger;
   }
 
+  getConnectionStats(): ConnectionStats | null {
+    return this.connectionMonitor?.getStats() || null;
+  }
+
+  subscribeToConnectionStats(callback: (stats: ConnectionStats) => void): () => void {
+    return this.connectionMonitor?.subscribe(callback) || (() => {});
+  }
+
   disconnect(): void {
+    this.connectionMonitor?.stopMonitoring();
     this.socket.close();
   }
 }

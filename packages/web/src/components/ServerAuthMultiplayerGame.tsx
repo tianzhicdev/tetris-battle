@@ -8,6 +8,7 @@ import {
   type AbilityActivationResult,
   type GameStateUpdate,
 } from '../services/partykit/ServerAuthGameClient';
+import type { ConnectionStats } from '../services/ConnectionMonitor';
 import { AbilityEffects } from './AbilityEffects';
 import { AbilityInfo } from './AbilityInfo';
 import { ParticleEffect } from './ParticleEffect';
@@ -187,6 +188,7 @@ export function ServerAuthMultiplayerGame({
   const debugLoggerRef = useRef<DebugLogger | null>(null);
   const [isDebugMode, setIsDebugMode] = useState(false);
   const [showMispredictionFeedback, setShowMispredictionFeedback] = useState(false);
+  const [connectionStats, setConnectionStats] = useState<ConnectionStats | null>(null);
 
   const { availableAbilities, setLoadout } = useAbilityStore();
   const gameStore = useGameStore();
@@ -417,10 +419,16 @@ export function ServerAuthMultiplayerGame({
 
     setIsConnected(true);
 
+    // Subscribe to connection stats updates
+    const unsubscribeStats = client.subscribeToConnectionStats((stats) => {
+      setConnectionStats(stats);
+    });
+
     // Start gameplay music
     audioManager.playMusic('gameplay_normal', true);
 
     return () => {
+      unsubscribeStats();
       pendingAbilityActivationsRef.current.clear();
       for (const timeout of abilityResponseTimeoutsRef.current.values()) {
         clearTimeout(timeout);
@@ -934,6 +942,52 @@ export function ServerAuthMultiplayerGame({
         left: 0,
       }}
     >
+      {/* Connection Quality Indicator */}
+      {connectionStats && (
+        <div
+          style={{
+            position: 'absolute',
+            top: '10px',
+            right: '10px',
+            padding: '8px 12px',
+            background: 'rgba(0, 0, 0, 0.7)',
+            borderRadius: '8px',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+            fontSize: '14px',
+            fontWeight: '500',
+            zIndex: 1000,
+            border: '1px solid rgba(255, 255, 255, 0.1)',
+          }}
+        >
+          <span style={{ fontSize: '16px' }}>
+            {connectionStats.quality === 'excellent' && '🟢'}
+            {connectionStats.quality === 'good' && '🟡'}
+            {connectionStats.quality === 'poor' && '🟠'}
+            {connectionStats.quality === 'critical' && '🔴'}
+          </span>
+          <span style={{ color: '#ffffff' }}>
+            {Math.round(connectionStats.avgLatency)}ms
+          </span>
+          <span
+            style={{
+              color:
+                connectionStats.quality === 'excellent'
+                  ? '#4ade80'
+                  : connectionStats.quality === 'good'
+                  ? '#fbbf24'
+                  : connectionStats.quality === 'poor'
+                  ? '#fb923c'
+                  : '#ef4444',
+              textTransform: 'capitalize',
+              fontSize: '12px',
+            }}
+          >
+            {connectionStats.quality}
+          </span>
+        </div>
+      )}
       {/* Main Game Area */}
       <div style={{ display: 'flex', flex: 1, overflow: 'hidden', padding: 'clamp(2px, 0.5vw, 4px)', gap: 'clamp(2px, 0.5vw, 4px)' }}>
         {/* Left: Your Board */}

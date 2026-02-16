@@ -1,4 +1,5 @@
 import PartySocket from 'partysocket';
+import { ReconnectionManager } from '../ReconnectionManager';
 
 export interface PresenceCallbacks {
   onPresenceUpdate: (userId: string, status: 'online' | 'in_game' | 'offline') => void;
@@ -19,12 +20,16 @@ export interface PresenceCallbacks {
   onChallengeDeclined: (challengeId: string) => void;
   onChallengeExpired: (challengeId: string) => void;
   onChallengeCancelled: (challengeId: string) => void;
+  onChallengeAcknowledged?: (challengeId: string) => void;
 }
 
 export class PartykitPresence {
   private socket: PartySocket | null = null;
   private userId: string;
   private host: string;
+  private reconnectionManager: ReconnectionManager | null = null;
+  private callbacks: PresenceCallbacks | null = null;
+  private friendIds: string[] = [];
 
   constructor(userId: string, host: string) {
     this.userId = userId;
@@ -32,6 +37,29 @@ export class PartykitPresence {
   }
 
   connect(callbacks: PresenceCallbacks): void {
+    this.callbacks = callbacks;
+
+    this.reconnectionManager = new ReconnectionManager(
+      {
+        maxAttempts: 10,
+        baseDelay: 1000,
+        maxDelay: 30000,
+        jitterFactor: 0.25,
+      },
+      {
+        onReconnecting: (attempt, delayMs) => {
+          console.log(`[PRESENCE] Reconnecting (attempt ${attempt}) in ${Math.ceil(delayMs / 1000)}s...`);
+        },
+        onReconnected: async () => {
+          console.log('[PRESENCE] Reconnected successfully');
+          await this.restoreState();
+        },
+        onFailed: () => {
+          console.error('[PRESENCE] Reconnection failed after max attempts');
+        },
+      }
+    );
+
     this.socket = new PartySocket({
       host: this.host,
       party: 'presence',
@@ -85,15 +113,45 @@ export class PartykitPresence {
         case 'friend_challenge_cancelled':
           callbacks.onChallengeCancelled(data.challengeId);
           break;
+
+        case 'challenge_ack_received':
+          callbacks.onChallengeAcknowledged?.(data.challengeId);
+          break;
       }
     });
 
     this.socket.addEventListener('error', (error) => {
       console.error('[PRESENCE] Error:', error);
     });
+
+    this.socket.addEventListener('close', () => {
+      console.log('[PRESENCE] Connection closed, attempting reconnection...');
+      this.reconnectionManager?.reconnect(async () => {
+        return new Promise((resolve, reject) => {
+          if (!this.callbacks) {
+            reject(new Error('No callbacks set'));
+            return;
+          }
+          this.connect(this.callbacks);
+          // Wait for open event
+          const checkOpen = setInterval(() => {
+            if (this.socket?.readyState === WebSocket.OPEN) {
+              clearInterval(checkOpen);
+              resolve();
+            }
+          }, 100);
+          // Timeout after 5 seconds
+          setTimeout(() => {
+            clearInterval(checkOpen);
+            reject(new Error('Reconnection timeout'));
+          }, 5000);
+        });
+      });
+    });
   }
 
   subscribeFriends(friendIds: string[]): void {
+    this.friendIds = friendIds;
     if (this.socket && this.socket.readyState === WebSocket.OPEN) {
       this.socket.send(JSON.stringify({
         type: 'presence_subscribe',
@@ -157,6 +215,38 @@ export class PartykitPresence {
         challengeId,
       }));
     }
+  }
+
+  acknowledgeChallenge(challengeId: string): void {
+    if (this.socket && this.socket.readyState === WebSocket.OPEN) {
+      this.socket.send(JSON.stringify({
+        type: 'challenge_ack',
+        challengeId,
+      }));
+    }
+  }
+
+  private async restoreState(): Promise<void> {
+    if (!this.socket || this.socket.readyState !== WebSocket.OPEN) return;
+
+    console.log('[PRESENCE] Restoring state after reconnection...');
+
+    // Re-send presence_connect
+    this.socket.send(JSON.stringify({
+      type: 'presence_connect',
+      userId: this.userId,
+    }));
+
+    // Re-subscribe to friends
+    if (this.friendIds.length > 0) {
+      this.subscribeFriends(this.friendIds);
+    }
+
+    // Request any pending challenges from server
+    this.socket.send(JSON.stringify({
+      type: 'request_pending_challenges',
+      userId: this.userId,
+    }));
   }
 
   disconnect(): void {

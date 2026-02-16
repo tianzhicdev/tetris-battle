@@ -34,6 +34,7 @@ function GameApp({ profile: initialProfile }: { profile: UserProfile }) {
   const [gameMatch, setGameMatch] = useState<GameMatch | null>(null);
   const [profile, setProfile] = useState<UserProfile>(initialProfile);
   const presenceRef = useRef<PartykitPresence | null>(null);
+  const challengePollIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const {
     loadFriends,
@@ -118,9 +119,35 @@ function GameApp({ profile: initialProfile }: { profile: UserProfile }) {
     loadFriends(playerId);
     loadPendingRequests(playerId);
 
+    // Restore pending challenges from database
+    const restorePendingChallenges = async () => {
+      try {
+        const pending = await friendService.getPendingChallenges(playerId);
+        for (const challenge of pending) {
+          if (challenge.challengedId === playerId) {
+            // I'm being challenged
+            setIncomingChallenge(challenge);
+          } else if (challenge.challengerId === playerId) {
+            // I sent a challenge
+            setOutgoingChallenge(challenge);
+          }
+        }
+      } catch (error) {
+        console.error('[APP] Error restoring pending challenges:', error);
+      }
+    };
+
+    restorePendingChallenges();
+
+    // Poll for pending challenges every 30 seconds (fallback mechanism)
+    challengePollIntervalRef.current = setInterval(restorePendingChallenges, 30000);
+
     return () => {
       presence.disconnect();
       presenceRef.current = null;
+      if (challengePollIntervalRef.current) {
+        clearInterval(challengePollIntervalRef.current);
+      }
     };
   }, [playerId]);
 

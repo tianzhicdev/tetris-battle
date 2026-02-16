@@ -15,6 +15,7 @@ interface PendingChallenge {
   challengerLevel: number;
   expiresAt: number;
   timer: ReturnType<typeof setTimeout>;
+  ackTimeout?: ReturnType<typeof setTimeout>;
 }
 
 export default class PresenceServer implements Party.Server {
@@ -28,6 +29,8 @@ export default class PresenceServer implements Party.Server {
   subscriptions: Map<string, Set<string>> = new Map();
   // challengeId -> pending challenge info
   pendingChallenges: Map<string, PendingChallenge> = new Map();
+  // Track which challenges have been acknowledged by the recipient
+  acknowledgedChallenges: Map<string, boolean> = new Map();
 
   constructor(readonly room: Party.Room) {
     console.log('[PRESENCE] Server initialized');
@@ -73,6 +76,14 @@ export default class PresenceServer implements Party.Server {
 
       case 'friend_challenge_cancel':
         this.handleChallengeCancel(data, sender);
+        break;
+
+      case 'challenge_ack':
+        this.handleChallengeAck(data, sender);
+        break;
+
+      case 'request_pending_challenges':
+        this.handleRequestPendingChallenges(data.userId, sender);
         break;
     }
   }
@@ -164,6 +175,31 @@ export default class PresenceServer implements Party.Server {
           challengerLevel,
           expiresAt,
         }));
+
+        // Track if ACK received within 5 seconds
+        const ackTimeout = setTimeout(() => {
+          if (!this.acknowledgedChallenges.get(challengeId)) {
+            console.warn(`[PRESENCE] Challenge ${challengeId} not acknowledged, retrying...`);
+            // Resend challenge
+            if (conn) {
+              conn.send(JSON.stringify({
+                type: 'friend_challenge_received',
+                challengeId,
+                challengerId,
+                challengerUsername,
+                challengerRank,
+                challengerLevel,
+                expiresAt,
+              }));
+            }
+          }
+        }, 5000);
+
+        // Store timeout so we can clear it
+        const challenge = this.pendingChallenges.get(challengeId);
+        if (challenge) {
+          challenge.ackTimeout = ackTimeout;
+        }
       }
     }
   }
@@ -173,8 +209,11 @@ export default class PresenceServer implements Party.Server {
     const challenge = this.pendingChallenges.get(challengeId);
     if (!challenge) return;
 
-    // Clear expiry timer
+    // Clear timers
     clearTimeout(challenge.timer);
+    if (challenge.ackTimeout) {
+      clearTimeout(challenge.ackTimeout);
+    }
     this.pendingChallenges.delete(challengeId);
 
     // Generate game room
@@ -209,8 +248,11 @@ export default class PresenceServer implements Party.Server {
     const challenge = this.pendingChallenges.get(challengeId);
     if (!challenge) return;
 
-    // Clear expiry timer
+    // Clear timers
     clearTimeout(challenge.timer);
+    if (challenge.ackTimeout) {
+      clearTimeout(challenge.ackTimeout);
+    }
     this.pendingChallenges.delete(challengeId);
 
     // Notify the challenger
@@ -232,6 +274,9 @@ export default class PresenceServer implements Party.Server {
     if (!challenge) return;
 
     clearTimeout(challenge.timer);
+    if (challenge.ackTimeout) {
+      clearTimeout(challenge.ackTimeout);
+    }
     this.pendingChallenges.delete(challengeId);
 
     // Notify the challenged user
@@ -273,6 +318,39 @@ export default class PresenceServer implements Party.Server {
         conn.send(JSON.stringify({
           type: 'friend_challenge_expired',
           challengeId,
+        }));
+      }
+    }
+  }
+
+  handleChallengeAck(data: any, sender: Party.Connection) {
+    const { challengeId } = data;
+    this.acknowledgedChallenges.set(challengeId, true);
+
+    // Send confirmation back to sender
+    sender.send(JSON.stringify({
+      type: 'challenge_ack_received',
+      challengeId,
+    }));
+
+    console.log(`[PRESENCE] Challenge ${challengeId} acknowledged`);
+  }
+
+  handleRequestPendingChallenges(userId: string, sender: Party.Connection) {
+    console.log(`[PRESENCE] Sending pending challenges to ${userId}`);
+
+    // Send all pending challenges involving this user
+    for (const [challengeId, challenge] of this.pendingChallenges) {
+      if (challenge.challengerId === userId || challenge.challengedId === userId) {
+        sender.send(JSON.stringify({
+          type: 'friend_challenge_received',
+          challengeId: challenge.challengeId,
+          challengerId: challenge.challengerId,
+          challengedId: challenge.challengedId,
+          challengerUsername: challenge.challengerUsername,
+          challengerRank: challenge.challengerRank,
+          challengerLevel: challenge.challengerLevel,
+          expiresAt: challenge.expiresAt,
         }));
       }
     }

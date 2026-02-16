@@ -58,6 +58,8 @@ export default class GameRoomServer implements Party.Server {
   lastBroadcastTime: number = 0;
   broadcastThrottle: number = 16; // 60fps = 16ms
   roomSeed: number = 0; // Deterministic seed for this room
+  playerLatencies: Map<string, number> = new Map();
+  lastPlayerBroadcasts: Map<string, number> = new Map();
 
   constructor(readonly room: Party.Room) {
     // Generate deterministic seed from room ID
@@ -90,10 +92,19 @@ export default class GameRoomServer implements Party.Server {
       return;
     }
 
-    // Debug ping/pong support
-    if (data.type === 'debug_ping') {
+    // Handle ping/pong for connection monitoring
+    if (data.type === 'ping' || data.type === 'debug_ping') {
+      // Calculate latency if this is a returning ping
+      const latency = Date.now() - data.timestamp;
+
+      // Get player ID from connection
+      const playerId = this.getPlayerIdByConnection(sender.id);
+      if (playerId) {
+        this.playerLatencies.set(playerId, latency);
+      }
+
       sender.send(JSON.stringify({
-        type: 'debug_pong',
+        type: data.type === 'ping' ? 'pong' : 'debug_pong',
         timestamp: data.timestamp,
         serverTime: Date.now(),
       }));
@@ -274,12 +285,7 @@ export default class GameRoomServer implements Party.Server {
   }
 
   private broadcastState(): void {
-    // Throttle to 60fps
     const now = Date.now();
-    if (now - this.lastBroadcastTime < this.broadcastThrottle) {
-      return;
-    }
-    this.lastBroadcastTime = now;
 
     // Get all player states
     const playerStates: Record<string, any> = {};
@@ -287,12 +293,22 @@ export default class GameRoomServer implements Party.Server {
       playerStates[playerId] = serverState.getPublicState();
     }
 
-    // Send to each player: their state + opponent state
+    // Send to each player with adaptive throttling
     for (const [playerId, playerState] of this.players) {
       if (playerId === this.aiPlayer?.id) continue; // Skip AI
 
       const conn = this.getConnection(playerState.connectionId);
       if (!conn) continue;
+
+      // Check player-specific throttle
+      const updateRate = this.determineUpdateRate(playerId);
+      const lastBroadcast = this.lastPlayerBroadcasts.get(playerId) || 0;
+
+      if (now - lastBroadcast < updateRate) {
+        continue; // Skip this player this frame
+      }
+
+      this.lastPlayerBroadcasts.set(playerId, now);
 
       // Find opponent
       const opponentId = this.getOpponentId(playerId);
@@ -317,6 +333,24 @@ export default class GameRoomServer implements Party.Server {
       if (id !== playerId) return id;
     }
     return null;
+  }
+
+  private getPlayerIdByConnection(connectionId: string): string | null {
+    for (const [playerId, playerState] of this.players) {
+      if (playerState.connectionId === connectionId) {
+        return playerId;
+      }
+    }
+    return null;
+  }
+
+  private determineUpdateRate(playerId: string): number {
+    const latency = this.playerLatencies.get(playerId) || 50;
+
+    if (latency < 50) return 16;    // 60fps (16ms)
+    if (latency < 100) return 33;   // 30fps (33ms)
+    if (latency < 200) return 50;   // 20fps (50ms)
+    return 100;                     // 10fps (100ms)
   }
 
   startAIGameLoop() {
