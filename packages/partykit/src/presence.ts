@@ -107,50 +107,67 @@ export default class PresenceServer implements Party.Server {
       return;
     }
 
-    switch (data.type) {
-      case 'presence_connect':
-        this.handlePresenceConnect(data.userId, sender);
-        break;
+    try {
+      switch (data.type) {
+        case 'presence_connect':
+          if (typeof data.userId === 'string' && data.userId.length > 0) {
+            this.handlePresenceConnect(data.userId, sender);
+          }
+          break;
 
-      case 'presence_subscribe':
-        this.handlePresenceSubscribe(data.friendIds, sender);
-        break;
+        case 'presence_subscribe':
+          this.handlePresenceSubscribe(data.friendIds, sender);
+          break;
 
-      case 'presence_status_update':
-        this.handleStatusUpdate(data.userId, data.status);
-        break;
+        case 'presence_status_update':
+          this.handleStatusUpdate(data.userId, data.status);
+          break;
 
-      case 'friend_challenge':
-        this.handleFriendChallenge(data, sender);
-        break;
+        case 'presence_ping':
+          this.safeSend(sender, {
+            type: 'presence_pong',
+            timestamp: data.timestamp ?? Date.now(),
+          });
+          break;
 
-      case 'friend_challenge_accept':
-        // Handle async method - don't await to avoid blocking other messages
-        this.handleChallengeAccept(data, sender).catch(err => {
-          console.error('[PRESENCE] Error handling challenge accept:', err);
-          sender.send(JSON.stringify({
-            type: 'challenge_accept_failed',
-            challengeId: data.challengeId,
-            error: 'Internal server error while processing challenge',
-          }));
-        });
-        break;
+        case 'friend_challenge':
+          this.handleFriendChallenge(data, sender);
+          break;
 
-      case 'friend_challenge_decline':
-        this.handleChallengeDecline(data, sender);
-        break;
+        case 'friend_challenge_accept':
+          // Handle async method - don't await to avoid blocking other messages
+          this.handleChallengeAccept(data, sender).catch(err => {
+            console.error('[PRESENCE] Error handling challenge accept:', err);
+            this.safeSend(sender, {
+              type: 'challenge_accept_failed',
+              challengeId: data.challengeId,
+              error: 'Internal server error while processing challenge',
+            });
+          });
+          break;
 
-      case 'friend_challenge_cancel':
-        this.handleChallengeCancel(data, sender);
-        break;
+        case 'friend_challenge_decline':
+          this.handleChallengeDecline(data, sender);
+          break;
 
-      case 'challenge_ack':
-        this.handleChallengeAck(data, sender);
-        break;
+        case 'friend_challenge_cancel':
+          this.handleChallengeCancel(data, sender);
+          break;
 
-      case 'request_pending_challenges':
-        this.handleRequestPendingChallenges(data.userId, sender);
-        break;
+        case 'challenge_ack':
+          this.handleChallengeAck(data, sender);
+          break;
+
+        case 'request_pending_challenges':
+          this.handleRequestPendingChallenges(data.userId, sender);
+          break;
+      }
+    } catch (error) {
+      console.error('[PRESENCE] onMessage handler error:', {
+        type: data?.type,
+        senderId: sender.id,
+        error,
+      });
     }
   }
 
@@ -183,26 +200,33 @@ export default class PresenceServer implements Party.Server {
     this.notifySubscribers(userId, 'online');
   }
 
-  handlePresenceSubscribe(friendIds: string[], conn: Party.Connection) {
+  handlePresenceSubscribe(friendIds: string[] | undefined, conn: Party.Connection) {
+    const safeFriendIds = Array.isArray(friendIds)
+      ? friendIds.filter((id) => typeof id === 'string' && id.length > 0)
+      : [];
+
     // Store subscription
-    this.subscriptions.set(conn.id, new Set(friendIds));
+    this.subscriptions.set(conn.id, new Set(safeFriendIds));
 
     // Send current status of all requested friends
-    for (const friendId of friendIds) {
+    for (const friendId of safeFriendIds) {
       const user = this.onlineUsers.get(friendId);
       const status = user
         ? (user.status === 'in_game' ? 'in_game' : 'online')
         : 'offline';
 
-      conn.send(JSON.stringify({
+      this.safeSend(conn, {
         type: 'presence_update',
         userId: friendId,
         status,
-      }));
+      });
     }
   }
 
   handleStatusUpdate(userId: string, status: 'menu' | 'in_queue' | 'in_game') {
+    if (!userId || (status !== 'menu' && status !== 'in_queue' && status !== 'in_game')) {
+      return;
+    }
     const user = this.onlineUsers.get(userId);
     if (user) {
       user.status = status;
@@ -239,7 +263,7 @@ export default class PresenceServer implements Party.Server {
     if (challengedUser) {
       const conn = this.getConnection(challengedUser.connectionId);
       if (conn) {
-        conn.send(JSON.stringify({
+        this.safeSend(conn, {
           type: 'friend_challenge_received',
           challengeId,
           challengerId,
@@ -247,7 +271,7 @@ export default class PresenceServer implements Party.Server {
           challengerRank,
           challengerLevel,
           expiresAt,
-        }));
+        });
 
         // Track if ACK received within 5 seconds
         const ackTimeout = setTimeout(() => {
@@ -255,7 +279,7 @@ export default class PresenceServer implements Party.Server {
             console.warn(`[PRESENCE] Challenge ${challengeId} not acknowledged, retrying...`);
             // Resend challenge
             if (conn) {
-              conn.send(JSON.stringify({
+              this.safeSend(conn, {
                 type: 'friend_challenge_received',
                 challengeId,
                 challengerId,
@@ -263,7 +287,7 @@ export default class PresenceServer implements Party.Server {
                 challengerRank,
                 challengerLevel,
                 expiresAt,
-              }));
+              });
             }
           }
         }, 5000);
@@ -290,11 +314,11 @@ export default class PresenceServer implements Party.Server {
 
       if (!challengeFromDB) {
         // Challenge not found - send error to client
-        sender.send(JSON.stringify({
+        this.safeSend(sender, {
           type: 'challenge_accept_failed',
           challengeId,
           error: 'Challenge not found or expired. It may have been cancelled or already accepted.',
-        }));
+        });
         console.error('[PRESENCE] Challenge accept failed: not found in memory or database');
         return;
       }
@@ -329,7 +353,7 @@ export default class PresenceServer implements Party.Server {
     if (challengerUser) {
       const conn = this.getConnection(challengerUser.connectionId);
       if (conn) {
-        conn.send(JSON.stringify(matchData));
+        this.safeSend(conn, matchData);
         console.log('[PRESENCE] Sent match data to challenger:', challenge.challengerId);
       } else {
         console.warn('[PRESENCE] Challenger connection not found');
@@ -343,7 +367,7 @@ export default class PresenceServer implements Party.Server {
     if (challengedUser) {
       const conn = this.getConnection(challengedUser.connectionId);
       if (conn) {
-        conn.send(JSON.stringify(matchData));
+        this.safeSend(conn, matchData);
         console.log('[PRESENCE] Sent match data to challenged:', challenge.challengedId);
       } else {
         console.warn('[PRESENCE] Challenged connection not found');
@@ -372,10 +396,10 @@ export default class PresenceServer implements Party.Server {
     if (challengerUser) {
       const conn = this.getConnection(challengerUser.connectionId);
       if (conn) {
-        conn.send(JSON.stringify({
+        this.safeSend(conn, {
           type: 'friend_challenge_declined',
           challengeId,
-        }));
+        });
       }
     }
   }
@@ -396,10 +420,10 @@ export default class PresenceServer implements Party.Server {
     if (challengedUser) {
       const conn = this.getConnection(challengedUser.connectionId);
       if (conn) {
-        conn.send(JSON.stringify({
+        this.safeSend(conn, {
           type: 'friend_challenge_cancelled',
           challengeId,
-        }));
+        });
       }
     }
   }
@@ -415,10 +439,10 @@ export default class PresenceServer implements Party.Server {
     if (challengerUser) {
       const conn = this.getConnection(challengerUser.connectionId);
       if (conn) {
-        conn.send(JSON.stringify({
+        this.safeSend(conn, {
           type: 'friend_challenge_expired',
           challengeId,
-        }));
+        });
       }
     }
 
@@ -427,10 +451,10 @@ export default class PresenceServer implements Party.Server {
     if (challengedUser) {
       const conn = this.getConnection(challengedUser.connectionId);
       if (conn) {
-        conn.send(JSON.stringify({
+        this.safeSend(conn, {
           type: 'friend_challenge_expired',
           challengeId,
-        }));
+        });
       }
     }
   }
@@ -440,10 +464,10 @@ export default class PresenceServer implements Party.Server {
     this.acknowledgedChallenges.set(challengeId, true);
 
     // Send confirmation back to sender
-    sender.send(JSON.stringify({
+    this.safeSend(sender, {
       type: 'challenge_ack_received',
       challengeId,
-    }));
+    });
 
     console.log(`[PRESENCE] Challenge ${challengeId} acknowledged`);
   }
@@ -454,7 +478,7 @@ export default class PresenceServer implements Party.Server {
     // Send all pending challenges involving this user
     for (const [challengeId, challenge] of this.pendingChallenges) {
       if (challenge.challengerId === userId || challenge.challengedId === userId) {
-        sender.send(JSON.stringify({
+        this.safeSend(sender, {
           type: 'friend_challenge_received',
           challengeId: challenge.challengeId,
           challengerId: challenge.challengerId,
@@ -463,7 +487,7 @@ export default class PresenceServer implements Party.Server {
           challengerRank: challenge.challengerRank,
           challengerLevel: challenge.challengerLevel,
           expiresAt: challenge.expiresAt,
-        }));
+        });
       }
     }
   }
@@ -480,9 +504,30 @@ export default class PresenceServer implements Party.Server {
       if (subscribedIds.has(userId)) {
         const conn = this.getConnection(connId);
         if (conn) {
-          conn.send(message);
+          try {
+            conn.send(message);
+          } catch (error) {
+            console.error('[PRESENCE] Failed to notify subscriber:', {
+              connId,
+              userId,
+              status,
+              error,
+            });
+          }
         }
       }
+    }
+  }
+
+  private safeSend(conn: Party.Connection, payload: any): void {
+    try {
+      conn.send(JSON.stringify(payload));
+    } catch (error) {
+      console.error('[PRESENCE] Failed to send message:', {
+        payloadType: payload?.type,
+        connectionId: conn.id,
+        error,
+      });
     }
   }
 

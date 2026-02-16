@@ -31,6 +31,7 @@ export class PartykitPresence {
   private friendIds: string[] = [];
   private intentionallyDisconnected: boolean = false;
   private currentStatus: 'menu' | 'in_queue' | 'in_game' = 'menu';
+  private heartbeatTimer: ReturnType<typeof setInterval> | null = null;
 
   constructor(userId: string, host: string) {
     this.userId = userId;
@@ -59,6 +60,8 @@ export class PartykitPresence {
 
     this.socket.addEventListener('open', () => {
       console.log('[PRESENCE] Connected');
+      this.stopHeartbeat();
+      this.startHeartbeat();
       this.socket!.send(JSON.stringify({
         type: 'presence_connect',
         userId: this.userId,
@@ -124,21 +127,35 @@ export class PartykitPresence {
         case 'challenge_ack_received':
           this.callbacks.onChallengeAcknowledged?.(data.challengeId);
           break;
+
+        case 'presence_pong':
+          break;
       }
     });
 
     this.socket.addEventListener('error', (error) => {
-      console.error('[PRESENCE] Error:', error);
+      console.error('[PRESENCE] Error:', {
+        type: error.type,
+        readyState: this.socket?.readyState,
+        url: this.socket?.url,
+      });
     });
 
-    this.socket.addEventListener('close', () => {
+    this.socket.addEventListener('close', (event) => {
+      this.stopHeartbeat();
       // Don't reconnect if we intentionally disconnected
       if (this.intentionallyDisconnected) {
         console.log('[PRESENCE] Connection closed intentionally, not reconnecting');
         return;
       }
       // PartySocket already reconnects automatically.
-      console.log('[PRESENCE] Connection closed, waiting for PartySocket auto-reconnect');
+      console.warn('[PRESENCE] Connection closed, waiting for PartySocket auto-reconnect', {
+        code: event.code,
+        reason: event.reason || '(empty)',
+        wasClean: event.wasClean,
+        readyState: this.socket?.readyState,
+        retryCount: (this.socket as any)?.retryCount,
+      });
     });
   }
 
@@ -222,6 +239,7 @@ export class PartykitPresence {
   disconnect(): void {
     console.log('[PRESENCE] Disconnect called');
     this.intentionallyDisconnected = true;
+    this.stopHeartbeat();
 
     if (this.socket) {
       this.socket.close();
@@ -229,5 +247,23 @@ export class PartykitPresence {
     }
 
     this.callbacks = null;
+  }
+
+  private startHeartbeat(): void {
+    this.heartbeatTimer = setInterval(() => {
+      if (this.socket && this.socket.readyState === WebSocket.OPEN) {
+        this.socket.send(JSON.stringify({
+          type: 'presence_ping',
+          timestamp: Date.now(),
+        }));
+      }
+    }, 20000);
+  }
+
+  private stopHeartbeat(): void {
+    if (this.heartbeatTimer) {
+      clearInterval(this.heartbeatTimer);
+      this.heartbeatTimer = null;
+    }
   }
 }
