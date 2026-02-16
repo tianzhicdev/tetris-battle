@@ -37,9 +37,6 @@ function GameApp({ profile: initialProfile }: { profile: UserProfile }) {
   const presenceRef = useRef<PartykitPresence | null>(null);
 
   const {
-    loadFriends,
-    loadPendingRequests,
-    updatePresence,
     clearChallenges,
     friends,
     cancelChallenge,
@@ -54,12 +51,16 @@ function GameApp({ profile: initialProfile }: { profile: UserProfile }) {
 
   // Initialize presence connection (for online status only, not challenges)
   useEffect(() => {
+    if (!playerId) return;
+
+    console.log('[PRESENCE] Initializing connection for player:', playerId);
     const host = normalizePartykitHost(import.meta.env.VITE_PARTYKIT_HOST);
     const presence = new PartykitPresence(playerId, host);
 
     presence.connect({
       onPresenceUpdate: (userId, status) => {
-        updatePresence(userId, status);
+        // Use store method directly instead of from props
+        useFriendStore.getState().updatePresence(userId, status);
       },
       // Challenge callbacks - no-ops since now handled by Supabase Realtime
       onChallengeReceived: () => {},
@@ -71,15 +72,16 @@ function GameApp({ profile: initialProfile }: { profile: UserProfile }) {
 
     presenceRef.current = presence;
 
-    // Load friends and pending requests
-    loadFriends(playerId);
-    loadPendingRequests(playerId);
+    // Load friends and pending requests (call directly from store)
+    useFriendStore.getState().loadFriends(playerId);
+    useFriendStore.getState().loadPendingRequests(playerId);
 
     return () => {
+      console.log('[PRESENCE] Disconnecting for player:', playerId);
       presence.disconnect();
       presenceRef.current = null;
     };
-  }, [playerId, loadFriends, loadPendingRequests, updatePresence]);
+  }, [playerId]); // Only depend on playerId!
 
   // Listen for accepted challenges (as challenger) to navigate to game
   useEffect(() => {
