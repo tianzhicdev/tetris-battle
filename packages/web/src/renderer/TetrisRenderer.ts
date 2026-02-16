@@ -190,42 +190,24 @@ export class TetrisRenderer {
                 this.blockSize - 4
               );
             } else {
+              // Draw normal block
+              this.theme.renderBlock(
+                this.ctx,
+                boardX * this.blockSize,
+                boardY * this.blockSize,
+                this.blockSize,
+                piece.type
+              );
+
+              // If it's a bomb, add blinking overlay
               if (isBomb) {
-                // Draw bomb piece with pulsing red/orange effect
                 const px = boardX * this.blockSize;
                 const py = boardY * this.blockSize;
-                const time = Date.now() / 200;
-                const pulse = Math.sin(time) * 0.3 + 0.7;
+                const time = Date.now() / 300;
+                const blink = Math.sin(time) * 0.5 + 0.5; // 0 to 1 pulsing
 
-                // Red/orange gradient
-                const gradient = this.ctx.createRadialGradient(
-                  px + this.blockSize / 2,
-                  py + this.blockSize / 2,
-                  0,
-                  px + this.blockSize / 2,
-                  py + this.blockSize / 2,
-                  this.blockSize / 2
-                );
-                gradient.addColorStop(0, `rgba(255, 100, 0, ${pulse})`);
-                gradient.addColorStop(1, `rgba(200, 0, 0, ${pulse})`);
-
-                this.ctx.fillStyle = gradient;
+                this.ctx.fillStyle = `rgba(255, 255, 255, ${blink * 0.6})`;
                 this.ctx.fillRect(px, py, this.blockSize, this.blockSize);
-
-                // Draw bomb icon (💣)
-                this.ctx.fillStyle = '#000';
-                this.ctx.font = `${this.blockSize * 0.6}px Arial`;
-                this.ctx.textAlign = 'center';
-                this.ctx.textBaseline = 'middle';
-                this.ctx.fillText('💣', px + this.blockSize / 2, py + this.blockSize / 2);
-              } else {
-                this.theme.renderBlock(
-                  this.ctx,
-                  boardX * this.blockSize,
-                  boardY * this.blockSize,
-                  this.blockSize,
-                  piece.type
-                );
               }
             }
           }
@@ -301,17 +283,17 @@ export class TetrisRenderer {
     const startY = (board.height - blindSpotRows) * this.blockSize;
     const height = blindSpotRows * this.blockSize;
 
-    // Create gradient fog effect
+    // Create gradient fog effect (fully opaque)
     const gradient = this.ctx.createLinearGradient(0, startY, 0, startY + height);
-    gradient.addColorStop(0, 'rgba(40, 40, 60, 0.7)');
-    gradient.addColorStop(0.5, 'rgba(30, 30, 50, 0.9)');
-    gradient.addColorStop(1, 'rgba(20, 20, 40, 0.95)');
+    gradient.addColorStop(0, 'rgba(40, 40, 60, 1.0)');
+    gradient.addColorStop(0.5, 'rgba(30, 30, 50, 1.0)');
+    gradient.addColorStop(1, 'rgba(20, 20, 40, 1.0)');
 
     this.ctx.fillStyle = gradient;
     this.ctx.fillRect(0, startY, board.width * this.blockSize, height);
 
-    // Add some cloud texture with circles
-    this.ctx.fillStyle = 'rgba(60, 60, 80, 0.3)';
+    // Add some cloud texture with circles (fully opaque)
+    this.ctx.fillStyle = 'rgba(60, 60, 80, 1.0)';
     for (let i = 0; i < 8; i++) {
       const x = (i * 50 + Math.sin(Date.now() / 1000 + i) * 20) % (board.width * this.blockSize);
       const y = startY + (i % 3) * (height / 3) + Math.cos(Date.now() / 1000 + i) * 15;
