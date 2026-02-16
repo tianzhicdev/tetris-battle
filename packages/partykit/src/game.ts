@@ -59,7 +59,6 @@ export default class GameRoomServer implements Party.Server {
   lastBroadcastTime: number = 0;
   broadcastThrottle: number = 16; // 60fps = 16ms
   roomSeed: number = 0; // Deterministic seed for this room
-  playerLatencies: Map<string, number> = new Map();
   lastPlayerBroadcasts: Map<string, number> = new Map();
 
   constructor(readonly room: Party.Room) {
@@ -95,15 +94,6 @@ export default class GameRoomServer implements Party.Server {
 
     // Handle ping/pong for connection monitoring
     if (data.type === 'ping' || data.type === 'debug_ping') {
-      // Calculate latency if this is a returning ping
-      const latency = Date.now() - data.timestamp;
-
-      // Get player ID from connection
-      const playerId = this.getPlayerIdByConnection(sender.id);
-      if (playerId) {
-        this.playerLatencies.set(playerId, latency);
-      }
-
       sender.send(JSON.stringify({
         type: data.type === 'ping' ? 'pong' : 'debug_pong',
         timestamp: data.timestamp,
@@ -336,22 +326,9 @@ export default class GameRoomServer implements Party.Server {
     return null;
   }
 
-  private getPlayerIdByConnection(connectionId: string): string | null {
-    for (const [playerId, playerState] of this.players) {
-      if (playerState.connectionId === connectionId) {
-        return playerId;
-      }
-    }
-    return null;
-  }
-
   private determineUpdateRate(playerId: string): number {
-    const latency = this.playerLatencies.get(playerId) || 50;
-
-    if (latency < 50) return 16;    // 60fps (16ms)
-    if (latency < 100) return 33;   // 30fps (33ms)
-    if (latency < 200) return 50;   // 20fps (50ms)
-    return 100;                     // 10fps (100ms)
+    void playerId;
+    return 33; // Fixed 30fps update cadence for deterministic behavior.
   }
 
   startAIGameLoop() {

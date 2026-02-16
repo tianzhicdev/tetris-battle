@@ -230,9 +230,26 @@ createRoot(document.getElementById('root')!).render(
   </StrictMode>,
 )
 
-// Register service worker for PWA support (disabled on native platforms)
+// Realtime gameplay favors fresh network state over offline caching.
+// SW is opt-in via VITE_ENABLE_SW=true.
 if ('serviceWorker' in navigator && !Capacitor.isNativePlatform()) {
-  window.addEventListener('load', () => {
+  window.addEventListener('load', async () => {
+    const enableServiceWorker = import.meta.env.PROD && import.meta.env.VITE_ENABLE_SW === 'true';
+
+    if (!enableServiceWorker) {
+      const registrations = await navigator.serviceWorker.getRegistrations();
+      await Promise.all(registrations.map((registration) => registration.unregister()));
+      if ('caches' in window) {
+        const cacheNames = await caches.keys();
+        await Promise.all(
+          cacheNames
+            .filter((name) => /tetris-battle|workbox|vite/i.test(name))
+            .map((name) => caches.delete(name))
+        );
+      }
+      return;
+    }
+
     navigator.serviceWorker.register('/sw.js')
       .then((registration) => {
         console.log('SW registered:', registration);

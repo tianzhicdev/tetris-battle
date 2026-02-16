@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAbilityStore } from '../stores/abilityStore';
-import { useGameStore } from '../stores/gameStore';
 import { TetrisRenderer } from '../renderer/TetrisRenderer';
 import {
   ServerAuthGameClient,
@@ -29,7 +28,6 @@ import { audioManager } from '../services/audioManager';
 import { normalizePartykitHost } from '../services/partykit/host';
 import { haptics } from '../utils/haptics';
 import { buttonVariants, springs, scoreVariants, overlayVariants, modalVariants } from '../utils/animations';
-import '../styles/predictionFeedback.css';
 
 interface ServerAuthMultiplayerGameProps {
   roomId: string;
@@ -187,38 +185,15 @@ export function ServerAuthMultiplayerGame({
   const [debugLogger, setDebugLogger] = useState<DebugLogger | null>(null);
   const debugLoggerRef = useRef<DebugLogger | null>(null);
   const [isDebugMode, setIsDebugMode] = useState(false);
-  const [showMispredictionFeedback, setShowMispredictionFeedback] = useState(false);
   const [connectionStats, setConnectionStats] = useState<ConnectionStats | null>(null);
 
   const { availableAbilities, setLoadout } = useAbilityStore();
-  const gameStore = useGameStore();
 
   // Set player's loadout
   useEffect(() => {
     console.log('[SERVER-AUTH] Setting player loadout:', profile.loadout);
     setLoadout(profile.loadout);
   }, [profile.loadout, setLoadout]);
-
-  // Enable prediction mode
-  useEffect(() => {
-    gameStore.setPredictionMode(true);
-    console.log('[PREDICTION] Prediction mode enabled');
-
-    return () => {
-      gameStore.setPredictionMode(false);
-      console.log('[PREDICTION] Prediction mode disabled');
-    };
-  }, []);
-
-  // Set up misprediction callback
-  useEffect(() => {
-    gameStore.setOnMisprediction(() => {
-      console.warn('[PREDICTION] Misprediction occurred - showing visual feedback');
-      setShowMispredictionFeedback(true);
-      haptics.light();
-      setTimeout(() => setShowMispredictionFeedback(false), 200);
-    });
-  }, []);
 
   // Initialize debug mode
   useEffect(() => {
@@ -382,7 +357,6 @@ export function ServerAuthMultiplayerGame({
     client.connect(
       // On state update from server
       (state: GameStateUpdate) => {
-        console.log('[SERVER-AUTH] State update received:', state);
         setYourState(state.yourState);
         setOpponentState(state.opponentState);
       },
@@ -404,16 +378,6 @@ export function ServerAuthMultiplayerGame({
       // On ability activation result
       (result) => {
         handleAbilityActivationResult(result);
-      },
-      // On input confirmed
-      (confirmedSeq, serverState) => {
-        console.log('[PREDICTION] Input confirmed:', confirmedSeq);
-        gameStore.reconcileWithServer(confirmedSeq, serverState);
-      },
-      // On input rejected
-      (rejectedSeq, reason, serverState) => {
-        console.error('[PREDICTION] Input rejected:', rejectedSeq, reason);
-        gameStore.handleInputRejection(rejectedSeq, serverState);
       }
     );
 
@@ -463,21 +427,18 @@ export function ServerAuthMultiplayerGame({
     }
   }, [theme]);
 
-  // Render own board from predicted state (or server state if prediction unavailable)
+  // Render own board from authoritative server state
   useEffect(() => {
     if (rendererRef.current && yourState) {
-      // Use predicted state if available, otherwise use server state
-      const renderState = gameStore.predictedState || yourState;
-
       applyBoardDiffAnimations(
         rendererRef.current,
         'self',
-        renderState.board || yourState.board,
+        yourState.board,
         yourState.activeEffects
       );
 
       const board = {
-        grid: renderState.board || yourState.board,
+        grid: yourState.board,
         width: 10,
         height: 20,
       };
@@ -486,7 +447,7 @@ export function ServerAuthMultiplayerGame({
       const blindSpotActive = yourState.activeEffects?.includes('blind_spot');
       const shrinkCeilingActive = yourState.activeEffects?.includes('shrink_ceiling');
 
-      rendererRef.current.render(board, renderState.currentPiece || yourState.currentPiece, null, {
+      rendererRef.current.render(board, yourState.currentPiece, null, {
         showGrid: true,
         showGhost: false, // Server doesn't send ghost piece
         isBomb: pendingBombVisualRef.current !== null,
@@ -512,7 +473,7 @@ export function ServerAuthMultiplayerGame({
       }
       prevYourPieceRef.current = currPiece;
     }
-  }, [yourState, gameStore.predictedState, applyBoardDiffAnimations, triggerBoardAbilityVisual]);
+  }, [yourState, applyBoardDiffAnimations, triggerBoardAbilityVisual]);
 
   // Render opponent's board
   useEffect(() => {
@@ -845,35 +806,30 @@ export function ServerAuthMultiplayerGame({
         case 'ArrowLeft':
           e.preventDefault();
           audioManager.playSfx('piece_move', 0.3);
-          const leftSeq = gameStore.predictInput('move_left');
-          gameClientRef.current.sendInput('move_left', leftSeq);
+          gameClientRef.current.sendInput('move_left');
           break;
         case 'ArrowRight':
           e.preventDefault();
           audioManager.playSfx('piece_move', 0.3);
-          const rightSeq = gameStore.predictInput('move_right');
-          gameClientRef.current.sendInput('move_right', rightSeq);
+          gameClientRef.current.sendInput('move_right');
           break;
         case 'ArrowDown':
           e.preventDefault();
           audioManager.playSfx('soft_drop', 0.4);
-          const downSeq = gameStore.predictInput('soft_drop');
-          gameClientRef.current.sendInput('soft_drop', downSeq);
+          gameClientRef.current.sendInput('soft_drop');
           break;
         case 'ArrowUp':
         case 'x':
         case 'X':
           e.preventDefault();
           audioManager.playSfx('piece_rotate', 0.5);
-          const rotateCwSeq = gameStore.predictInput('rotate_cw');
-          gameClientRef.current.sendInput('rotate_cw', rotateCwSeq);
+          gameClientRef.current.sendInput('rotate_cw');
           break;
         case ' ':
           e.preventDefault();
           audioManager.playSfx('hard_drop');
           haptics.medium();
-          const hardDropSeq = gameStore.predictInput('hard_drop');
-          gameClientRef.current.sendInput('hard_drop', hardDropSeq);
+          gameClientRef.current.sendInput('hard_drop');
           break;
         case '1':
         case '2':
@@ -1026,7 +982,6 @@ export function ServerAuthMultiplayerGame({
               ref={canvasRef}
               width={250}
               height={500}
-              className={showMispredictionFeedback ? 'prediction-correction' : ''}
               style={{
                 border: `2px solid ${selfBoardFx?.borderColor || '#00d4ff'}`,
                 backgroundColor: 'rgba(5,5,15,0.8)',
@@ -1316,8 +1271,7 @@ export function ServerAuthMultiplayerGame({
             if (!gameClientRef.current) return;
             haptics.light();
             audioManager.playSfx('piece_move', 0.3);
-            const touchLeftSeq = gameStore.predictInput('move_left');
-            gameClientRef.current.sendInput('move_left', touchLeftSeq);
+            gameClientRef.current.sendInput('move_left');
           }}
           style={{
             flex: 1,
@@ -1349,8 +1303,7 @@ export function ServerAuthMultiplayerGame({
             if (!gameClientRef.current) return;
             audioManager.playSfx('hard_drop');
             haptics.medium();
-            const touchHardDropSeq = gameStore.predictInput('hard_drop');
-            gameClientRef.current.sendInput('hard_drop', touchHardDropSeq);
+            gameClientRef.current.sendInput('hard_drop');
           }}
           style={{
             flex: 1,
@@ -1383,8 +1336,7 @@ export function ServerAuthMultiplayerGame({
             if (!gameClientRef.current) return;
             haptics.light();
             audioManager.playSfx('soft_drop', 0.4);
-            const touchSoftDropSeq = gameStore.predictInput('soft_drop');
-            gameClientRef.current.sendInput('soft_drop', touchSoftDropSeq);
+            gameClientRef.current.sendInput('soft_drop');
           }}
           style={{
             flex: 1,
@@ -1416,8 +1368,7 @@ export function ServerAuthMultiplayerGame({
             if (!gameClientRef.current) return;
             haptics.light();
             audioManager.playSfx('piece_rotate', 0.5);
-            const touchRotateCwSeq = gameStore.predictInput('rotate_cw');
-            gameClientRef.current.sendInput('rotate_cw', touchRotateCwSeq);
+            gameClientRef.current.sendInput('rotate_cw');
           }}
           style={{
             flex: 1,
@@ -1450,8 +1401,7 @@ export function ServerAuthMultiplayerGame({
             if (!gameClientRef.current) return;
             haptics.light();
             audioManager.playSfx('piece_move', 0.3);
-            const touchRightSeq = gameStore.predictInput('move_right');
-            gameClientRef.current.sendInput('move_right', touchRightSeq);
+            gameClientRef.current.sendInput('move_right');
           }}
           style={{
             flex: 1,

@@ -47,15 +47,24 @@ function GameApp({ profile: initialProfile }: { profile: UserProfile }) {
   const playerId = profile.userId;
 
   // Set up database-first challenge subscriptions
-  useChallenges(playerId);
+  useChallenges(mode === 'menu' ? playerId : '');
 
   // Initialize presence connection (for online status only, not challenges)
   useEffect(() => {
     if (!playerId) return;
 
+    // Keep presence only in menu to avoid extra sockets during matchmaking/gameplay.
+    if (mode !== 'menu') {
+      if (presenceRef.current) {
+        console.log('[PRESENCE] Disconnecting (non-menu mode)');
+        presenceRef.current.disconnect();
+        presenceRef.current = null;
+      }
+      return;
+    }
+
     // CRITICAL: Prevent duplicate connections if effect runs multiple times
     if (presenceRef.current) {
-      console.warn('[PRESENCE] Connection already exists, skipping re-initialization');
       return;
     }
 
@@ -83,18 +92,17 @@ function GameApp({ profile: initialProfile }: { profile: UserProfile }) {
     useFriendStore.getState().loadPendingRequests(playerId);
 
     return () => {
-      console.log('[PRESENCE] Cleanup running for player:', playerId);
-      if (presenceRef.current) {
-        console.log('[PRESENCE] Disconnecting presence connection');
-        presenceRef.current.disconnect();
+      if (presenceRef.current === presence) {
+        console.log('[PRESENCE] Cleanup disconnect');
+        presence.disconnect();
         presenceRef.current = null;
       }
     };
-  }, [playerId]); // Only depend on playerId!
+  }, [playerId, mode]);
 
   // Listen for accepted challenges (as challenger) to navigate to game
   useEffect(() => {
-    if (!playerId) return;
+    if (!playerId || mode !== 'menu') return;
 
     const subscription = supabase
       .channel(`challenge_accepted_${playerId}`)
@@ -122,7 +130,7 @@ function GameApp({ profile: initialProfile }: { profile: UserProfile }) {
     return () => {
       subscription.unsubscribe();
     };
-  }, [playerId, clearChallenges]);
+  }, [playerId, mode, clearChallenges]);
 
   // Subscribe to friend presence when friend list changes
   useEffect(() => {
@@ -131,23 +139,6 @@ function GameApp({ profile: initialProfile }: { profile: UserProfile }) {
       presenceRef.current.subscribeFriends(friendIds);
     }
   }, [friends]);
-
-  // Update presence status based on game mode
-  useEffect(() => {
-    if (!presenceRef.current) return;
-    switch (mode) {
-      case 'menu':
-        presenceRef.current.updateStatus('menu');
-        break;
-      case 'matchmaking':
-        presenceRef.current.updateStatus('in_queue');
-        break;
-      case 'multiplayer':
-      case 'solo':
-        presenceRef.current.updateStatus('in_game');
-        break;
-    }
-  }, [mode]);
 
   // Reload profile when returning to menu
   useEffect(() => {

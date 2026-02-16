@@ -179,3 +179,60 @@ Proposed solution:
 4. Switch default multiplayer path to server-authoritative mode.
 5. Align matchmaking policy with architecture or update architecture to current intent.
 6. Repair TypeScript and test-suite contract drift.
+
+## Realtime Latency Simplification (2026-02-16)
+
+Observed symptoms:
+- Repeated websocket reconnects on landing page (`presence/global` with same `_pk`).
+- Severe mobile latency spikes during gameplay sessions.
+- PartyKit tail showed recurring `Alarm ... Exception Thrown` activity in `matchmaking`.
+
+### A) Matchmaking control-loop simplification (implemented)
+
+Problem:
+- `packages/partykit/src/matchmaking.ts` used both:
+- a perpetual `setInterval` AI check every 2s, and
+- recurring `onAlarm` scheduling every 5s.
+- This created unnecessary timer churn and noisy logs, and matched tail output showing alarm exceptions.
+
+Change:
+- Removed periodic `setInterval` + `onAlarm` matchmaking loop.
+- Replaced with per-player one-shot AI fallback timer started on `join_queue`.
+- On human match, leave, or disconnect, fallback timers are cleared.
+
+Expected effect:
+- Lower background server churn.
+- Fewer worker disruptions that can cascade into websocket reconnects.
+- Easier-to-reason matchmaking lifecycle.
+
+### B) Socket surface reduction by mode (implemented)
+
+Problem:
+- Non-game realtime channels were still active outside menu flow, increasing unnecessary socket load.
+
+Change:
+- `useChallenges(...)` subscriptions now run only in menu mode.
+- Challenge acceptance subscription in `App.tsx` now also runs only in menu mode.
+
+Expected effect:
+- During matchmaking/gameplay, only gameplay-critical sockets remain active.
+- Reduced contention and reduced chance of side-channel reconnect noise affecting perceived gameplay responsiveness.
+
+### C) Service worker neutrality for realtime mode (implemented)
+
+Problem:
+- Prior service worker behavior and stale registrations could interfere with fresh realtime bundles/network behavior.
+
+Change:
+- SW remains opt-in only (`VITE_ENABLE_SW=true` in prod).
+- When SW is disabled, app now actively unregisters registrations and clears known cache buckets.
+
+Expected effect:
+- Prevent stale cached client logic from reintroducing old websocket/reconnect behavior.
+- More deterministic runtime for realtime gameplay.
+
+### D) Further simplification candidates (proposed)
+
+1. Remove PartyKit presence from critical path entirely and gate it behind explicit opt-in if online friend indicators are non-essential during active gameplay windows.
+2. Gate verbose websocket debug logging behind debug mode on both client and server to avoid log-induced runtime overhead.
+3. Add lightweight server telemetry counters (connect/close rate, close codes, avg state_update cadence) to make reconnect storms explicit without tailing raw logs.
