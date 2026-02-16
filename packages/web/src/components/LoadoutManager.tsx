@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { ABILITIES } from '@tetris-battle/game-core';
 import type { UserProfile } from '@tetris-battle/game-core';
 import { progressionService } from '../lib/supabase';
+import { AbilityCopy } from './AbilityCopy';
 
 interface LoadoutManagerProps {
   profile: UserProfile;
@@ -113,7 +114,7 @@ export function LoadoutManager({ profile, onClose, onProfileUpdate }: LoadoutMan
                   key={i}
                   style={{
                     flex: '1 1 clamp(120px, 30vw, 150px)',
-                    minHeight: 'clamp(70px, 17.5vw, 80px)',
+                    minHeight: 'clamp(90px, 22vw, 110px)',
                     background: ability ? 'rgba(10, 10, 30, 0.7)' : 'rgba(10, 10, 30, 0.3)',
                     backdropFilter: 'blur(15px)',
                     border: `1px dashed ${ability ? 'rgba(0, 255, 136, 0.5)' : 'rgba(255, 255, 255, 0.15)'}`,
@@ -122,26 +123,22 @@ export function LoadoutManager({ profile, onClose, onProfileUpdate }: LoadoutMan
                     display: 'flex',
                     flexDirection: 'column',
                     justifyContent: 'center',
-                    alignItems: 'center',
                     boxShadow: ability ? '0 2px 10px rgba(0, 255, 136, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.05)' : 'inset 0 1px 0 rgba(255, 255, 255, 0.02)',
                   }}
                 >
                   {ability ? (
                     <>
-                      <div style={{
-                        color: '#00ff88',
-                        fontSize: 'clamp(12px, 3vw, 14px)',
-                        fontWeight: '700',
-                        marginBottom: 'clamp(4px, 1vw, 5px)',
-                        textAlign: 'center',
-                        textShadow: '0 0 8px rgba(0, 255, 136, 0.4)',
-                      }}>
-                        {ability.name}
-                      </div>
+                      <AbilityCopy
+                        ability={ability}
+                        accentColor={ability.category === 'buff' ? '#00d4ff' : '#ff006e'}
+                        compact
+                        showDescription={false}
+                      />
                       <div style={{
                         color: '#ffd700',
                         fontSize: 'clamp(10px, 2.5vw, 11px)',
                         fontWeight: '600',
+                        marginTop: '4px',
                       }}>
                         {ability.cost} ⭐
                       </div>
@@ -205,16 +202,15 @@ export function LoadoutManager({ profile, onClose, onProfileUpdate }: LoadoutMan
                     display: 'flex',
                     justifyContent: 'space-between',
                     alignItems: 'center',
-                    marginBottom: 'clamp(5px, 1.25vw, 6px)',
+                    marginBottom: 'clamp(8px, 2vw, 10px)',
                     gap: 'clamp(6px, 1.5vw, 8px)',
                   }}>
-                    <div style={{
-                      color: '#00ff88',
-                      fontSize: 'clamp(12px, 3vw, 14px)',
-                      fontWeight: '700',
-                      textShadow: inLoadout ? '0 0 10px rgba(0, 255, 136, 0.5)' : 'none',
-                    }}>
-                      {ability.name}
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <AbilityCopy
+                        ability={ability}
+                        accentColor={ability.category === 'buff' ? '#00d4ff' : '#ff006e'}
+                        compact
+                      />
                     </div>
 
                     {inLoadout && (
@@ -226,15 +222,6 @@ export function LoadoutManager({ profile, onClose, onProfileUpdate }: LoadoutMan
                         ✓
                       </div>
                     )}
-                  </div>
-
-                  <div style={{
-                    fontSize: 'clamp(10px, 2.5vw, 11px)',
-                    color: '#aaa',
-                    marginBottom: 'clamp(6px, 1.5vw, 8px)',
-                    lineHeight: '1.4',
-                  }}>
-                    {ability.description}
                   </div>
 
                   <div style={{

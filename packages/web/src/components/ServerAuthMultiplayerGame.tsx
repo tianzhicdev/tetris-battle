@@ -362,8 +362,8 @@ export function ServerAuthMultiplayerGame({
       },
       // On opponent disconnected
       () => {
-        alert('Opponent disconnected!');
-        onExit();
+        setGameFinished(true);
+        setWinnerId(playerId);
       },
       // On game finished
       (winner) => {
@@ -760,8 +760,6 @@ export function ServerAuthMultiplayerGame({
 
   // Calculate and save match rewards
   const calculateMatchRewards = useCallback(async (isWin: boolean) => {
-    if (!yourState) return;
-
     console.log('[SERVER-AUTH REWARDS] Starting reward calculation...', { isWin, aiOpponent, profile });
 
     const outcome: 'win' | 'loss' = isWin ? 'win' : 'loss';
@@ -789,7 +787,7 @@ export function ServerAuthMultiplayerGame({
     if (rewards) {
       setMatchRewards(rewards);
     }
-  }, [profile, opponentId, yourState, aiOpponent]);
+  }, [profile, opponentId, aiOpponent]);
 
   // Update active effects periodically
   useEffect(() => {
@@ -903,25 +901,37 @@ export function ServerAuthMultiplayerGame({
         <div
           style={{
             position: 'absolute',
-            top: '10px',
-            left: '10px',
-            padding: '8px 12px',
-            background: 'rgba(0, 0, 0, 0.7)',
-            borderRadius: '8px',
+            top: '6px',
+            left: '6px',
+            padding: '2px 5px',
+            background: 'rgba(0, 0, 0, 0.42)',
+            borderRadius: '4px',
             display: 'flex',
             alignItems: 'center',
-            gap: '8px',
-            fontSize: '14px',
-            fontWeight: '500',
-            zIndex: 1000,
-            border: '1px solid rgba(255, 255, 255, 0.1)',
+            gap: '4px',
+            fontSize: '10px',
+            fontWeight: '600',
+            lineHeight: 1,
+            zIndex: 5,
+            border: '1px solid rgba(255, 255, 255, 0.12)',
+            pointerEvents: 'none',
+            userSelect: 'none',
           }}
         >
-          <span style={{ fontSize: '16px' }}>
-            {connectionStats.quality === 'excellent' && '🟢'}
-            {connectionStats.quality === 'good' && '🟡'}
-            {connectionStats.quality === 'poor' && '🟠'}
-            {connectionStats.quality === 'critical' && '🔴'}
+          <span style={{
+            width: '6px',
+            height: '6px',
+            borderRadius: '50%',
+            display: 'inline-block',
+            background:
+              connectionStats.quality === 'excellent'
+                ? '#4ade80'
+                : connectionStats.quality === 'good'
+                ? '#fbbf24'
+                : connectionStats.quality === 'poor'
+                ? '#fb923c'
+                : '#ef4444',
+          }}>
           </span>
           <span style={{ color: '#ffffff' }}>
             {Math.round(connectionStats.avgLatency)}ms
@@ -937,7 +947,7 @@ export function ServerAuthMultiplayerGame({
                   ? '#fb923c'
                   : '#ef4444',
               textTransform: 'capitalize',
-              fontSize: '12px',
+              fontSize: '9px',
             }}
           >
             {connectionStats.quality}

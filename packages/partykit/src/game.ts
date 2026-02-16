@@ -749,32 +749,40 @@ export default class GameRoomServer implements Party.Server {
   }
 
   onClose(conn: Party.Connection) {
-    this.stopAIGameLoop();
-
-    // Find and remove player
+    // Find disconnected player first.
+    let disconnectedPlayerId: string | null = null;
     for (const [playerId, player] of this.players) {
       if (player.connectionId === conn.id) {
-        // Clean up server game state
-        this.stopAllGameLoops();
-        this.serverGameStates.delete(playerId);
-        this.aiMoveQueue = [];
-        this.roomStatus = 'finished';
-
-        this.players.delete(playerId);
-        console.log(`Player ${playerId} disconnected`);
-
-        // Notify opponent
-        const opponent = this.getOpponent(playerId);
-        if (opponent) {
-          const opponentConn = this.getConnection(opponent.connectionId);
-          if (opponentConn) {
-            opponentConn.send(JSON.stringify({
-              type: 'opponent_disconnected',
-            }));
-          }
-        }
+        disconnectedPlayerId = playerId;
         break;
       }
     }
+    if (!disconnectedPlayerId) return;
+
+    console.log(`Player ${disconnectedPlayerId} disconnected`);
+
+    // During active matches, disconnect counts as a loss.
+    if (this.roomStatus === 'playing') {
+      this.handleGameOver(disconnectedPlayerId);
+    } else {
+      this.stopAllGameLoops();
+      this.stopAIGameLoop();
+      this.aiMoveQueue = [];
+      this.roomStatus = 'finished';
+
+      // Legacy fallback signal for pre-game disconnects.
+      const opponent = this.getOpponent(disconnectedPlayerId);
+      if (opponent) {
+        const opponentConn = this.getConnection(opponent.connectionId);
+        if (opponentConn) {
+          opponentConn.send(JSON.stringify({
+            type: 'opponent_disconnected',
+          }));
+        }
+      }
+    }
+
+    this.serverGameStates.delete(disconnectedPlayerId);
+    this.players.delete(disconnectedPlayerId);
   }
 }

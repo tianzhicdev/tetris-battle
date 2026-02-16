@@ -2,6 +2,7 @@ import { ABILITIES } from '@tetris-battle/game-core';
 import type { Ability } from '@tetris-battle/game-core';
 import { motion } from 'framer-motion';
 import { overlayVariants, modalVariants, springs } from '../utils/animations';
+import { AbilityCopy } from './AbilityCopy';
 
 interface AbilityInfoProps {
   onClose: () => void;
@@ -13,10 +14,7 @@ export function AbilityInfo({ onClose }: AbilityInfoProps) {
 
   const renderAbilityCard = (ability: Ability) => {
     const isBuff = ability.category === 'buff';
-    const textColor = isBuff ? '#00d4ff' : '#ff006e';
-    const glowColor = isBuff
-      ? 'rgba(0, 212, 255, 0.6)'
-      : 'rgba(255, 0, 110, 0.6)';
+    const accentColor = isBuff ? '#00d4ff' : '#ff006e';
 
     return (
       <div
@@ -32,16 +30,13 @@ export function AbilityInfo({ onClose }: AbilityInfoProps) {
           flexDirection: 'column',
           gap: '8px',
         }}
-      >
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px' }}>
-          <div style={{
-            fontSize: '18px',
-            fontWeight: '800',
-            color: textColor,
-            textShadow: `0 0 12px ${glowColor}`,
-            letterSpacing: '0.5px',
-          }}>
-            {ability.shortName}
+        >
+        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '12px' }}>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <AbilityCopy
+              ability={ability}
+              accentColor={accentColor}
+            />
           </div>
           <div style={{
             fontSize: '12px',
@@ -49,14 +44,6 @@ export function AbilityInfo({ onClose }: AbilityInfoProps) {
           }}>
             {ability.cost} ★
           </div>
-        </div>
-        <div style={{
-          fontSize: '14px',
-          color: '#ffffff',
-          lineHeight: '1.5',
-          opacity: 0.9,
-        }}>
-          {ability.description}
         </div>
         {ability.duration && (
           <div style={{

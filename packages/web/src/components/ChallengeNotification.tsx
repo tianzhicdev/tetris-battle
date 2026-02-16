@@ -86,10 +86,13 @@ export function ChallengeNotification({ userId, onNavigate }: ChallengeNotificat
           style={{
             position: 'fixed',
             top: 20,
-            left: '50%',
-            transform: 'translateX(-50%)',
+            left: 0,
+            right: 0,
             zIndex: 10000,
-            padding: '20px',
+            padding: '0 20px',
+            display: 'flex',
+            justifyContent: 'center',
+            pointerEvents: 'none',
           }}
         >
           <div style={{
@@ -99,8 +102,8 @@ export function ChallengeNotification({ userId, onNavigate }: ChallengeNotificat
             borderRadius: '12px',
             boxShadow: '0 8px 32px rgba(0, 0, 0, 0.6), inset 0 1px 0 rgba(255, 255, 255, 0.1)',
             padding: 'clamp(16px, 4vw, 24px)',
-            minWidth: '300px',
-            maxWidth: '400px',
+            width: 'min(400px, 100%)',
+            pointerEvents: 'auto',
           }}>
             <div style={{
               fontSize: 'clamp(18px, 5vw, 24px)',

@@ -3,6 +3,7 @@ import { ABILITIES } from '@tetris-battle/game-core';
 import { ABILITY_UNLOCKS } from '@tetris-battle/game-core';
 import type { UserProfile } from '@tetris-battle/game-core';
 import { progressionService } from '../lib/supabase';
+import { AbilityCopy } from './AbilityCopy';
 
 interface AbilityShopProps {
   profile: UserProfile;
@@ -154,16 +155,16 @@ export function AbilityShop({ profile, onClose, onProfileUpdate }: AbilityShopPr
                         <div style={{
                           display: 'flex',
                           justifyContent: 'space-between',
-                          marginBottom: 'clamp(6px, 1.5vw, 8px)',
+                          alignItems: 'flex-start',
+                          marginBottom: 'clamp(8px, 2vw, 10px)',
                           gap: 'clamp(6px, 1.5vw, 8px)',
                         }}>
-                          <div style={{
-                            color: '#00ff88',
-                            fontWeight: '700',
-                            fontSize: 'clamp(13px, 3.25vw, 14px)',
-                            textShadow: isUnlocked ? '0 0 10px rgba(0, 255, 136, 0.5)' : 'none',
-                          }}>
-                            {ability.name}
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <AbilityCopy
+                              ability={ability}
+                              accentColor={ability.category === 'buff' ? '#00d4ff' : '#ff006e'}
+                              compact
+                            />
                           </div>
 
                           {isUnlocked && inLoadout && (
@@ -182,15 +183,6 @@ export function AbilityShop({ profile, onClose, onProfileUpdate }: AbilityShopPr
                               EQUIPPED
                             </div>
                           )}
-                        </div>
-
-                        <div style={{
-                          fontSize: 'clamp(10px, 2.5vw, 11px)',
-                          color: '#aaa',
-                          marginBottom: 'clamp(8px, 2vw, 10px)',
-                          lineHeight: '1.4',
-                        }}>
-                          {ability.description}
                         </div>
 
                         <div style={{
