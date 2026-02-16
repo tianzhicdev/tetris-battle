@@ -20,6 +20,7 @@ export interface PresenceCallbacks {
   onChallengeDeclined: (challengeId: string) => void;
   onChallengeExpired: (challengeId: string) => void;
   onChallengeCancelled: (challengeId: string) => void;
+  onChallengeAcceptFailed?: (challengeId: string, error: string) => void;
   onChallengeAcknowledged?: (challengeId: string) => void;
 }
 
@@ -112,6 +113,11 @@ export class PartykitPresence {
 
         case 'friend_challenge_cancelled':
           callbacks.onChallengeCancelled(data.challengeId);
+          break;
+
+        case 'challenge_accept_failed':
+          console.error('[PRESENCE] Challenge accept failed:', data.error);
+          callbacks.onChallengeAcceptFailed?.(data.challengeId, data.error);
           break;
 
         case 'challenge_ack_received':

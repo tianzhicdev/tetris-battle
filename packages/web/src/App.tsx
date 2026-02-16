@@ -45,6 +45,7 @@ function GameApp({ profile: initialProfile }: { profile: UserProfile }) {
     clearChallenges,
     friends,
     incomingChallenge,
+    outgoingChallenge,
   } = useFriendStore();
 
   const [challengeTimeLeft, setChallengeTimeLeft] = useState(120);
@@ -111,6 +112,15 @@ function GameApp({ profile: initialProfile }: { profile: UserProfile }) {
       onChallengeCancelled: () => {
         setIncomingChallenge(null);
       },
+      onChallengeAcceptFailed: (_challengeId, error) => {
+        console.error('[APP] Challenge accept failed:', error);
+        // Clear the challenge from state
+        setIncomingChallenge(null);
+        // Show error to user (you could add a toast notification here)
+        alert(`Failed to accept challenge: ${error}`);
+        // Reload challenges from database to get current state
+        restorePendingChallenges();
+      },
     });
 
     presenceRef.current = presence;
@@ -122,15 +132,16 @@ function GameApp({ profile: initialProfile }: { profile: UserProfile }) {
     // Restore pending challenges from database
     const restorePendingChallenges = async () => {
       try {
-        const pending = await friendService.getPendingChallenges(playerId);
-        for (const challenge of pending) {
-          if (challenge.challengedId === playerId) {
-            // I'm being challenged
-            setIncomingChallenge(challenge);
-          } else if (challenge.challengerId === playerId) {
-            // I sent a challenge
-            setOutgoingChallenge(challenge);
-          }
+        // Fetch incoming challenges (where I'm being challenged)
+        const incoming = await friendService.getPendingChallenges(playerId);
+        if (incoming.length > 0 && !incomingChallenge) {
+          setIncomingChallenge(incoming[0]);  // Show first incoming challenge
+        }
+
+        // Fetch outgoing challenges (where I sent a challenge)
+        const outgoing = await friendService.getOutgoingChallenges(playerId);
+        if (outgoing.length > 0 && !outgoingChallenge) {
+          setOutgoingChallenge(outgoing[0]);  // Show first outgoing challenge
         }
       } catch (error) {
         console.error('[APP] Error restoring pending challenges:', error);
@@ -266,33 +277,43 @@ function GameApp({ profile: initialProfile }: { profile: UserProfile }) {
 
   return (
     <>
-      {/* Global challenge notifications */}
-      <Notification
-        visible={!!incomingChallenge}
-        title={incomingChallenge?.challengerUsername || 'Challenge'}
-        message={`Lv ${incomingChallenge?.challengerLevel || 0} · Rank ${incomingChallenge?.challengerRank || 0}`}
-        variant="challenge"
-        countdown={challengeTimeLeft}
-        actions={incomingChallenge ? [
-          {
-            label: 'Accept',
-            onClick: () => {
-              audioManager.playSfx('button_click');
-              handleAcceptChallenge(incomingChallenge.challengeId);
+      {/* Global notification layer - always rendered above all game content */}
+      <div style={{
+        position: 'fixed',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        pointerEvents: 'none',
+        zIndex: 9999,
+      }}>
+        <Notification
+          visible={!!incomingChallenge}
+          title={incomingChallenge?.challengerUsername || 'Challenge'}
+          message={`Lv ${incomingChallenge?.challengerLevel || 0} · Rank ${incomingChallenge?.challengerRank || 0}`}
+          variant="challenge"
+          countdown={challengeTimeLeft}
+          actions={incomingChallenge ? [
+            {
+              label: 'Accept',
+              onClick: () => {
+                audioManager.playSfx('button_click');
+                handleAcceptChallenge(incomingChallenge.challengeId);
+              },
+              variant: 'success',
             },
-            variant: 'success',
-          },
-          {
-            label: 'Decline',
-            onClick: () => {
-              audioManager.playSfx('button_click');
-              handleDeclineChallenge(incomingChallenge.challengeId);
+            {
+              label: 'Decline',
+              onClick: () => {
+                audioManager.playSfx('button_click');
+                handleDeclineChallenge(incomingChallenge.challengeId);
+              },
+              variant: 'danger',
             },
-            variant: 'danger',
-          },
-        ] : undefined}
-      />
-      <ChallengeWaiting onCancel={handleCancelChallenge} />
+          ] : undefined}
+        />
+        <ChallengeWaiting onCancel={handleCancelChallenge} />
+      </div>
 
       {/* Game mode routing */}
       {mode === 'menu' && (

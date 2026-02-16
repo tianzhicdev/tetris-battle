@@ -419,19 +419,43 @@ const handleAcceptChallenge = useCallback(async (challengeId: string) => {
 
 ---
 
-## 📋 Recommended Implementation Order
+## 📋 Implementation Status
 
-### Phase 1: Critical Fixes (Day 1)
+### Phase 1: Critical Fixes ✅ COMPLETED
 1. ✅ Fix `getPendingChallenges()` to only return incoming challenges
 2. ✅ Add `getOutgoingChallenges()` for sent challenges
 3. ✅ Update App.tsx to use correct functions
 4. ✅ Move Notification to global layer (always visible)
 
-### Phase 2: Reliability (Day 2)
+### Phase 2: Reliability ✅ COMPLETED
 5. ✅ Add database fallback to `handleChallengeAccept`
 6. ✅ Add error responses from server
 7. ✅ Add error handling in client
-8. ✅ Increase polling frequency to 10s
+
+## ⚙️ Configuration Required
+
+### PartyKit Environment Variables
+
+For the database fallback to work, PartyKit needs access to Supabase credentials. Add these environment variables to your PartyKit deployment:
+
+```bash
+SUPABASE_URL=your_supabase_url
+SUPABASE_ANON_KEY=your_supabase_anon_key
+```
+
+**How to set:**
+1. For local development: Create `.env` in `packages/partykit/` with these variables
+2. For production: Add via PartyKit dashboard or `partykit env add` command
+
+```bash
+# Local development (.env file)
+SUPABASE_URL=https://your-project.supabase.co
+SUPABASE_ANON_KEY=your-anon-key-here
+
+# Production deployment
+partykit env add SUPABASE_URL https://your-project.supabase.co
+partykit env add SUPABASE_ANON_KEY your-anon-key-here
+```
 
 ### Phase 3: UX Polish (Day 3)
 9. ✅ Add visual feedback for failed accept

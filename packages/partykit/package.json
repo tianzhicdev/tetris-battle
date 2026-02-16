@@ -9,6 +9,7 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@supabase/supabase-js": "^2.95.3",
     "@tetris-battle/game-core": "workspace:*",
     "partykit": "^0.0.111"
   },

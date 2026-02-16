@@ -416,11 +416,12 @@ class FriendService {
   }
 
   async getPendingChallenges(userId: string): Promise<Challenge[]> {
+    // ONLY return challenges where user is the challenged party (incoming challenges)
     const { data: challenges, error } = await supabase
       .from('friend_challenges')
       .select('id, "challengerId", "challengedId", "createdAt", "expiresAt"')
       .eq('status', 'pending')
-      .or(`challengerId.eq.${userId},challengedId.eq.${userId}`)
+      .eq('challengedId', userId)  // ONLY incoming challenges
       .gt('expiresAt', new Date().toISOString());
 
     if (error || !challenges) {
@@ -430,33 +431,75 @@ class FriendService {
 
     if (challenges.length === 0) return [];
 
-    // For each challenge, fetch the other user's profile
-    const userIds = challenges.map(c =>
-      c.challengerId === userId ? c.challengedId : c.challengerId
-    );
+    // Fetch challenger profiles
+    const challengerIds = challenges.map(c => c.challengerId);
 
     const { data: profiles, error: profileError } = await supabase
       .from('user_profiles')
       .select('"userId", username, level, rank')
-      .in('userId', userIds);
+      .in('userId', challengerIds);
 
     if (profileError || !profiles) {
-      console.error('Error fetching profiles:', profileError);
+      console.error('Error fetching challenger profiles:', profileError);
       return [];
     }
 
     return challenges.map(c => {
-      const otherUserId = c.challengerId === userId ? c.challengedId : c.challengerId;
-      const profile = profiles.find(p => p.userId === otherUserId);
-      if (!profile) return null;
+      const challengerProfile = profiles.find(p => p.userId === c.challengerId);
+      if (!challengerProfile) return null;
 
       return {
         challengeId: c.id,
         challengerId: c.challengerId,
         challengedId: c.challengedId,
-        challengerUsername: profile.username,
-        challengerRank: profile.rank,
-        challengerLevel: profile.level,
+        challengerUsername: challengerProfile.username,
+        challengerRank: challengerProfile.rank,
+        challengerLevel: challengerProfile.level,
+        expiresAt: new Date(c.expiresAt).getTime(),
+      };
+    }).filter((c): c is Challenge => c !== null);
+  }
+
+  async getOutgoingChallenges(userId: string): Promise<Challenge[]> {
+    // Return challenges where user is the challenger (outgoing challenges)
+    const { data: challenges, error } = await supabase
+      .from('friend_challenges')
+      .select('id, "challengerId", "challengedId", "createdAt", "expiresAt"')
+      .eq('status', 'pending')
+      .eq('challengerId', userId)  // ONLY outgoing challenges
+      .gt('expiresAt', new Date().toISOString());
+
+    if (error || !challenges) {
+      console.error('Error fetching outgoing challenges:', error);
+      return [];
+    }
+
+    if (challenges.length === 0) return [];
+
+    // Fetch challenged user profiles
+    const challengedIds = challenges.map(c => c.challengedId);
+
+    const { data: profiles, error: profileError } = await supabase
+      .from('user_profiles')
+      .select('"userId", username, level, rank')
+      .in('userId', challengedIds);
+
+    if (profileError || !profiles) {
+      console.error('Error fetching challenged profiles:', profileError);
+      return [];
+    }
+
+    return challenges.map(c => {
+      const challengedProfile = profiles.find(p => p.userId === c.challengedId);
+      if (!challengedProfile) return null;
+
+      return {
+        challengeId: c.id,
+        challengerId: c.challengerId,
+        challengedId: c.challengedId,
+        challengerUsername: challengedProfile.username,  // Actually the challenged user's name
+        challengerRank: challengedProfile.rank,
+        challengerLevel: challengedProfile.level,
         expiresAt: new Date(c.expiresAt).getTime(),
       };
     }).filter((c): c is Challenge => c !== null);

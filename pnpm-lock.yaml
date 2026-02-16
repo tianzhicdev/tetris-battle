@@ -32,6 +32,9 @@ importers:
 
   packages/partykit:
     dependencies:
+      '@supabase/supabase-js':
+        specifier: ^2.95.3
+        version: 2.95.3
       '@tetris-battle/game-core':
         specifier: workspace:*
         version: link:../game-core

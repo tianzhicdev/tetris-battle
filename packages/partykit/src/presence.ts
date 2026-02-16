@@ -1,4 +1,5 @@
 import type * as Party from "partykit/server";
+import { createClient } from '@supabase/supabase-js';
 
 interface OnlineUser {
   connectedAt: number;
@@ -36,6 +37,63 @@ export default class PresenceServer implements Party.Server {
     console.log('[PRESENCE] Server initialized');
   }
 
+  // Helper method to query challenge from database (fallback when not in memory)
+  async queryChallengeFromDB(challengeId: string): Promise<PendingChallenge | null> {
+    try {
+      // Access Supabase credentials from environment
+      const supabaseUrl = this.room.env.SUPABASE_URL as string;
+      const supabaseKey = this.room.env.SUPABASE_ANON_KEY as string;
+
+      if (!supabaseUrl || !supabaseKey) {
+        console.warn('[PRESENCE] Supabase credentials not configured, cannot query database');
+        return null;
+      }
+
+      const supabase = createClient(supabaseUrl, supabaseKey);
+
+      // Query challenge from database
+      const { data, error } = await supabase
+        .from('friend_challenges')
+        .select('id, "challengerId", "challengedId", "createdAt", "expiresAt", status')
+        .eq('id', challengeId)
+        .eq('status', 'pending')
+        .gt('expiresAt', new Date().toISOString())
+        .single();
+
+      if (error || !data) {
+        console.log('[PRESENCE] Challenge not found in database:', challengeId);
+        return null;
+      }
+
+      // Fetch user profiles to get usernames
+      const { data: profiles } = await supabase
+        .from('user_profiles')
+        .select('"userId", username, level, rank')
+        .in('userId', [data.challengerId, data.challengedId]);
+
+      const challengerProfile = profiles?.find(p => p.userId === data.challengerId);
+      if (!challengerProfile) {
+        console.log('[PRESENCE] Challenger profile not found');
+        return null;
+      }
+
+      return {
+        challengeId: data.id,
+        challengerId: data.challengerId,
+        challengedId: data.challengedId,
+        challengerUsername: challengerProfile.username,
+        challengerRank: challengerProfile.rank,
+        challengerLevel: challengerProfile.level,
+        expiresAt: new Date(data.expiresAt).getTime(),
+        timer: setTimeout(() => {}, 0), // Dummy timer, will be cleared immediately
+        ackTimeout: undefined,
+      };
+    } catch (error) {
+      console.error('[PRESENCE] Error querying challenge from database:', error);
+      return null;
+    }
+  }
+
   onConnect(conn: Party.Connection, ctx: Party.ConnectionContext) {
     console.log(`[PRESENCE] Connection: ${conn.id}`);
   }
@@ -67,7 +125,15 @@ export default class PresenceServer implements Party.Server {
         break;
 
       case 'friend_challenge_accept':
-        this.handleChallengeAccept(data, sender);
+        // Handle async method - don't await to avoid blocking other messages
+        this.handleChallengeAccept(data, sender).catch(err => {
+          console.error('[PRESENCE] Error handling challenge accept:', err);
+          sender.send(JSON.stringify({
+            type: 'challenge_accept_failed',
+            challengeId: data.challengeId,
+            error: 'Internal server error while processing challenge',
+          }));
+        });
         break;
 
       case 'friend_challenge_decline':
@@ -204,13 +270,35 @@ export default class PresenceServer implements Party.Server {
     }
   }
 
-  handleChallengeAccept(data: any, sender: Party.Connection) {
+  async handleChallengeAccept(data: any, sender: Party.Connection) {
     const { challengeId } = data;
-    const challenge = this.pendingChallenges.get(challengeId);
-    if (!challenge) return;
 
-    // Clear timers
-    clearTimeout(challenge.timer);
+    // Try memory first (fast path)
+    let challenge = this.pendingChallenges.get(challengeId);
+
+    if (!challenge) {
+      // Fallback to database query (server may have restarted)
+      console.warn('[PRESENCE] Challenge not in memory, querying database...');
+      challenge = await this.queryChallengeFromDB(challengeId);
+
+      if (!challenge) {
+        // Challenge not found - send error to client
+        sender.send(JSON.stringify({
+          type: 'challenge_accept_failed',
+          challengeId,
+          error: 'Challenge not found or expired. It may have been cancelled or already accepted.',
+        }));
+        console.error('[PRESENCE] Challenge accept failed: not found in memory or database');
+        return;
+      }
+
+      console.log('[PRESENCE] Challenge restored from database:', challengeId);
+    }
+
+    // Clear timers if they exist
+    if (challenge.timer) {
+      clearTimeout(challenge.timer);
+    }
     if (challenge.ackTimeout) {
       clearTimeout(challenge.ackTimeout);
     }
@@ -232,15 +320,31 @@ export default class PresenceServer implements Party.Server {
     const challengerUser = this.onlineUsers.get(challenge.challengerId);
     if (challengerUser) {
       const conn = this.getConnection(challengerUser.connectionId);
-      if (conn) conn.send(JSON.stringify(matchData));
+      if (conn) {
+        conn.send(JSON.stringify(matchData));
+        console.log('[PRESENCE] Sent match data to challenger:', challenge.challengerId);
+      } else {
+        console.warn('[PRESENCE] Challenger connection not found');
+      }
+    } else {
+      console.warn('[PRESENCE] Challenger not online:', challenge.challengerId);
     }
 
     // Send to challenged (the acceptor)
     const challengedUser = this.onlineUsers.get(challenge.challengedId);
     if (challengedUser) {
       const conn = this.getConnection(challengedUser.connectionId);
-      if (conn) conn.send(JSON.stringify(matchData));
+      if (conn) {
+        conn.send(JSON.stringify(matchData));
+        console.log('[PRESENCE] Sent match data to challenged:', challenge.challengedId);
+      } else {
+        console.warn('[PRESENCE] Challenged connection not found');
+      }
+    } else {
+      console.warn('[PRESENCE] Challenged not online:', challenge.challengedId);
     }
+
+    console.log('[PRESENCE] Challenge accepted successfully, room created:', roomId);
   }
 
   handleChallengeDecline(data: any, sender: Party.Connection) {
