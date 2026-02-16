@@ -51,6 +51,7 @@ export default class GameRoomServer implements Party.Server {
   adaptiveAI: AdaptiveAI | null = null;
   aiAbilityLoadout: string[] = [];
   aiLastAbilityUse: number = 0;
+  aiIsExecuting: boolean = false; // Prevent overlapping AI executions
 
   // Server-authoritative mode
   serverGameStates: Map<string, ServerGameState> = new Map();
@@ -384,6 +385,12 @@ export default class GameRoomServer implements Party.Server {
     this.aiLastAbilityUse = Date.now();
 
     this.aiInterval = setInterval(() => {
+      // Guard: skip if previous AI execution is still running (prevents event loop blocking)
+      if (this.aiIsExecuting) {
+        console.warn('[AI] Skipping tick - previous execution still running');
+        return;
+      }
+
       const currentAIState = this.serverGameStates.get(this.aiPlayer!.id);
       if (!currentAIState) {
         return;
@@ -392,6 +399,7 @@ export default class GameRoomServer implements Party.Server {
         return;
       }
 
+      this.aiIsExecuting = true; // Mark as executing
       const now = Date.now();
 
       // AI gets slower under visual disruption debuffs to mirror human impact.
@@ -402,6 +410,7 @@ export default class GameRoomServer implements Party.Server {
       if (activeEffects.has('shrink_ceiling')) moveDelay *= 1.1;
 
       if (now - this.aiLastMoveTime < moveDelay) {
+        this.aiIsExecuting = false;
         return;
       }
 
@@ -415,7 +424,10 @@ export default class GameRoomServer implements Party.Server {
       }
 
       let move = this.aiMoveQueue.shift();
-      if (!move) return;
+      if (!move) {
+        this.aiIsExecuting = false;
+        return;
+      }
 
       if (activeEffects.has('reverse_controls')) {
         if (move.type === 'left') move = { type: 'right' };
@@ -445,7 +457,8 @@ export default class GameRoomServer implements Party.Server {
       }
 
       this.aiLastMoveTime = now;
-    }, 50);
+      this.aiIsExecuting = false; // Mark as complete
+    }, 200); // Increased from 50ms to 200ms to prevent event loop blocking
   }
 
   private aiMoveToPlayerInput(moveType: AIMove['type']): PlayerInputType {
