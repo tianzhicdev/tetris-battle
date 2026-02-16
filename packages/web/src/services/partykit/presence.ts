@@ -31,6 +31,7 @@ export class PartykitPresence {
   private reconnectionManager: ReconnectionManager | null = null;
   private callbacks: PresenceCallbacks | null = null;
   private friendIds: string[] = [];
+  private intentionallyDisconnected: boolean = false;
 
   constructor(userId: string, host: string) {
     this.userId = userId;
@@ -39,6 +40,7 @@ export class PartykitPresence {
 
   connect(callbacks: PresenceCallbacks): void {
     this.callbacks = callbacks;
+    this.intentionallyDisconnected = false;
 
     this.reconnectionManager = new ReconnectionManager(
       {
@@ -131,6 +133,12 @@ export class PartykitPresence {
     });
 
     this.socket.addEventListener('close', () => {
+      // Don't reconnect if we intentionally disconnected
+      if (this.intentionallyDisconnected) {
+        console.log('[PRESENCE] Connection closed intentionally, not reconnecting');
+        return;
+      }
+
       console.log('[PRESENCE] Connection closed, attempting reconnection...');
       this.reconnectionManager?.reconnect(async () => {
         return new Promise((resolve, reject) => {
@@ -256,9 +264,20 @@ export class PartykitPresence {
   }
 
   disconnect(): void {
+    console.log('[PRESENCE] Disconnect called');
+    this.intentionallyDisconnected = true;
+
+    // Stop reconnection manager
+    if (this.reconnectionManager) {
+      this.reconnectionManager.reset();
+      this.reconnectionManager = null;
+    }
+
     if (this.socket) {
       this.socket.close();
       this.socket = null;
     }
+
+    this.callbacks = null;
   }
 }

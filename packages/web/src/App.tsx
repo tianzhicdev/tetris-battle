@@ -53,6 +53,12 @@ function GameApp({ profile: initialProfile }: { profile: UserProfile }) {
   useEffect(() => {
     if (!playerId) return;
 
+    // CRITICAL: Prevent duplicate connections if effect runs multiple times
+    if (presenceRef.current) {
+      console.warn('[PRESENCE] Connection already exists, skipping re-initialization');
+      return;
+    }
+
     console.log('[PRESENCE] Initializing connection for player:', playerId);
     const host = normalizePartykitHost(import.meta.env.VITE_PARTYKIT_HOST);
     const presence = new PartykitPresence(playerId, host);
@@ -77,9 +83,12 @@ function GameApp({ profile: initialProfile }: { profile: UserProfile }) {
     useFriendStore.getState().loadPendingRequests(playerId);
 
     return () => {
-      console.log('[PRESENCE] Disconnecting for player:', playerId);
-      presence.disconnect();
-      presenceRef.current = null;
+      console.log('[PRESENCE] Cleanup running for player:', playerId);
+      if (presenceRef.current) {
+        console.log('[PRESENCE] Disconnecting presence connection');
+        presenceRef.current.disconnect();
+        presenceRef.current = null;
+      }
     };
   }, [playerId]); // Only depend on playerId!
 
