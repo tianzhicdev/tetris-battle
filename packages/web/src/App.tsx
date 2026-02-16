@@ -198,10 +198,26 @@ function GameApp({ profile: initialProfile }: { profile: UserProfile }) {
   }, [cancelChallenge, playerId]);
 
   const handleNavigate = useCallback((path: string, options?: any) => {
-    // This will be handled by the store's acceptChallenge method
-    // which sets up the game match and navigates
     console.log('[APP] Navigation triggered:', path, options);
-  }, []);
+
+    // Parse roomId from path (format: /game?roomId=xxx&mode=friend)
+    const url = new URL(path, window.location.origin);
+    const roomId = url.searchParams.get('roomId');
+    const opponentId = options?.state?.opponentId;
+
+    if (roomId && opponentId) {
+      console.log('[APP] Setting up game match:', { roomId, playerId, opponentId });
+      clearChallenges();
+      setGameMatch({
+        roomId,
+        player1Id: playerId,
+        player2Id: opponentId,
+      });
+      setMode('multiplayer');
+    } else {
+      console.error('[APP] Missing roomId or opponentId:', { roomId, opponentId });
+    }
+  }, [playerId, clearChallenges]);
 
   return (
     <>
