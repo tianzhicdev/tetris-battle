@@ -19,7 +19,9 @@ export function ChallengeWaiting({ onCancel }: ChallengeWaitingProps) {
       return;
     }
 
-    const remaining = Math.max(0, Math.floor((outgoingChallenge.expiresAt - Date.now()) / 1000));
+    const remaining = Math.max(0, Math.floor(
+      (new Date(outgoingChallenge.expiresAt).getTime() - Date.now()) / 1000
+    ));
     setTimeLeft(remaining);
 
     const interval = setInterval(() => {
@@ -104,7 +106,7 @@ export function ChallengeWaiting({ onCancel }: ChallengeWaitingProps) {
               fontWeight: 'bold',
               marginBottom: '8px',
             }}>
-              Waiting for {outgoingChallenge.challengerUsername}{dots}
+              Waiting for {outgoingChallenge.challengedUsername || 'opponent'}{dots}
             </div>
 
             <div style={{
@@ -125,7 +127,7 @@ export function ChallengeWaiting({ onCancel }: ChallengeWaitingProps) {
             <button
               onClick={() => {
                 audioManager.playSfx('button_click');
-                onCancel(outgoingChallenge.challengeId);
+                onCancel(outgoingChallenge.id);
               }}
               style={mergeGlass(glassDanger(), {
                 padding: '10px 30px',

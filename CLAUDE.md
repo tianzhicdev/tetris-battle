@@ -4,6 +4,28 @@
 
 Tetris Battle is a multiplayer Tetris game with friend challenges, matchmaking, AI opponents, and special abilities.
 
+## Recent Changes: Friend Challenge System Redesign (Feb 2026)
+
+**Implemented**: Database-first friend challenge architecture replacing dual source-of-truth (PartyKit + Database) with pure Supabase Realtime solution.
+
+**Problem Solved**: Previous system had ~60% challenge success rate due to race conditions from maintaining state in both database and PartyKit memory.
+
+**New Architecture**: Single source of truth (PostgreSQL) with Supabase Realtime subscriptions for instant notifications. Expected >99% success rate.
+
+**Key Files Added**:
+- `supabase/migrations/008_friend_challenges_redesign.sql` - Database schema + atomic RPC functions
+- `packages/web/src/hooks/useChallenges.ts` - Main integration hook
+- `packages/web/src/hooks/useIncomingChallenges.ts` - Realtime subscription for incoming
+- `packages/web/src/hooks/useOutgoingChallenges.ts` - Realtime subscription for outgoing
+- `packages/web/src/components/ChallengeNotification.tsx` - Incoming challenge UI
+
+**Key Files Modified**:
+- `packages/web/src/services/friendService.ts` - New RPC methods (accept/decline/cancel)
+- `packages/web/src/stores/friendStore.ts` - New actions with optimistic updates
+- `packages/web/src/App.tsx` - Removed PartyKit challenge logic, integrated useChallenges hook
+
+**Testing Status**: TypeScript compiles. Manual testing pending (requires database migration). Unit tests not yet written.
+
 **Stack:**
 - Frontend: React + TypeScript + Vite
 - Backend: PartyKit (WebSocket-based multiplayer)

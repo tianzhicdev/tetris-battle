@@ -3,16 +3,17 @@ import { MainMenu } from './components/MainMenu';
 import { TetrisGame } from './components/TetrisGame';
 import { Matchmaking } from './components/PartykitMatchmaking';
 import { ServerAuthMultiplayerGame } from './components/ServerAuthMultiplayerGame';
-import { Notification } from './components/Notification';
 import { audioManager } from './services/audioManager';
 import { ChallengeWaiting } from './components/ChallengeWaiting';
+import { ChallengeNotification } from './components/ChallengeNotification';
 import { AuthWrapper } from './components/AuthWrapper';
+import { useChallenges } from './hooks/useChallenges';
+import { supabase } from './lib/supabase';
 import { AbilityEffectsDemo } from './components/AbilityEffectsDemo';
 import { VisualEffectsDemo } from './components/VisualEffectsDemo';
 import { ThemeProvider, useTheme } from './contexts/ThemeContext';
 import { toLegacyTheme } from './themes/index';
 import { progressionService } from './lib/supabase';
-import { friendService } from './services/friendService';
 import { PartykitPresence } from './services/partykit/presence';
 import { normalizePartykitHost } from './services/partykit/host';
 import { useFriendStore } from './stores/friendStore';
@@ -34,51 +35,24 @@ function GameApp({ profile: initialProfile }: { profile: UserProfile }) {
   const [gameMatch, setGameMatch] = useState<GameMatch | null>(null);
   const [profile, setProfile] = useState<UserProfile>(initialProfile);
   const presenceRef = useRef<PartykitPresence | null>(null);
-  const challengePollIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const {
     loadFriends,
     loadPendingRequests,
     updatePresence,
-    setIncomingChallenge,
-    setOutgoingChallenge,
     clearChallenges,
     friends,
-    incomingChallenge,
-    outgoingChallenge,
+    cancelChallenge,
+    sendChallenge,
   } = useFriendStore();
-
-  const [challengeTimeLeft, setChallengeTimeLeft] = useState(120);
 
   // Use Clerk user ID as player ID
   const playerId = profile.userId;
 
-  // Handle challenge countdown timer
-  useEffect(() => {
-    if (!incomingChallenge) {
-      setChallengeTimeLeft(120);
-      return;
-    }
+  // Set up database-first challenge subscriptions
+  useChallenges(playerId);
 
-    const remaining = Math.max(0, Math.floor((incomingChallenge.expiresAt - Date.now()) / 1000));
-    setChallengeTimeLeft(remaining);
-
-    const interval = setInterval(() => {
-      setChallengeTimeLeft(prev => {
-        const next = prev - 1;
-        if (next <= 0) {
-          clearInterval(interval);
-          handleDeclineChallenge(incomingChallenge.challengeId);
-          return 0;
-        }
-        return next;
-      });
-    }, 1000);
-
-    return () => clearInterval(interval);
-  }, [incomingChallenge]);
-
-  // Initialize presence connection
+  // Initialize presence connection (for online status only, not challenges)
   useEffect(() => {
     const host = normalizePartykitHost(import.meta.env.VITE_PARTYKIT_HOST);
     const presence = new PartykitPresence(playerId, host);
@@ -87,40 +61,12 @@ function GameApp({ profile: initialProfile }: { profile: UserProfile }) {
       onPresenceUpdate: (userId, status) => {
         updatePresence(userId, status);
       },
-      onChallengeReceived: (challenge) => {
-        setIncomingChallenge({
-          challengeId: challenge.challengeId,
-          challengerId: challenge.challengerId,
-          challengedId: playerId,
-          challengerUsername: challenge.challengerUsername,
-          challengerRank: challenge.challengerRank,
-          challengerLevel: challenge.challengerLevel,
-          expiresAt: challenge.expiresAt,
-        });
-      },
-      onChallengeAccepted: (data) => {
-        clearChallenges();
-        setGameMatch({ roomId: data.roomId, player1Id: data.player1, player2Id: data.player2 });
-        setMode('multiplayer');
-      },
-      onChallengeDeclined: () => {
-        setOutgoingChallenge(null);
-      },
-      onChallengeExpired: () => {
-        clearChallenges();
-      },
-      onChallengeCancelled: () => {
-        setIncomingChallenge(null);
-      },
-      onChallengeAcceptFailed: (_challengeId, error) => {
-        console.error('[APP] Challenge accept failed:', error);
-        // Clear the challenge from state
-        setIncomingChallenge(null);
-        // Show error to user (you could add a toast notification here)
-        alert(`Failed to accept challenge: ${error}`);
-        // Reload challenges from database to get current state
-        restorePendingChallenges();
-      },
+      // Challenge callbacks - no-ops since now handled by Supabase Realtime
+      onChallengeReceived: () => {},
+      onChallengeAccepted: () => {},
+      onChallengeDeclined: () => {},
+      onChallengeExpired: () => {},
+      onChallengeCancelled: () => {},
     });
 
     presenceRef.current = presence;
@@ -129,38 +75,43 @@ function GameApp({ profile: initialProfile }: { profile: UserProfile }) {
     loadFriends(playerId);
     loadPendingRequests(playerId);
 
-    // Restore pending challenges from database
-    const restorePendingChallenges = async () => {
-      try {
-        // Fetch incoming challenges (where I'm being challenged)
-        const incoming = await friendService.getPendingChallenges(playerId);
-        if (incoming.length > 0 && !incomingChallenge) {
-          setIncomingChallenge(incoming[0]);  // Show first incoming challenge
-        }
-
-        // Fetch outgoing challenges (where I sent a challenge)
-        const outgoing = await friendService.getOutgoingChallenges(playerId);
-        if (outgoing.length > 0 && !outgoingChallenge) {
-          setOutgoingChallenge(outgoing[0]);  // Show first outgoing challenge
-        }
-      } catch (error) {
-        console.error('[APP] Error restoring pending challenges:', error);
-      }
-    };
-
-    restorePendingChallenges();
-
-    // Poll for pending challenges every 30 seconds (fallback mechanism)
-    challengePollIntervalRef.current = setInterval(restorePendingChallenges, 30000);
-
     return () => {
       presence.disconnect();
       presenceRef.current = null;
-      if (challengePollIntervalRef.current) {
-        clearInterval(challengePollIntervalRef.current);
-      }
     };
-  }, [playerId]);
+  }, [playerId, loadFriends, loadPendingRequests, updatePresence]);
+
+  // Listen for accepted challenges (as challenger) to navigate to game
+  useEffect(() => {
+    if (!playerId) return;
+
+    const subscription = supabase
+      .channel(`challenge_accepted_${playerId}`)
+      .on('postgres_changes', {
+        event: 'UPDATE',
+        schema: 'public',
+        table: 'friend_challenges',
+        filter: `challengerId=eq.${playerId}`,
+      }, (payload) => {
+        const challenge = payload.new as any;
+
+        if (challenge.status === 'accepted' && challenge.roomId) {
+          console.log('[APP] Challenge accepted, navigating to game');
+          clearChallenges();
+          setGameMatch({
+            roomId: challenge.roomId,
+            player1Id: challenge.challengerId,
+            player2Id: challenge.challengedId,
+          });
+          setMode('multiplayer');
+        }
+      })
+      .subscribe();
+
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, [playerId, clearChallenges]);
 
   // Subscribe to friend presence when friend list changes
   useEffect(() => {
@@ -233,87 +184,30 @@ function GameApp({ profile: initialProfile }: { profile: UserProfile }) {
 
   // Challenge handlers
   const handleChallenge = useCallback(async (friendUserId: string, friendUsername: string) => {
-    const challengeId = await friendService.createChallenge(playerId, friendUserId);
-    if (!challengeId) return;
-
-    // Send via presence WebSocket
-    presenceRef.current?.sendChallenge(
-      challengeId,
-      friendUserId,
-      profile.username,
-      profile.matchmakingRating,
-      0 // level no longer exists
-    );
-
-    // Set outgoing challenge in store
-    setOutgoingChallenge({
-      challengeId,
-      challengerId: playerId,
-      challengedId: friendUserId,
-      challengerUsername: friendUsername,
-      challengerRank: 0,
-      challengerLevel: 0,
-      expiresAt: Date.now() + 120000,
-    });
-  }, [playerId, profile, setOutgoingChallenge]);
-
-  const handleAcceptChallenge = useCallback(async (challengeId: string) => {
-    await friendService.updateChallengeStatus(challengeId, 'accepted');
-    presenceRef.current?.acceptChallenge(challengeId);
-    setIncomingChallenge(null);
-  }, [setIncomingChallenge]);
-
-  const handleDeclineChallenge = useCallback(async (challengeId: string) => {
-    await friendService.updateChallengeStatus(challengeId, 'declined');
-    presenceRef.current?.declineChallenge(challengeId);
-    setIncomingChallenge(null);
-  }, [setIncomingChallenge]);
+    try {
+      await sendChallenge(friendUserId, friendUsername, playerId);
+    } catch (error) {
+      console.error('[APP] Failed to send challenge:', error);
+      alert('Failed to send challenge. Please try again.');
+    }
+  }, [playerId, sendChallenge]);
 
   const handleCancelChallenge = useCallback(async (challengeId: string) => {
-    await friendService.updateChallengeStatus(challengeId, 'expired');
-    presenceRef.current?.cancelChallenge(challengeId);
-    setOutgoingChallenge(null);
-  }, [setOutgoingChallenge]);
+    audioManager.playSfx('button_click');
+    await cancelChallenge(challengeId, playerId);
+  }, [cancelChallenge, playerId]);
+
+  const handleNavigate = useCallback((path: string, options?: any) => {
+    // This will be handled by the store's acceptChallenge method
+    // which sets up the game match and navigates
+    console.log('[APP] Navigation triggered:', path, options);
+  }, []);
 
   return (
     <>
-      {/* Global notification layer - always rendered above all game content */}
-      <div style={{
-        position: 'fixed',
-        top: 0,
-        left: 0,
-        right: 0,
-        bottom: 0,
-        pointerEvents: 'none',
-        zIndex: 9999,
-      }}>
-        <Notification
-          visible={!!incomingChallenge}
-          title={incomingChallenge?.challengerUsername || 'Challenge'}
-          message={`Lv ${incomingChallenge?.challengerLevel || 0} · Rank ${incomingChallenge?.challengerRank || 0}`}
-          variant="challenge"
-          countdown={challengeTimeLeft}
-          actions={incomingChallenge ? [
-            {
-              label: 'Accept',
-              onClick: () => {
-                audioManager.playSfx('button_click');
-                handleAcceptChallenge(incomingChallenge.challengeId);
-              },
-              variant: 'success',
-            },
-            {
-              label: 'Decline',
-              onClick: () => {
-                audioManager.playSfx('button_click');
-                handleDeclineChallenge(incomingChallenge.challengeId);
-              },
-              variant: 'danger',
-            },
-          ] : undefined}
-        />
-        <ChallengeWaiting onCancel={handleCancelChallenge} />
-      </div>
+      {/* Challenge notifications */}
+      <ChallengeNotification userId={playerId} onNavigate={handleNavigate} />
+      <ChallengeWaiting onCancel={handleCancelChallenge} />
 
       {/* Game mode routing */}
       {mode === 'menu' && (

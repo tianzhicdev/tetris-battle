@@ -27,13 +27,17 @@ export interface UserSearchResult {
 }
 
 export interface Challenge {
-  challengeId: string;
+  id: string;
   challengerId: string;
   challengedId: string;
   challengerUsername: string;
-  challengerRank: number;
-  challengerLevel: number;
-  expiresAt: number;
+  challengedUsername?: string;  // For outgoing challenges
+  status: 'pending' | 'accepted' | 'declined' | 'expired' | 'cancelled';
+  roomId?: string;
+  expiresAt: string;  // ISO timestamp
+  createdAt: string;  // ISO timestamp
+  acceptedAt?: string;  // ISO timestamp
+  resolvedAt?: string;  // ISO timestamp
 }
 
 type FriendRequestResult =
@@ -382,47 +386,111 @@ class FriendService {
     });
   }
 
-  async createChallenge(challengerId: string, challengedId: string): Promise<string | null> {
+  async createChallenge(challengerId: string, challengedId: string): Promise<{
+    success: boolean;
+    challenge?: Challenge;
+    error?: 'DUPLICATE_CHALLENGE' | 'NOT_FRIENDS' | 'INTERNAL_ERROR';
+  }> {
     const { data, error } = await supabase
       .from('friend_challenges')
       .insert({
         challengerId,
         challengedId,
         status: 'pending',
+        expiresAt: new Date(Date.now() + 120000).toISOString(),
       })
-      .select('id')
+      .select('id, challengerId, challengedId, status, createdAt, expiresAt')
       .single();
 
     if (error) {
       console.error('Error creating challenge:', error);
-      return null;
+      // Check for unique constraint violation (23505 = unique_violation)
+      if (error.code === '23505') {
+        return { success: false, error: 'DUPLICATE_CHALLENGE' };
+      }
+      return { success: false, error: 'INTERNAL_ERROR' };
     }
 
-    return data.id;
+    // Fetch challenger profile for username
+    const { data: profile } = await supabase
+      .from('user_profiles')
+      .select('username')
+      .eq('userId', challengerId)
+      .single();
+
+    return {
+      success: true,
+      challenge: {
+        ...data,
+        challengerUsername: profile?.username || 'Unknown',
+      } as Challenge,
+    };
   }
 
-  async updateChallengeStatus(challengeId: string, status: 'accepted' | 'declined' | 'expired'): Promise<boolean> {
-    const { error } = await supabase
-      .from('friend_challenges')
-      .update({ status })
-      .eq('id', challengeId);
+  async acceptChallenge(challengeId: string, userId: string): Promise<{
+    success: boolean;
+    roomId?: string;
+    challengeId?: string;
+    challengerId?: string;
+    challengedId?: string;
+    error?: 'CHALLENGE_NOT_FOUND' | 'CHALLENGE_EXPIRED' | 'CONCURRENT_MODIFICATION' | 'INTERNAL_ERROR';
+  }> {
+    const { data, error } = await supabase.rpc('accept_challenge', {
+      p_challenge_id: challengeId,
+      p_user_id: userId,
+    });
 
     if (error) {
-      console.error('Error updating challenge status:', error);
-      return false;
+      console.error('Error accepting challenge:', error);
+      return { success: false, error: 'INTERNAL_ERROR' };
     }
 
-    return true;
+    return data as any;
+  }
+
+  async declineChallenge(challengeId: string, userId: string): Promise<{
+    success: boolean;
+    error?: 'CHALLENGE_NOT_FOUND' | 'INTERNAL_ERROR';
+  }> {
+    const { data, error } = await supabase.rpc('decline_challenge', {
+      p_challenge_id: challengeId,
+      p_user_id: userId,
+    });
+
+    if (error) {
+      console.error('Error declining challenge:', error);
+      return { success: false, error: 'INTERNAL_ERROR' };
+    }
+
+    return data as any;
+  }
+
+  async cancelChallenge(challengeId: string, userId: string): Promise<{
+    success: boolean;
+    error?: 'CHALLENGE_NOT_FOUND' | 'INTERNAL_ERROR';
+  }> {
+    const { data, error } = await supabase.rpc('cancel_challenge', {
+      p_challenge_id: challengeId,
+      p_user_id: userId,
+    });
+
+    if (error) {
+      console.error('Error cancelling challenge:', error);
+      return { success: false, error: 'INTERNAL_ERROR' };
+    }
+
+    return data as any;
   }
 
   async getPendingChallenges(userId: string): Promise<Challenge[]> {
     // ONLY return challenges where user is the challenged party (incoming challenges)
     const { data: challenges, error } = await supabase
       .from('friend_challenges')
-      .select('id, "challengerId", "challengedId", "createdAt", "expiresAt"')
+      .select('id, "challengerId", "challengedId", status, "createdAt", "expiresAt"')
       .eq('status', 'pending')
       .eq('challengedId', userId)  // ONLY incoming challenges
-      .gt('expiresAt', new Date().toISOString());
+      .gt('expiresAt', new Date().toISOString())
+      .order('createdAt', { ascending: true });
 
     if (error || !challenges) {
       console.error('Error fetching pending challenges:', error);
@@ -436,7 +504,7 @@ class FriendService {
 
     const { data: profiles, error: profileError } = await supabase
       .from('user_profiles')
-      .select('"userId", username, level, rank')
+      .select('"userId", username')
       .in('userId', challengerIds);
 
     if (profileError || !profiles) {
@@ -444,30 +512,33 @@ class FriendService {
       return [];
     }
 
-    return challenges.map(c => {
+    const result: Challenge[] = [];
+    for (const c of challenges) {
       const challengerProfile = profiles.find(p => p.userId === c.challengerId);
-      if (!challengerProfile) return null;
+      if (!challengerProfile) continue;
 
-      return {
-        challengeId: c.id,
+      result.push({
+        id: c.id,
         challengerId: c.challengerId,
         challengedId: c.challengedId,
         challengerUsername: challengerProfile.username,
-        challengerRank: challengerProfile.rank,
-        challengerLevel: challengerProfile.level,
-        expiresAt: new Date(c.expiresAt).getTime(),
-      };
-    }).filter((c): c is Challenge => c !== null);
+        status: c.status as 'pending',
+        expiresAt: c.expiresAt,
+        createdAt: c.createdAt,
+      });
+    }
+    return result;
   }
 
   async getOutgoingChallenges(userId: string): Promise<Challenge[]> {
     // Return challenges where user is the challenger (outgoing challenges)
     const { data: challenges, error } = await supabase
       .from('friend_challenges')
-      .select('id, "challengerId", "challengedId", "createdAt", "expiresAt"')
+      .select('id, "challengerId", "challengedId", status, "createdAt", "expiresAt"')
       .eq('status', 'pending')
       .eq('challengerId', userId)  // ONLY outgoing challenges
-      .gt('expiresAt', new Date().toISOString());
+      .gt('expiresAt', new Date().toISOString())
+      .order('createdAt', { ascending: true });
 
     if (error || !challenges) {
       console.error('Error fetching outgoing challenges:', error);
@@ -481,7 +552,7 @@ class FriendService {
 
     const { data: profiles, error: profileError } = await supabase
       .from('user_profiles')
-      .select('"userId", username, level, rank')
+      .select('"userId", username')
       .in('userId', challengedIds);
 
     if (profileError || !profiles) {
@@ -489,20 +560,23 @@ class FriendService {
       return [];
     }
 
-    return challenges.map(c => {
+    const result: Challenge[] = [];
+    for (const c of challenges) {
       const challengedProfile = profiles.find(p => p.userId === c.challengedId);
-      if (!challengedProfile) return null;
+      if (!challengedProfile) continue;
 
-      return {
-        challengeId: c.id,
+      result.push({
+        id: c.id,
         challengerId: c.challengerId,
         challengedId: c.challengedId,
-        challengerUsername: challengedProfile.username,  // Actually the challenged user's name
-        challengerRank: challengedProfile.rank,
-        challengerLevel: challengedProfile.level,
-        expiresAt: new Date(c.expiresAt).getTime(),
-      };
-    }).filter((c): c is Challenge => c !== null);
+        challengerUsername: '', // We don't need this for outgoing challenges
+        challengedUsername: challengedProfile.username,  // The person we challenged
+        status: c.status as 'pending',
+        expiresAt: c.expiresAt,
+        createdAt: c.createdAt,
+      });
+    }
+    return result;
   }
 }
 
