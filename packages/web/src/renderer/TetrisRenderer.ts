@@ -117,6 +117,51 @@ export class TetrisRenderer {
           this.ctx.fill();
           break;
         }
+
+        case 'burn': {
+          // Realistic burning fire effect
+          const centerX = px + this.blockSize / 2;
+          const centerY = py + this.blockSize / 2;
+
+          // Flickering intensity (random flicker)
+          const flicker = 0.7 + Math.random() * 0.3;
+          const alpha = (1 - progress) * flicker;
+
+          // Multi-layered fire gradient
+          const fireGradient = this.ctx.createRadialGradient(
+            centerX, centerY + this.blockSize * 0.2, 0,
+            centerX, centerY, this.blockSize * 0.7
+          );
+
+          // Fire core (white-hot center)
+          fireGradient.addColorStop(0, `rgba(255, 255, 200, ${alpha})`);
+          // Inner flame (bright yellow)
+          fireGradient.addColorStop(0.3, `rgba(255, 220, 0, ${alpha * 0.9})`);
+          // Middle flame (orange)
+          fireGradient.addColorStop(0.6, `rgba(255, 100, 0, ${alpha * 0.7})`);
+          // Outer flame (red)
+          fireGradient.addColorStop(0.85, `rgba(255, 50, 0, ${alpha * 0.4})`);
+          // Edge (dark red smoke)
+          fireGradient.addColorStop(1, `rgba(100, 0, 0, 0)`);
+
+          this.ctx.fillStyle = fireGradient;
+          this.ctx.fillRect(px, py, this.blockSize, this.blockSize);
+
+          // Add flickering particles/embers rising up
+          if (Math.random() > 0.7) {
+            const emberX = centerX + (Math.random() - 0.5) * this.blockSize * 0.6;
+            const emberY = py + progress * this.blockSize * 0.5;
+            const emberSize = this.blockSize * 0.1;
+
+            this.ctx.globalAlpha = (1 - progress) * 0.8;
+            this.ctx.fillStyle = '#ffaa00';
+            this.ctx.beginPath();
+            this.ctx.arc(emberX, emberY, emberSize, 0, Math.PI * 2);
+            this.ctx.fill();
+          }
+
+          break;
+        }
       }
 
       this.ctx.restore();

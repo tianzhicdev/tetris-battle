@@ -340,8 +340,11 @@ export function ServerAuthMultiplayerGame({
         const abilityType = pendingAbility || periodicAbility!;
 
         if (BOMB_ABILITY_TYPES.has(abilityType)) {
-          renderer.animationManager.animateBlocksDisappearing(allChanged, '#ff8c42');
-          renderer.animationManager.animateBlocksFlashing(allChanged, '#ffd166');
+          // Flash warning first
+          renderer.animationManager.animateBlocksFlashing(allChanged, '#ffffff');
+          // Burning fire effect on cleared cells
+          renderer.animationManager.animateBlocksBurning(allChanged);
+          // Explosion at center
           const center = centerOfPositions(allChanged);
           renderer.animationManager.animateExplosion(center.x, center.y, 3, '#ff6a00');
         } else {

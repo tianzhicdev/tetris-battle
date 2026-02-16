@@ -3,7 +3,7 @@
  * Provides consistent animations for block manipulation abilities
  */
 
-export type AnimationType = 'fade-out' | 'fade-in' | 'flash' | 'shake' | 'explode';
+export type AnimationType = 'fade-out' | 'fade-in' | 'flash' | 'shake' | 'explode' | 'burn';
 
 export interface BlockAnimation {
   x: number;
@@ -90,6 +90,23 @@ export class BlockAnimationManager {
         });
       }
     }
+  }
+
+  /**
+   * Add burning fire animation (for bomb-cleared blocks)
+   */
+  animateBlocksBurning(positions: Array<{ x: number; y: number }>): void {
+    const now = Date.now();
+    positions.forEach(({ x, y }) => {
+      this.animations.push({
+        x,
+        y,
+        type: 'burn',
+        startTime: now,
+        duration: 600, // Longer duration for burning effect
+        color: '#ff6a00', // Orange fire
+      });
+    });
   }
 
   /**

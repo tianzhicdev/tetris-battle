@@ -177,7 +177,11 @@ export function AbilityEffectsDemo() {
               }
             }
           }
-          renderer.animationManager.animateBlocksDisappearing(affectedCells, '#ff8c42');
+          // Flash warning first
+          renderer.animationManager.animateBlocksFlashing(affectedCells, '#ffffff');
+          // Burning fire effect
+          renderer.animationManager.animateBlocksBurning(affectedCells);
+          // Explosion at center
           renderer.animationManager.animateExplosion(centerX, centerY, 3, '#ff6a00');
         } else {
           // Cross explosion
@@ -190,7 +194,11 @@ export function AbilityEffectsDemo() {
             const y = centerY + dy;
             if (y >= 0 && y < 20) affectedCells.push({ x: centerX, y });
           }
-          renderer.animationManager.animateBlocksDisappearing(affectedCells, '#ff8c42');
+          // Flash warning first
+          renderer.animationManager.animateBlocksFlashing(affectedCells, '#ffffff');
+          // Burning fire effect
+          renderer.animationManager.animateBlocksBurning(affectedCells);
+          // Explosion at center
           renderer.animationManager.animateExplosion(centerX, centerY, 2, '#ff4400');
         }
         audioManager.playSfx('ability_bomb_explode');
