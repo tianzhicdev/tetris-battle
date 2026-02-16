@@ -27,15 +27,14 @@ DROP TABLE IF EXISTS user_profiles CASCADE;
 CREATE TABLE user_profiles (
   "userId" TEXT PRIMARY KEY,
   username TEXT UNIQUE NOT NULL,
-  level INTEGER NOT NULL DEFAULT 1,
-  xp INTEGER NOT NULL DEFAULT 0,
   coins INTEGER NOT NULL DEFAULT 0,
-  rank INTEGER NOT NULL DEFAULT 1000,  -- renamed from "elo"
+  "matchmakingRating" INTEGER NOT NULL DEFAULT 1000,
   "unlockedAbilities" JSONB NOT NULL DEFAULT '["screen_shake", "speed_up_opponent", "piece_preview_plus", "mini_blocks"]'::jsonb,
   loadout JSONB NOT NULL DEFAULT '["screen_shake", "speed_up_opponent", "piece_preview_plus"]'::jsonb,
   "createdAt" BIGINT NOT NULL,
   "updatedAt" BIGINT NOT NULL,
   "gamesPlayed" INTEGER NOT NULL DEFAULT 0,
+  "gamesWon" INTEGER NOT NULL DEFAULT 0,
   "lastActiveAt" BIGINT NOT NULL DEFAULT EXTRACT(EPOCH FROM NOW())::BIGINT * 1000
 );
 
@@ -48,12 +47,11 @@ CREATE TABLE match_results (
   "linesCleared" INTEGER NOT NULL DEFAULT 0,
   "abilitiesUsed" INTEGER NOT NULL DEFAULT 0,
   "coinsEarned" INTEGER NOT NULL DEFAULT 0,
-  "xpEarned" INTEGER NOT NULL DEFAULT 0,
   duration INTEGER NOT NULL DEFAULT 0,
   timestamp BIGINT NOT NULL,
-  "rankChange" INTEGER NOT NULL DEFAULT 0,  -- renamed from "eloChange"
-  "rankAfter" INTEGER NOT NULL DEFAULT 1000,  -- renamed from "eloAfter"
-  "opponentRank" INTEGER NOT NULL DEFAULT 1000  -- renamed from "opponentElo"
+  "rankChange" INTEGER NOT NULL DEFAULT 0,
+  "rankAfter" INTEGER NOT NULL DEFAULT 1000,
+  "opponentRank" INTEGER NOT NULL DEFAULT 1000
 );
 
 -- User Quests Table (daily/weekly quests)
@@ -152,7 +150,8 @@ CREATE TABLE friend_challenges (
 
 -- User profiles indexes
 CREATE INDEX idx_user_profiles_username ON user_profiles(username);
-CREATE INDEX idx_user_profiles_rank ON user_profiles(rank DESC);
+CREATE INDEX idx_user_profiles_matchmaking_rating ON user_profiles("matchmakingRating" DESC);
+CREATE INDEX idx_user_profiles_games_won ON user_profiles("gamesWon" DESC);
 
 -- Match results indexes
 CREATE INDEX idx_match_results_user ON match_results("userId", timestamp DESC);
