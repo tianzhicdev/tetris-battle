@@ -8,6 +8,7 @@ import { ChallengeWaiting } from './components/ChallengeWaiting';
 import { ChallengeNotification } from './components/ChallengeNotification';
 import { AuthWrapper } from './components/AuthWrapper';
 import { useChallenges } from './hooks/useChallenges';
+import { useFriendRequests } from './hooks/useFriendRequests';
 import { supabase } from './lib/supabase';
 import { AbilityEffectsDemo } from './components/AbilityEffectsDemo';
 import { VisualEffectsDemo } from './components/VisualEffectsDemo';
@@ -48,6 +49,9 @@ function GameApp({ profile: initialProfile }: { profile: UserProfile }) {
 
   // Set up database-first challenge subscriptions
   useChallenges(mode === 'menu' ? playerId : '');
+
+  // Set up real-time friend request notifications
+  useFriendRequests(mode === 'menu' ? playerId : '');
 
   // Initialize presence connection (for online status only, not challenges)
   useEffect(() => {
