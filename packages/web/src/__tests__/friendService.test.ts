@@ -40,7 +40,7 @@ describe('FriendService', () => {
 
   describe('sendFriendRequest', () => {
     it('creates pending friendship with valid username', async () => {
-      const lookupQuery = mockQuery({ data: { userId: 'user-2', username: 'bob' } });
+      const lookupQuery = mockQuery({ data: [{ userId: 'user-2', username: 'bob' }] });
       const existingQuery = mockQuery({ data: [], error: null });
       const insertQuery = mockQuery({ data: null, error: null });
 
@@ -68,7 +68,7 @@ describe('FriendService', () => {
     });
 
     it('returns ALREADY_EXISTS for duplicate request', async () => {
-      const lookupQuery = mockQuery({ data: { userId: 'user-2', username: 'bob' } });
+      const lookupQuery = mockQuery({ data: [{ userId: 'user-2', username: 'bob' }] });
       const existingQuery = mockQuery({
         data: [{ id: 'f-1', status: 'pending', requesterId: 'user-1', addresseeId: 'user-2' }],
       });
@@ -88,7 +88,7 @@ describe('FriendService', () => {
     });
 
     it('returns BLOCKED when addressee has blocked requester', async () => {
-      const lookupQuery = mockQuery({ data: { userId: 'user-2', username: 'bob' } });
+      const lookupQuery = mockQuery({ data: [{ userId: 'user-2', username: 'bob' }] });
       const existingQuery = mockQuery({
         data: [{ id: 'f-1', status: 'blocked', requesterId: 'user-2', addresseeId: 'user-1' }],
       });
@@ -108,11 +108,33 @@ describe('FriendService', () => {
     });
 
     it('returns CANNOT_ADD_SELF when trying to add yourself', async () => {
-      const lookupQuery = mockQuery({ data: { userId: 'user-1', username: 'me' } });
+      const lookupQuery = mockQuery({ data: [{ userId: 'user-1', username: 'me' }] });
       mockFrom.mockReturnValue(lookupQuery);
 
       const result = await friendService.sendFriendRequest('user-1', 'me');
       expect(result).toEqual({ error: 'CANNOT_ADD_SELF' });
+    });
+
+    it('auto-accepts reverse pending request', async () => {
+      const lookupQuery = mockQuery({ data: [{ userId: 'user-2', username: 'bob' }] });
+      const existingQuery = mockQuery({
+        data: [{ id: 'f-1', status: 'pending', requesterId: 'user-2', addresseeId: 'user-1' }],
+      });
+      const updateQuery = mockQuery({ data: null, error: null });
+
+      let callCount = 0;
+      mockFrom.mockImplementation((table: string) => {
+        if (table === 'user_profiles') return lookupQuery;
+        if (table === 'friendships') {
+          callCount++;
+          if (callCount === 1) return existingQuery;
+          return updateQuery;
+        }
+        return mockQuery({ data: null });
+      });
+
+      const result = await friendService.sendFriendRequest('user-1', 'bob');
+      expect(result).toEqual({ success: true, autoAccepted: true });
     });
   });
 
@@ -220,8 +242,8 @@ describe('FriendService', () => {
       });
       const profilesQuery = mockQuery({
         data: [
-          { userId: 'user-2', username: 'bob', level: 5, rank: 1200 },
-          { userId: 'user-3', username: 'alice', level: 3, rank: 1100 },
+          { userId: 'user-2', username: 'bob', matchmakingRating: 1200, gamesPlayed: 25 },
+          { userId: 'user-3', username: 'alice', matchmakingRating: 1100, gamesPlayed: 10 },
         ],
       });
 
@@ -246,7 +268,7 @@ describe('FriendService', () => {
         data: [{ id: 'f-1', requesterId: 'user-2', createdAt: '2026-01-01' }],
       });
       const profilesQuery = mockQuery({
-        data: [{ userId: 'user-2', username: 'bob', level: 5, rank: 1200 }],
+        data: [{ userId: 'user-2', username: 'bob', matchmakingRating: 1200, gamesPlayed: 25 }],
       });
 
       let callCount = 0;
@@ -267,8 +289,8 @@ describe('FriendService', () => {
     it('returns search results with friendship status', async () => {
       const usersQuery = mockQuery({
         data: [
-          { userId: 'user-2', username: 'bob', level: 5, rank: 1200 },
-          { userId: 'user-3', username: 'bobby', level: 3, rank: 1100 },
+          { userId: 'user-2', username: 'bob', matchmakingRating: 1200, gamesPlayed: 25 },
+          { userId: 'user-3', username: 'bobby', matchmakingRating: 1100, gamesPlayed: 10 },
         ],
       });
       const friendshipsQuery = mockQuery({

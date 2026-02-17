@@ -60,9 +60,10 @@ export function FriendList({ profile, onClose, onChallenge }: FriendListProps) {
     } else {
       const errorMessages: Record<string, string> = {
         USER_NOT_FOUND: 'User not found',
-        ALREADY_EXISTS: 'Request already exists',
+        ALREADY_EXISTS: 'Request already exists (check Requests tab)',
         BLOCKED: 'Cannot send request',
         CANNOT_ADD_SELF: 'Cannot add yourself',
+        INTERNAL_ERROR: 'Failed to send request',
       };
       setRequestStatus(errorMessages[result.error || ''] || 'Error sending request');
       setTimeout(() => setRequestStatus(null), 3000);
@@ -297,7 +298,7 @@ export function FriendList({ profile, onClose, onChallenge }: FriendListProps) {
                         }} />
                       </div>
                       <div style={{ color: '#888', fontSize: '11px', fontFamily: 'monospace', marginTop: '2px' }}>
-                        Lv {friend.level} · Rank {friend.rank} · {statusText(friend.onlineStatus)}
+                        MMR {friend.matchmakingRating} · {friend.gamesPlayed} games · {statusText(friend.onlineStatus)}
                       </div>
                     </div>
 
@@ -400,7 +401,7 @@ export function FriendList({ profile, onClose, onChallenge }: FriendListProps) {
                         {request.username}
                       </span>
                       <div style={{ color: '#888', fontSize: '11px', fontFamily: 'monospace', marginTop: '2px' }}>
-                        Lv {request.level} · Rank {request.rank}
+                        MMR {request.matchmakingRating} · {request.gamesPlayed} games
                       </div>
                     </div>
 
@@ -567,7 +568,7 @@ export function FriendList({ profile, onClose, onChallenge }: FriendListProps) {
                         {user.username}
                       </span>
                       <div style={{ color: '#888', fontSize: '11px', fontFamily: 'monospace', marginTop: '2px' }}>
-                        Lv {user.level} · Rank {user.rank}
+                        MMR {user.matchmakingRating} · {user.gamesPlayed} games
                       </div>
                     </div>
 

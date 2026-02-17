@@ -4,8 +4,8 @@ export interface Friend {
   friendshipId: string;
   userId: string;
   username: string;
-  level: number;
-  rank: number;
+  matchmakingRating: number;
+  gamesPlayed: number;
   onlineStatus: 'online' | 'in_game' | 'offline';
 }
 
@@ -13,16 +13,16 @@ export interface FriendRequest {
   friendshipId: string;
   requesterId: string;
   username: string;
-  level: number;
-  rank: number;
+  matchmakingRating: number;
+  gamesPlayed: number;
   createdAt: string;
 }
 
 export interface UserSearchResult {
   userId: string;
   username: string;
-  level: number;
-  rank: number;
+  matchmakingRating: number;
+  gamesPlayed: number;
   friendshipStatus: 'none' | 'pending_sent' | 'pending_received' | 'accepted' | 'blocked';
 }
 
@@ -41,17 +41,23 @@ export interface Challenge {
 }
 
 type FriendRequestResult =
-  | { success: true }
-  | { error: 'USER_NOT_FOUND' | 'ALREADY_EXISTS' | 'BLOCKED' | 'CANNOT_ADD_SELF' };
+  | { success: true; autoAccepted?: boolean }
+  | { error: 'USER_NOT_FOUND' | 'ALREADY_EXISTS' | 'BLOCKED' | 'CANNOT_ADD_SELF' | 'INTERNAL_ERROR' };
 
 class FriendService {
   async sendFriendRequest(requesterId: string, addresseeUsername: string): Promise<FriendRequestResult> {
-    // Look up addressee by username
-    const { data: addressee, error: lookupError } = await supabase
+    const normalizedUsername = addresseeUsername.trim();
+    if (!normalizedUsername) {
+      return { error: 'USER_NOT_FOUND' };
+    }
+
+    // Look up addressee by username (case-insensitive exact match)
+    const { data: addresseeMatches, error: lookupError } = await supabase
       .from('user_profiles')
       .select('"userId", username')
-      .eq('username', addresseeUsername)
-      .single();
+      .ilike('username', normalizedUsername)
+      .limit(1);
+    const addressee = addresseeMatches?.[0];
 
     if (lookupError || !addressee) {
       return { error: 'USER_NOT_FOUND' };
@@ -72,11 +78,34 @@ class FriendService {
       );
 
     if (existing && existing.length > 0) {
-      const friendship = existing[0];
-      // Check if blocked
-      if (friendship.status === 'blocked' && friendship.requesterId === addresseeId) {
+      const blockedByAddressee = existing.find(
+        friendship => friendship.status === 'blocked' && friendship.requesterId === addresseeId
+      );
+      if (blockedByAddressee) {
         return { error: 'BLOCKED' };
       }
+
+      // If the other user already sent a pending request, auto-accept it.
+      const reversePending = existing.find(
+        friendship =>
+          friendship.status === 'pending' &&
+          friendship.requesterId === addresseeId &&
+          friendship.addresseeId === requesterId
+      );
+      if (reversePending) {
+        const { error: acceptError } = await supabase
+          .from('friendships')
+          .update({ status: 'accepted', updatedAt: new Date().toISOString() })
+          .eq('id', reversePending.id);
+
+        if (acceptError) {
+          console.error('Error auto-accepting reverse friend request:', acceptError);
+          return { error: 'INTERNAL_ERROR' };
+        }
+
+        return { success: true, autoAccepted: true };
+      }
+
       return { error: 'ALREADY_EXISTS' };
     }
 
@@ -91,7 +120,10 @@ class FriendService {
 
     if (insertError) {
       console.error('Error sending friend request:', insertError);
-      return { error: 'ALREADY_EXISTS' };
+      if (insertError.code === '23505') {
+        return { error: 'ALREADY_EXISTS' };
+      }
+      return { error: 'INTERNAL_ERROR' };
     }
 
     return { success: true };
@@ -252,7 +284,7 @@ class FriendService {
     // Fetch friend profiles
     const { data: profiles, error: profileError } = await supabase
       .from('user_profiles')
-      .select('"userId", username, level, rank')
+      .select('"userId", username, "matchmakingRating", "gamesPlayed"')
       .in('userId', friendUserIds);
 
     if (profileError || !profiles) {
@@ -271,8 +303,8 @@ class FriendService {
         friendshipId: f.id,
         userId: friendUserId,
         username: profile.username,
-        level: profile.level,
-        rank: profile.rank,
+        matchmakingRating: profile.matchmakingRating,
+        gamesPlayed: profile.gamesPlayed,
         onlineStatus: 'offline',
       });
     }
@@ -299,7 +331,7 @@ class FriendService {
 
     const { data: profiles, error: profileError } = await supabase
       .from('user_profiles')
-      .select('"userId", username, level, rank')
+      .select('"userId", username, "matchmakingRating", "gamesPlayed"')
       .in('userId', requesterIds);
 
     if (profileError || !profiles) {
@@ -316,8 +348,8 @@ class FriendService {
           friendshipId: f.id,
           requesterId: f.requesterId,
           username: profile.username,
-          level: profile.level,
-          rank: profile.rank,
+          matchmakingRating: profile.matchmakingRating,
+          gamesPlayed: profile.gamesPlayed,
           createdAt: f.createdAt,
         };
       })
@@ -330,7 +362,7 @@ class FriendService {
     // Search users by username
     const { data: users, error } = await supabase
       .from('user_profiles')
-      .select('"userId", username, level, rank')
+      .select('"userId", username, "matchmakingRating", "gamesPlayed"')
       .ilike('username', `%${query}%`)
       .neq('userId', currentUserId)
       .limit(10);
@@ -379,8 +411,8 @@ class FriendService {
       return {
         userId: user.userId,
         username: user.username,
-        level: user.level,
-        rank: user.rank,
+        matchmakingRating: user.matchmakingRating,
+        gamesPlayed: user.gamesPlayed,
         friendshipStatus,
       };
     });
