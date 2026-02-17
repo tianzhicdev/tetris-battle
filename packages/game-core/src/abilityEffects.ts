@@ -139,41 +139,38 @@ export function applyWeirdShapes(piece: Tetromino): Tetromino {
   };
 }
 
-export function applyRandomSpawner(board: Board, blockCount: number = 1, rng?: SeededRandom): Board {
-  // Add random garbage blocks to EMPTY cells only.
-  // Technical behavior: one random empty cell per trigger by default.
-  // Spawn only at bottom row OR next to existing filled cells.
+export function applyRandomSpawner(board: Board, blockCount: number = 5, rng?: SeededRandom): Board {
+  // One-shot: fill up to blockCount empty cells that are at least 2 Manhattan-distance
+  // away from every existing filled cell. Skips the top 5 rows.
   const newGrid = board.grid.map(row => [...row]);
 
-  // Find all valid empty cells (bottom row or adjacent to filled cells)
-  const validEmptyCells: { x: number; y: number }[] = [];
+  // Collect valid candidate cells
+  const candidates: { x: number; y: number }[] = [];
 
-  for (let y = 5; y < board.height; y++) { // Don't spawn in top 5 rows
+  for (let y = 5; y < board.height; y++) {
     for (let x = 0; x < board.width; x++) {
-      if (!newGrid[y][x]) {
-        // Check if it's at the bottom row
-        const isBottom = y === board.height - 1;
+      if (newGrid[y][x]) continue; // already filled
 
-        // Check if it's adjacent to a filled cell
-        const hasAdjacentFilled =
-          (y > 0 && newGrid[y - 1][x]) ||  // Above
-          (y < board.height - 1 && newGrid[y + 1][x]) ||  // Below
-          (x > 0 && newGrid[y][x - 1]) ||  // Left
-          (x < board.width - 1 && newGrid[y][x + 1]);  // Right
-
-        if (isBottom || hasAdjacentFilled) {
-          validEmptyCells.push({ x, y });
+      // Check Manhattan distance ≥ 2 from every filled cell
+      let tooClose = false;
+      outer: for (let fy = 0; fy < board.height; fy++) {
+        for (let fx = 0; fx < board.width; fx++) {
+          if (newGrid[fy][fx] && Math.abs(fy - y) + Math.abs(fx - x) < 2) {
+            tooClose = true;
+            break outer;
+          }
         }
       }
+      if (!tooClose) candidates.push({ x, y });
     }
   }
 
-  // Randomly select and fill valid empty cells
-  for (let i = 0; i < blockCount && validEmptyCells.length > 0; i++) {
-    const randomIndex = randomInt(validEmptyCells.length, rng);
-    const { x, y } = validEmptyCells[randomIndex];
+  // Randomly pick up to blockCount candidates and fill them
+  for (let i = 0; i < blockCount && candidates.length > 0; i++) {
+    const idx = randomInt(candidates.length, rng);
+    const { x, y } = candidates[idx];
     newGrid[y][x] = randomCellType(rng);
-    validEmptyCells.splice(randomIndex, 1); // Remove from available cells
+    candidates.splice(idx, 1);
   }
 
   return { ...board, grid: newGrid };
@@ -255,27 +252,24 @@ export function applyDeathCross(board: Board): Board {
   return { ...board, grid: newGrid };
 }
 
-export function applyGoldDigger(board: Board, blockCount: number = 1, rng?: SeededRandom): Board {
-  // Remove random blocks from FILLED cells only.
-  // Technical behavior: one random filled cell per trigger by default.
+export function applyGoldDigger(board: Board, blockCount: number = 5, rng?: SeededRandom): Board {
+  // One-shot: randomly clear up to blockCount filled cells. Skips the top 5 rows.
   const newGrid = board.grid.map(row => [...row]);
 
-  // Find all filled cells
+  // Collect all filled cells below the safe zone
   const filledCells: { x: number; y: number }[] = [];
-  for (let y = 5; y < board.height; y++) { // Don't affect top 5 rows
+  for (let y = 5; y < board.height; y++) {
     for (let x = 0; x < board.width; x++) {
-      if (newGrid[y][x]) {
-        filledCells.push({ x, y });
-      }
+      if (newGrid[y][x]) filledCells.push({ x, y });
     }
   }
 
-  // Randomly remove blocks
+  // Randomly pick up to blockCount and clear them
   for (let i = 0; i < blockCount && filledCells.length > 0; i++) {
-    const randomIndex = randomInt(filledCells.length, rng);
-    const { x, y } = filledCells[randomIndex];
+    const idx = randomInt(filledCells.length, rng);
+    const { x, y } = filledCells[idx];
     newGrid[y][x] = null;
-    filledCells.splice(randomIndex, 1);
+    filledCells.splice(idx, 1);
   }
 
   return { ...board, grid: newGrid };

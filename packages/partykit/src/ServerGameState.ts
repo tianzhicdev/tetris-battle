@@ -45,7 +45,6 @@ export class ServerGameState {
   // Buff ability state
   private bombMode: { type: 'circle' | 'cross' } | null = null;
   private miniBlocksRemaining: number = 0;
-  private periodicLastTrigger: Map<string, number> = new Map();
 
   constructor(playerId: string, seed: number, loadout: string[]) {
     this.playerId = playerId;
@@ -151,9 +150,7 @@ export class ServerGameState {
    * Tick: move piece down or lock (called by game loop)
    */
   tick(): boolean {
-    const periodicChanged = this.applyPeriodicBoardEffects(Date.now());
-    const movementChanged = this.movePieceDown();
-    return periodicChanged || movementChanged;
+    return this.movePieceDown();
   }
 
   private movePieceDown(): boolean {
@@ -285,17 +282,9 @@ export class ServerGameState {
       s.gameState.board = board;
     },
 
-    random_spawner: (s) => {
-      const dur = s.getDurationMs('random_spawner', 20000);
-      s.activeEffects.set('random_spawner', Date.now() + dur);
-      s.periodicLastTrigger.set('random_spawner', Date.now());
-    },
+    random_spawner: (s) => { s.gameState.board = applyRandomSpawner(s.gameState.board, 5, s.rng); },
 
-    gold_digger: (s) => {
-      const dur = s.getDurationMs('gold_digger', 20000);
-      s.activeEffects.set('gold_digger', Date.now() + dur);
-      s.periodicLastTrigger.set('gold_digger', Date.now());
-    },
+    gold_digger: (s) => { s.gameState.board = applyGoldDigger(s.gameState.board, 5, s.rng); },
 
     speed_up_opponent: (s) => {
       const dur = s.getDurationMs('speed_up_opponent', 10000);
@@ -357,48 +346,6 @@ export class ServerGameState {
     }
 
     return active;
-  }
-
-  private applyPeriodicBoardEffects(now: number): boolean {
-    let changed = false;
-    changed = this.applyPeriodicEffect('random_spawner', now, () => {
-      this.gameState.board = applyRandomSpawner(this.gameState.board, 1, this.rng);
-    }) || changed;
-    changed = this.applyPeriodicEffect('gold_digger', now, () => {
-      this.gameState.board = applyGoldDigger(this.gameState.board, 1, this.rng);
-    }) || changed;
-    return changed;
-  }
-
-  private applyPeriodicEffect(
-    abilityType: 'random_spawner' | 'gold_digger',
-    now: number,
-    applyOnce: () => void
-  ): boolean {
-    const endTime = this.activeEffects.get(abilityType);
-    if (!endTime) {
-      this.periodicLastTrigger.delete(abilityType);
-      return false;
-    }
-    if (endTime <= now) {
-      this.activeEffects.delete(abilityType);
-      this.periodicLastTrigger.delete(abilityType);
-      return false;
-    }
-
-    const intervalMs = 2000;
-    const lastTrigger = this.periodicLastTrigger.get(abilityType) ?? now;
-    const elapsed = now - lastTrigger;
-    if (elapsed < intervalMs) {
-      return false;
-    }
-
-    const triggerCount = Math.floor(elapsed / intervalMs);
-    for (let i = 0; i < triggerCount; i++) {
-      applyOnce();
-    }
-    this.periodicLastTrigger.set(abilityType, lastTrigger + triggerCount * intervalMs);
-    return triggerCount > 0;
   }
 
   private getDurationMs(abilityType: string, fallbackMs: number): number {
