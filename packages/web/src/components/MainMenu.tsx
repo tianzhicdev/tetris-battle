@@ -7,6 +7,7 @@ import { ProfilePage } from './ProfilePage';
 import { AbilityInfo } from './AbilityInfo';
 import { FriendList } from './FriendList';
 import { ThemeSelector } from './ThemeSelector';
+import { Leaderboard } from './Leaderboard';
 import { audioManager } from '../services/audioManager';
 import { useFriendStore } from '../stores/friendStore';
 import { useTheme } from '../contexts/ThemeContext';
@@ -27,6 +28,7 @@ export function MainMenu({ onSelectMode, theme, profile, onProfileUpdate, onChal
   const [showAbilityInfo, setShowAbilityInfo] = useState(false);
   const [showFriends, setShowFriends] = useState(false);
   const [showThemeSelector, setShowThemeSelector] = useState(false);
+  const [showLeaderboard, setShowLeaderboard] = useState(false);
   const pendingRequests = useFriendStore(state => state.pendingRequests);
   const { themeId, setTheme } = useTheme();
 
@@ -270,6 +272,28 @@ export function MainMenu({ onSelectMode, theme, profile, onProfileUpdate, onChal
         >
           Themes
         </button>
+
+        <button
+          onClick={() => {
+            audioManager.playSfx('button_click');
+            setShowLeaderboard(true);
+          }}
+          style={mergeGlass(glassGold(), {
+            padding: '12px 20px',
+            fontSize: '14px',
+            color: '#ffd700',
+            cursor: 'pointer',
+            fontFamily: 'monospace',
+            fontWeight: 'bold',
+            minWidth: '90px',
+            touchAction: 'manipulation',
+            borderRadius: '8px',
+            textShadow: '0 0 10px rgba(255, 215, 0, 0.5)',
+            transition: 'all 0.2s ease',
+          })}
+        >
+          Top Players
+        </button>
       </div>
 
       {/* Modals */}
@@ -319,6 +343,13 @@ export function MainMenu({ onSelectMode, theme, profile, onProfileUpdate, onChal
             audioManager.playSfx('button_click');
           }}
           onClose={() => setShowThemeSelector(false)}
+        />
+      )}
+
+      {showLeaderboard && (
+        <Leaderboard
+          currentUserId={profile.userId}
+          onClose={() => setShowLeaderboard(false)}
         />
       )}
     </div>
