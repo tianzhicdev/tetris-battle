@@ -139,9 +139,12 @@ CREATE TABLE friend_challenges (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   "challengerId" TEXT NOT NULL REFERENCES user_profiles("userId") ON DELETE CASCADE,
   "challengedId" TEXT NOT NULL REFERENCES user_profiles("userId") ON DELETE CASCADE,
-  status TEXT NOT NULL CHECK (status IN ('pending', 'accepted', 'declined', 'expired')),
+  status TEXT NOT NULL CHECK (status IN ('pending', 'accepted', 'declined', 'expired', 'cancelled')),
+  "roomId" TEXT,
   "createdAt" TIMESTAMPTZ DEFAULT NOW(),
-  "expiresAt" TIMESTAMPTZ DEFAULT (NOW() + INTERVAL '2 minutes')
+  "expiresAt" TIMESTAMPTZ DEFAULT (NOW() + INTERVAL '2 minutes'),
+  "acceptedAt" TIMESTAMPTZ,
+  "resolvedAt" TIMESTAMPTZ
 );
 
 -- ============================================================================
