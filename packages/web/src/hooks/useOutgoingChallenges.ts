@@ -27,15 +27,15 @@ export function useOutgoingChallenges(userId: string) {
         event: 'UPDATE',
         schema: 'public',
         table: 'friend_challenges',
-        filter: `challengerId=eq.${userId}`,
+        filter: `challenger_id=eq.${userId}`,
       }, (payload) => {
         console.log('[CHALLENGES] Outgoing challenge updated:', payload);
         const challenge = payload.new as any;
 
-        if (challenge.status === 'accepted' && challenge.roomId) {
+        if (challenge.status === 'accepted' && challenge.room_id) {
           // Challenge accepted! Game will start
           // Navigation is handled by App.tsx which also subscribes to this
-          console.log('[CHALLENGES] Challenge accepted, roomId:', challenge.roomId);
+          console.log('[CHALLENGES] Challenge accepted, roomId:', challenge.room_id);
           clearChallenges();
         } else if (challenge.status === 'declined') {
           console.log('[CHALLENGES] Challenge declined');

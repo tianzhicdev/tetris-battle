@@ -26,13 +26,13 @@ export function useIncomingChallenges(userId: string) {
         event: 'INSERT',
         schema: 'public',
         table: 'friend_challenges',
-        filter: `challengedId=eq.${userId}`,
+        filter: `challenged_id=eq.${userId}`,
       }, async (payload) => {
         console.log('[CHALLENGES] Received INSERT:', payload);
         const challenge = payload.new as any;
 
         // Ignore if already expired
-        if (new Date(challenge.expiresAt) < new Date()) {
+        if (new Date(challenge.expires_at) < new Date()) {
           console.log('[CHALLENGES] Challenge already expired, ignoring');
           return;
         }
@@ -41,17 +41,17 @@ export function useIncomingChallenges(userId: string) {
         const { data: profile } = await supabase
           .from('user_profiles')
           .select('username')
-          .eq('userId', challenge.challengerId)
+          .eq('id', challenge.challenger_id)
           .single();
 
         const fullChallenge: Challenge = {
           id: challenge.id,
-          challengerId: challenge.challengerId,
-          challengedId: challenge.challengedId,
+          challengerId: challenge.challenger_id,
+          challengedId: challenge.challenged_id,
           challengerUsername: profile?.username || 'Unknown',
           status: challenge.status as 'pending',
-          expiresAt: challenge.expiresAt,
-          createdAt: challenge.createdAt,
+          expiresAt: challenge.expires_at,
+          createdAt: challenge.created_at,
         };
 
         setIncomingChallenge(fullChallenge);
@@ -67,7 +67,7 @@ export function useIncomingChallenges(userId: string) {
         event: 'UPDATE',
         schema: 'public',
         table: 'friend_challenges',
-        filter: `challengedId=eq.${userId}`,
+        filter: `challenged_id=eq.${userId}`,
       }, (payload) => {
         console.log('[CHALLENGES] Received UPDATE:', payload);
         const challenge = payload.new as any;

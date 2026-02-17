@@ -1,10 +1,11 @@
 -- ============================================================================
--- Tetris Battle - Complete Database Schema
+-- Tetris Battle - Complete Database Schema (v2 - snake_case)
 -- ============================================================================
--- This file consolidates all migrations into one clean schema
--- Run this to reset the entire database (all data will be lost!)
+-- All columns use standard snake_case (PostgreSQL convention).
+-- TypeScript code maps DB rows to camelCase objects in the service layer.
 --
--- Usage: Copy and paste into Supabase SQL Editor
+-- Usage: Copy and paste into Supabase SQL Editor to reset the database.
+-- WARNING: This drops all existing tables. All data will be lost.
 -- ============================================================================
 
 -- Drop all existing tables (CASCADE handles foreign keys)
@@ -19,104 +20,45 @@ DROP TABLE IF EXISTS game_rooms CASCADE;
 DROP TABLE IF EXISTS matchmaking_queue CASCADE;
 DROP TABLE IF EXISTS user_profiles CASCADE;
 
+-- Drop old functions
+DROP FUNCTION IF EXISTS match_players() CASCADE;
+DROP FUNCTION IF EXISTS cleanup_finished_games() CASCADE;
+DROP FUNCTION IF EXISTS accept_challenge(UUID, TEXT) CASCADE;
+DROP FUNCTION IF EXISTS decline_challenge(UUID, TEXT) CASCADE;
+DROP FUNCTION IF EXISTS cancel_challenge(UUID, TEXT) CASCADE;
+
 -- ============================================================================
 -- CORE USER TABLES
 -- ============================================================================
 
--- User Profiles Table (progression system)
+-- User Profiles Table
 CREATE TABLE user_profiles (
-  "userId" TEXT PRIMARY KEY,
-  username TEXT UNIQUE NOT NULL,
-  coins INTEGER NOT NULL DEFAULT 0,
-  "matchmakingRating" INTEGER NOT NULL DEFAULT 1000,
-  "unlockedAbilities" JSONB NOT NULL DEFAULT '["screen_shake", "speed_up_opponent", "piece_preview_plus", "mini_blocks"]'::jsonb,
-  loadout JSONB NOT NULL DEFAULT '["screen_shake", "speed_up_opponent", "piece_preview_plus"]'::jsonb,
-  "createdAt" BIGINT NOT NULL,
-  "updatedAt" BIGINT NOT NULL,
-  "gamesPlayed" INTEGER NOT NULL DEFAULT 0,
-  "gamesWon" INTEGER NOT NULL DEFAULT 0,
-  "lastActiveAt" BIGINT NOT NULL DEFAULT EXTRACT(EPOCH FROM NOW())::BIGINT * 1000
+  id                  TEXT PRIMARY KEY,             -- Clerk user ID
+  username            TEXT UNIQUE NOT NULL,
+  coins               INTEGER NOT NULL DEFAULT 0,
+  rating              INTEGER NOT NULL DEFAULT 1000,  -- Elo-style matchmaking rating
+  games_played        INTEGER NOT NULL DEFAULT 0,
+  games_won           INTEGER NOT NULL DEFAULT 0,
+  unlocked_abilities  JSONB   NOT NULL DEFAULT '["screen_shake","speed_up_opponent","mini_blocks","earthquake"]'::jsonb,
+  loadout             JSONB   NOT NULL DEFAULT '["screen_shake","speed_up_opponent","mini_blocks","earthquake"]'::jsonb,
+  last_active_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  created_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at          TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 -- Match Results Table
 CREATE TABLE match_results (
-  id TEXT PRIMARY KEY,
-  "userId" TEXT NOT NULL REFERENCES user_profiles("userId") ON DELETE CASCADE,
-  "opponentId" TEXT NOT NULL,
-  outcome TEXT NOT NULL CHECK (outcome IN ('win', 'loss', 'draw')),
-  "linesCleared" INTEGER NOT NULL DEFAULT 0,
-  "abilitiesUsed" INTEGER NOT NULL DEFAULT 0,
-  "coinsEarned" INTEGER NOT NULL DEFAULT 0,
-  duration INTEGER NOT NULL DEFAULT 0,
-  timestamp BIGINT NOT NULL,
-  "rankChange" INTEGER NOT NULL DEFAULT 0,
-  "rankAfter" INTEGER NOT NULL DEFAULT 1000,
-  "opponentRank" INTEGER NOT NULL DEFAULT 1000
-);
-
--- User Quests Table (daily/weekly quests)
-CREATE TABLE user_quests (
-  "userId" TEXT PRIMARY KEY REFERENCES user_profiles("userId") ON DELETE CASCADE,
-  daily JSONB NOT NULL DEFAULT '[]'::jsonb,
-  weekly JSONB DEFAULT NULL,
-  "lastRefresh" BIGINT NOT NULL
-);
-
--- ============================================================================
--- MULTIPLAYER GAME TABLES
--- ============================================================================
-
--- Game Rooms Table
-CREATE TABLE game_rooms (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  status TEXT NOT NULL CHECK (status IN ('waiting', 'playing', 'finished')),
-  player1_id TEXT,
-  player2_id TEXT,
-  winner_id TEXT,
-  created_at TIMESTAMPTZ DEFAULT NOW(),
-  started_at TIMESTAMPTZ,
-  finished_at TIMESTAMPTZ
-);
-
--- Game States Table (stores current game state for each player)
-CREATE TABLE game_states (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  room_id UUID REFERENCES game_rooms(id) ON DELETE CASCADE,
-  player_id TEXT NOT NULL,
-  board JSONB NOT NULL,
-  score INTEGER DEFAULT 0,
-  stars INTEGER DEFAULT 20,
-  lines_cleared INTEGER DEFAULT 0,
-  combo_count INTEGER DEFAULT 0,
-  is_game_over BOOLEAN DEFAULT FALSE,
-  updated_at TIMESTAMPTZ DEFAULT NOW()
-);
-
--- Game Events Table (stores all game actions for sync)
-CREATE TABLE game_events (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  room_id UUID REFERENCES game_rooms(id) ON DELETE CASCADE,
-  player_id TEXT NOT NULL,
-  event_type TEXT NOT NULL,
-  event_data JSONB,
-  created_at TIMESTAMPTZ DEFAULT NOW()
-);
-
--- Ability Activations Table
-CREATE TABLE ability_activations (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  room_id UUID REFERENCES game_rooms(id) ON DELETE CASCADE,
-  player_id TEXT NOT NULL,
-  target_player_id TEXT NOT NULL,
-  ability_type TEXT NOT NULL,
-  activated_at TIMESTAMPTZ DEFAULT NOW()
-);
-
--- Matchmaking Queue Table
-CREATE TABLE matchmaking_queue (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  player_id TEXT UNIQUE NOT NULL,
-  joined_at TIMESTAMPTZ DEFAULT NOW()
+  id              TEXT PRIMARY KEY,
+  user_id         TEXT NOT NULL REFERENCES user_profiles(id) ON DELETE CASCADE,
+  opponent_id     TEXT NOT NULL,
+  outcome         TEXT NOT NULL CHECK (outcome IN ('win', 'loss', 'draw')),
+  coins_earned    INTEGER NOT NULL DEFAULT 0,
+  duration        INTEGER NOT NULL DEFAULT 0,     -- seconds
+  timestamp       BIGINT  NOT NULL,
+  rating_before   INTEGER NOT NULL DEFAULT 1000,
+  rating_change   INTEGER NOT NULL DEFAULT 0,
+  rating_after    INTEGER NOT NULL DEFAULT 1000,
+  opponent_rating INTEGER NOT NULL DEFAULT 1000
 );
 
 -- ============================================================================
@@ -125,147 +67,260 @@ CREATE TABLE matchmaking_queue (
 
 -- Friendships table
 CREATE TABLE friendships (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  "requesterId" TEXT NOT NULL REFERENCES user_profiles("userId") ON DELETE CASCADE,
-  "addresseeId" TEXT NOT NULL REFERENCES user_profiles("userId") ON DELETE CASCADE,
-  status TEXT NOT NULL CHECK (status IN ('pending', 'accepted', 'blocked')),
-  "createdAt" TIMESTAMPTZ DEFAULT NOW(),
-  "updatedAt" TIMESTAMPTZ DEFAULT NOW(),
-  UNIQUE("requesterId", "addresseeId")
+  id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  requester_id TEXT NOT NULL REFERENCES user_profiles(id) ON DELETE CASCADE,
+  addressee_id TEXT NOT NULL REFERENCES user_profiles(id) ON DELETE CASCADE,
+  status       TEXT NOT NULL CHECK (status IN ('pending', 'accepted', 'blocked')),
+  created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE(requester_id, addressee_id),
+  CHECK(requester_id != addressee_id)
 );
 
 -- Friend challenges table
 CREATE TABLE friend_challenges (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  "challengerId" TEXT NOT NULL REFERENCES user_profiles("userId") ON DELETE CASCADE,
-  "challengedId" TEXT NOT NULL REFERENCES user_profiles("userId") ON DELETE CASCADE,
-  status TEXT NOT NULL CHECK (status IN ('pending', 'accepted', 'declined', 'expired', 'cancelled')),
-  "roomId" TEXT,
-  "createdAt" TIMESTAMPTZ DEFAULT NOW(),
-  "expiresAt" TIMESTAMPTZ DEFAULT (NOW() + INTERVAL '2 minutes'),
-  "acceptedAt" TIMESTAMPTZ,
-  "resolvedAt" TIMESTAMPTZ
+  id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  challenger_id TEXT NOT NULL REFERENCES user_profiles(id) ON DELETE CASCADE,
+  challenged_id TEXT NOT NULL REFERENCES user_profiles(id) ON DELETE CASCADE,
+  status        TEXT NOT NULL CHECK (status IN ('pending', 'accepted', 'declined', 'expired', 'cancelled')),
+  room_id       TEXT,
+  expires_at    TIMESTAMPTZ NOT NULL DEFAULT (NOW() + INTERVAL '2 minutes'),
+  accepted_at   TIMESTAMPTZ,
+  resolved_at   TIMESTAMPTZ,
+  created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  CHECK(challenger_id != challenged_id)
+);
+
+-- ============================================================================
+-- MULTIPLAYER GAME TABLES (used by legacy Supabase-based matchmaking, kept
+-- for game_rooms compatibility with existing code)
+-- ============================================================================
+
+CREATE TABLE game_rooms (
+  id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  status      TEXT NOT NULL CHECK (status IN ('waiting', 'playing', 'finished')),
+  player1_id  TEXT,
+  player2_id  TEXT,
+  winner_id   TEXT,
+  created_at  TIMESTAMPTZ DEFAULT NOW(),
+  started_at  TIMESTAMPTZ,
+  finished_at TIMESTAMPTZ
+);
+
+CREATE TABLE matchmaking_queue (
+  id         UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  player_id  TEXT UNIQUE NOT NULL,
+  joined_at  TIMESTAMPTZ DEFAULT NOW()
 );
 
 -- ============================================================================
 -- INDEXES FOR PERFORMANCE
 -- ============================================================================
 
--- User profiles indexes
-CREATE INDEX idx_user_profiles_username ON user_profiles(username);
-CREATE INDEX idx_user_profiles_matchmaking_rating ON user_profiles("matchmakingRating" DESC);
-CREATE INDEX idx_user_profiles_games_won ON user_profiles("gamesWon" DESC);
+-- User profile lookup
+CREATE INDEX idx_user_profiles_username    ON user_profiles(username);
+CREATE INDEX idx_user_profiles_rating      ON user_profiles(rating DESC);
+CREATE INDEX idx_user_profiles_games_won   ON user_profiles(games_won DESC);
 
--- Match results indexes
-CREATE INDEX idx_match_results_user ON match_results("userId", timestamp DESC);
-CREATE INDEX idx_match_results_timestamp ON match_results(timestamp DESC);
+-- Match results
+CREATE INDEX idx_match_results_user        ON match_results(user_id, timestamp DESC);
+CREATE INDEX idx_match_results_timestamp   ON match_results(timestamp DESC);
 
--- Game rooms indexes
-CREATE INDEX idx_game_rooms_status ON game_rooms(status);
-CREATE INDEX idx_game_states_room ON game_states(room_id);
-CREATE INDEX idx_game_events_room ON game_events(room_id, created_at);
-CREATE INDEX idx_matchmaking_queue_joined ON matchmaking_queue(joined_at);
+-- Game rooms
+CREATE INDEX idx_game_rooms_status         ON game_rooms(status);
+CREATE INDEX idx_matchmaking_joined        ON matchmaking_queue(joined_at);
 
--- Friendships indexes
-CREATE INDEX idx_friendships_requester ON friendships("requesterId", status);
-CREATE INDEX idx_friendships_addressee ON friendships("addresseeId", status);
+-- Friendships
+CREATE INDEX idx_friendships_requester     ON friendships(requester_id, status);
+CREATE INDEX idx_friendships_addressee     ON friendships(addressee_id, status);
+
+-- Challenges
+CREATE INDEX idx_challenges_challenged     ON friend_challenges(challenged_id, status);
+CREATE INDEX idx_challenges_challenger     ON friend_challenges(challenger_id, status);
+CREATE INDEX idx_challenges_expires        ON friend_challenges(expires_at) WHERE status = 'pending';
 
 -- ============================================================================
 -- ROW LEVEL SECURITY (RLS)
 -- ============================================================================
 
--- Enable RLS on all tables
-ALTER TABLE user_profiles ENABLE ROW LEVEL SECURITY;
-ALTER TABLE match_results ENABLE ROW LEVEL SECURITY;
-ALTER TABLE user_quests ENABLE ROW LEVEL SECURITY;
-ALTER TABLE game_rooms ENABLE ROW LEVEL SECURITY;
-ALTER TABLE game_states ENABLE ROW LEVEL SECURITY;
-ALTER TABLE game_events ENABLE ROW LEVEL SECURITY;
-ALTER TABLE ability_activations ENABLE ROW LEVEL SECURITY;
-ALTER TABLE matchmaking_queue ENABLE ROW LEVEL SECURITY;
-ALTER TABLE friendships ENABLE ROW LEVEL SECURITY;
+ALTER TABLE user_profiles   ENABLE ROW LEVEL SECURITY;
+ALTER TABLE match_results    ENABLE ROW LEVEL SECURITY;
+ALTER TABLE friendships      ENABLE ROW LEVEL SECURITY;
 ALTER TABLE friend_challenges ENABLE ROW LEVEL SECURITY;
+ALTER TABLE game_rooms        ENABLE ROW LEVEL SECURITY;
+ALTER TABLE matchmaking_queue ENABLE ROW LEVEL SECURITY;
 
--- User profiles policies
-CREATE POLICY "Public profiles are viewable by everyone" ON user_profiles FOR SELECT USING (true);
-CREATE POLICY "Users can insert their own profile" ON user_profiles FOR INSERT WITH CHECK (true);
-CREATE POLICY "Allow all updates on user_profiles" ON user_profiles FOR UPDATE USING (true);
+-- User profiles: public read, self-write
+CREATE POLICY "profiles_select_all"  ON user_profiles FOR SELECT USING (true);
+CREATE POLICY "profiles_insert_self" ON user_profiles FOR INSERT WITH CHECK (true);
+CREATE POLICY "profiles_update_all"  ON user_profiles FOR UPDATE USING (true);
 
--- Match results policies
-CREATE POLICY "Allow all selects on match_results" ON match_results FOR SELECT USING (true);
-CREATE POLICY "Allow all inserts on match_results" ON match_results FOR INSERT WITH CHECK (true);
+-- Match results
+CREATE POLICY "match_results_select_all"  ON match_results FOR SELECT USING (true);
+CREATE POLICY "match_results_insert_all"  ON match_results FOR INSERT WITH CHECK (true);
 
--- User quests policies
-CREATE POLICY "Users can view own quests" ON user_quests FOR SELECT USING (true);
-CREATE POLICY "Users can upsert own quests" ON user_quests FOR INSERT WITH CHECK (true);
-CREATE POLICY "Users can update own quests" ON user_quests FOR UPDATE USING (true);
+-- Friendships
+CREATE POLICY "friendships_select_all"  ON friendships FOR SELECT USING (true);
+CREATE POLICY "friendships_insert_all"  ON friendships FOR INSERT WITH CHECK (true);
+CREATE POLICY "friendships_update_all"  ON friendships FOR UPDATE USING (true);
+CREATE POLICY "friendships_delete_all"  ON friendships FOR DELETE USING (true);
 
--- Game room policies (allow all for now - auth handled by Clerk)
-CREATE POLICY "Allow all on game_rooms" ON game_rooms FOR ALL USING (true);
-CREATE POLICY "Allow all on game_states" ON game_states FOR ALL USING (true);
-CREATE POLICY "Allow all on game_events" ON game_events FOR ALL USING (true);
-CREATE POLICY "Allow all on ability_activations" ON ability_activations FOR ALL USING (true);
-CREATE POLICY "Allow all on matchmaking_queue" ON matchmaking_queue FOR ALL USING (true);
+-- Challenges
+CREATE POLICY "challenges_select_all"  ON friend_challenges FOR SELECT USING (true);
+CREATE POLICY "challenges_insert_all"  ON friend_challenges FOR INSERT WITH CHECK (true);
+CREATE POLICY "challenges_update_all"  ON friend_challenges FOR UPDATE USING (true);
 
--- Friend system policies
-CREATE POLICY "Anyone can read friendships" ON friendships FOR SELECT USING (true);
-CREATE POLICY "Anyone can insert friendships" ON friendships FOR INSERT WITH CHECK (true);
-CREATE POLICY "Anyone can update friendships" ON friendships FOR UPDATE USING (true);
-CREATE POLICY "Anyone can delete friendships" ON friendships FOR DELETE USING (true);
-
-CREATE POLICY "Anyone can read challenges" ON friend_challenges FOR SELECT USING (true);
-CREATE POLICY "Anyone can insert challenges" ON friend_challenges FOR INSERT WITH CHECK (true);
-CREATE POLICY "Anyone can update challenges" ON friend_challenges FOR UPDATE USING (true);
+-- Game rooms
+CREATE POLICY "game_rooms_all"        ON game_rooms        FOR ALL USING (true);
+CREATE POLICY "matchmaking_queue_all" ON matchmaking_queue FOR ALL USING (true);
 
 -- ============================================================================
--- HELPER FUNCTIONS
+-- DATABASE FUNCTIONS
 -- ============================================================================
 
--- Function to clean up old finished games (older than 1 hour)
-CREATE OR REPLACE FUNCTION cleanup_finished_games()
-RETURNS void AS $$
+-- Accept a friend challenge atomically (prevents race conditions)
+CREATE OR REPLACE FUNCTION accept_challenge(
+  p_challenge_id UUID,
+  p_user_id      TEXT
+) RETURNS JSON AS $$
+DECLARE
+  v_challenge friend_challenges;
+  v_room_id   TEXT;
 BEGIN
-  DELETE FROM game_rooms
-  WHERE status = 'finished'
-  AND finished_at < NOW() - INTERVAL '1 hour';
-END;
-$$ LANGUAGE plpgsql;
+  SELECT * INTO v_challenge
+  FROM friend_challenges
+  WHERE id = p_challenge_id
+    AND challenged_id = p_user_id
+    AND status = 'pending'
+    AND expires_at > NOW()
+  FOR UPDATE NOWAIT;
 
--- Function to match players from queue
+  IF NOT FOUND THEN
+    RETURN json_build_object('success', false, 'error', 'CHALLENGE_NOT_FOUND');
+  END IF;
+
+  v_room_id := 'game_' || extract(epoch from now())::bigint
+               || '_' || substr(md5(random()::text || p_challenge_id::text), 1, 8);
+
+  UPDATE friend_challenges
+  SET status      = 'accepted',
+      room_id     = v_room_id,
+      accepted_at = NOW(),
+      resolved_at = NOW()
+  WHERE id = p_challenge_id;
+
+  RETURN json_build_object(
+    'success',     true,
+    'roomId',      v_room_id,
+    'challengeId', v_challenge.id::text,
+    'challengerId', v_challenge.challenger_id,
+    'challengedId', v_challenge.challenged_id
+  );
+EXCEPTION
+  WHEN lock_not_available THEN
+    RETURN json_build_object('success', false, 'error', 'CONCURRENT_MODIFICATION');
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- Decline a challenge
+CREATE OR REPLACE FUNCTION decline_challenge(
+  p_challenge_id UUID,
+  p_user_id      TEXT
+) RETURNS JSON AS $$
+DECLARE
+  v_challenge friend_challenges;
+BEGIN
+  SELECT * INTO v_challenge
+  FROM friend_challenges
+  WHERE id = p_challenge_id
+    AND challenged_id = p_user_id
+    AND status = 'pending'
+  FOR UPDATE NOWAIT;
+
+  IF NOT FOUND THEN
+    RETURN json_build_object('success', false, 'error', 'CHALLENGE_NOT_FOUND');
+  END IF;
+
+  UPDATE friend_challenges
+  SET status      = 'declined',
+      resolved_at = NOW()
+  WHERE id = p_challenge_id;
+
+  RETURN json_build_object('success', true);
+EXCEPTION
+  WHEN lock_not_available THEN
+    RETURN json_build_object('success', false, 'error', 'CONCURRENT_MODIFICATION');
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- Cancel a challenge (by challenger)
+CREATE OR REPLACE FUNCTION cancel_challenge(
+  p_challenge_id UUID,
+  p_user_id      TEXT
+) RETURNS JSON AS $$
+DECLARE
+  v_challenge friend_challenges;
+BEGIN
+  SELECT * INTO v_challenge
+  FROM friend_challenges
+  WHERE id = p_challenge_id
+    AND challenger_id = p_user_id
+    AND status = 'pending'
+  FOR UPDATE NOWAIT;
+
+  IF NOT FOUND THEN
+    RETURN json_build_object('success', false, 'error', 'CHALLENGE_NOT_FOUND');
+  END IF;
+
+  UPDATE friend_challenges
+  SET status      = 'cancelled',
+      resolved_at = NOW()
+  WHERE id = p_challenge_id;
+
+  RETURN json_build_object('success', true);
+EXCEPTION
+  WHEN lock_not_available THEN
+    RETURN json_build_object('success', false, 'error', 'CONCURRENT_MODIFICATION');
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- Match players from queue (for Supabase-based matchmaking fallback)
 CREATE OR REPLACE FUNCTION match_players()
-RETURNS TABLE (
-  room_id UUID,
-  player1_id TEXT,
-  player2_id TEXT
-) AS $$
+RETURNS TABLE (room_id UUID, player1_id TEXT, player2_id TEXT) AS $$
 DECLARE
   p1 TEXT;
   p2 TEXT;
   new_room_id UUID;
 BEGIN
-  -- Get two oldest players from queue
   SELECT mq1.player_id, mq2.player_id INTO p1, p2
   FROM matchmaking_queue mq1, matchmaking_queue mq2
   WHERE mq1.player_id < mq2.player_id
   ORDER BY mq1.joined_at, mq2.joined_at
   LIMIT 1;
 
-  -- If we found a match
   IF p1 IS NOT NULL AND p2 IS NOT NULL THEN
-    -- Create game room
     INSERT INTO game_rooms (status, player1_id, player2_id, started_at)
     VALUES ('playing', p1, p2, NOW())
     RETURNING id INTO new_room_id;
 
-    -- Remove from queue
-    DELETE FROM matchmaking_queue
-    WHERE player_id IN (p1, p2);
-
-    -- Return the match
+    DELETE FROM matchmaking_queue WHERE player_id IN (p1, p2);
     RETURN QUERY SELECT new_room_id, p1, p2;
   END IF;
 END;
 $$ LANGUAGE plpgsql;
+
+-- Grant execute permissions
+GRANT EXECUTE ON FUNCTION accept_challenge  TO authenticated, anon;
+GRANT EXECUTE ON FUNCTION decline_challenge TO authenticated, anon;
+GRANT EXECUTE ON FUNCTION cancel_challenge  TO authenticated, anon;
+
+-- ============================================================================
+-- REALTIME PUBLICATIONS
+-- ============================================================================
+
+-- Ensure tables emit Realtime events (required for challenge/friend notifications)
+ALTER PUBLICATION supabase_realtime ADD TABLE friend_challenges;
+ALTER PUBLICATION supabase_realtime ADD TABLE friendships;
 
 -- ============================================================================
 -- COMPLETION MESSAGE
@@ -273,6 +328,6 @@ $$ LANGUAGE plpgsql;
 
 DO $$
 BEGIN
-  RAISE NOTICE '✅ Complete schema created successfully!';
-  RAISE NOTICE 'Tables: user_profiles, match_results, user_quests, game_rooms, game_states, game_events, ability_activations, matchmaking_queue, friendships, friend_challenges';
+  RAISE NOTICE '✅ Tetris Battle schema v2 created successfully (snake_case columns)!';
+  RAISE NOTICE 'Tables: user_profiles, match_results, friendships, friend_challenges, game_rooms, matchmaking_queue';
 END $$;

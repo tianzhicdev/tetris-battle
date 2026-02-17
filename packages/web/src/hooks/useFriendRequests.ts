@@ -19,7 +19,7 @@ export function useFriendRequests(userId: string) {
         event: 'INSERT',
         schema: 'public',
         table: 'friendships',
-        filter: `addresseeId=eq.${userId}`,
+        filter: `addressee_id=eq.${userId}`,
       }, (payload) => {
         console.log('[FRIEND_REQUESTS] New request received:', payload);
         const friendship = payload.new as any;
@@ -35,7 +35,7 @@ export function useFriendRequests(userId: string) {
         event: 'UPDATE',
         schema: 'public',
         table: 'friendships',
-        filter: `requesterId=eq.${userId}`,
+        filter: `requester_id=eq.${userId}`,
       }, (payload) => {
         console.log('[FRIEND_REQUESTS] Request status updated:', payload);
         const friendship = payload.new as any;

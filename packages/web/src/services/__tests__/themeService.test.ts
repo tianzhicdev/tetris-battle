@@ -100,9 +100,9 @@ describe('Theme Service', () => {
 
   describe('getCurrentThemeId', () => {
     it('should return localStorage theme when available', async () => {
-      localStorage.setItem('tetris-theme-preference', 'minimalist-flat');
+      localStorage.setItem('tetris-theme-preference', 'retro-8bit');
       const themeId = await getCurrentThemeId();
-      expect(themeId).toBe('minimalist-flat');
+      expect(themeId).toBe('retro-8bit');
     });
 
     it('should return default when nothing saved', async () => {

@@ -114,17 +114,17 @@ function GameApp({ profile: initialProfile }: { profile: UserProfile }) {
         event: 'UPDATE',
         schema: 'public',
         table: 'friend_challenges',
-        filter: `challengerId=eq.${playerId}`,
+        filter: `challenger_id=eq.${playerId}`,
       }, (payload) => {
         const challenge = payload.new as any;
 
-        if (challenge.status === 'accepted' && challenge.roomId) {
+        if (challenge.status === 'accepted' && challenge.room_id) {
           console.log('[APP] Challenge accepted, navigating to game');
           clearChallenges();
           setGameMatch({
-            roomId: challenge.roomId,
-            player1Id: challenge.challengerId,
-            player2Id: challenge.challengedId,
+            roomId: challenge.room_id,
+            player1Id: challenge.challenger_id,
+            player2Id: challenge.challenged_id,
           });
           setMode('multiplayer');
         }

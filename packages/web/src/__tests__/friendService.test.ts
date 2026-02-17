@@ -40,7 +40,8 @@ describe('FriendService', () => {
 
   describe('sendFriendRequest', () => {
     it('creates pending friendship with valid username', async () => {
-      const lookupQuery = mockQuery({ data: [{ userId: 'user-2', username: 'bob' }] });
+      // Mock uses snake_case id field (matches DB schema)
+      const lookupQuery = mockQuery({ data: [{ id: 'user-2', username: 'bob' }] });
       const existingQuery = mockQuery({ data: [], error: null });
       const insertQuery = mockQuery({ data: null, error: null });
 
@@ -68,9 +69,9 @@ describe('FriendService', () => {
     });
 
     it('returns ALREADY_EXISTS for duplicate request', async () => {
-      const lookupQuery = mockQuery({ data: [{ userId: 'user-2', username: 'bob' }] });
+      const lookupQuery = mockQuery({ data: [{ id: 'user-2', username: 'bob' }] });
       const existingQuery = mockQuery({
-        data: [{ id: 'f-1', status: 'pending', requesterId: 'user-1', addresseeId: 'user-2' }],
+        data: [{ id: 'f-1', status: 'pending', requester_id: 'user-1', addressee_id: 'user-2' }],
       });
 
       let callCount = 0;
@@ -88,9 +89,9 @@ describe('FriendService', () => {
     });
 
     it('returns BLOCKED when addressee has blocked requester', async () => {
-      const lookupQuery = mockQuery({ data: [{ userId: 'user-2', username: 'bob' }] });
+      const lookupQuery = mockQuery({ data: [{ id: 'user-2', username: 'bob' }] });
       const existingQuery = mockQuery({
-        data: [{ id: 'f-1', status: 'blocked', requesterId: 'user-2', addresseeId: 'user-1' }],
+        data: [{ id: 'f-1', status: 'blocked', requester_id: 'user-2', addressee_id: 'user-1' }],
       });
 
       let callCount = 0;
@@ -108,7 +109,8 @@ describe('FriendService', () => {
     });
 
     it('returns CANNOT_ADD_SELF when trying to add yourself', async () => {
-      const lookupQuery = mockQuery({ data: [{ userId: 'user-1', username: 'me' }] });
+      // id matches requesterId → CANNOT_ADD_SELF
+      const lookupQuery = mockQuery({ data: [{ id: 'user-1', username: 'me' }] });
       mockFrom.mockReturnValue(lookupQuery);
 
       const result = await friendService.sendFriendRequest('user-1', 'me');
@@ -116,9 +118,9 @@ describe('FriendService', () => {
     });
 
     it('auto-accepts reverse pending request', async () => {
-      const lookupQuery = mockQuery({ data: [{ userId: 'user-2', username: 'bob' }] });
+      const lookupQuery = mockQuery({ data: [{ id: 'user-2', username: 'bob' }] });
       const existingQuery = mockQuery({
-        data: [{ id: 'f-1', status: 'pending', requesterId: 'user-2', addresseeId: 'user-1' }],
+        data: [{ id: 'f-1', status: 'pending', requester_id: 'user-2', addressee_id: 'user-1' }],
       });
       const updateQuery = mockQuery({ data: null, error: null });
 
@@ -141,7 +143,7 @@ describe('FriendService', () => {
   describe('acceptFriendRequest', () => {
     it('accepts valid pending request when user is addressee', async () => {
       const selectQuery = mockQuery({
-        data: { id: 'f-1', addresseeId: 'user-2', status: 'pending' },
+        data: { id: 'f-1', addressee_id: 'user-2', status: 'pending' },
       });
       const updateQuery = mockQuery({ data: null, error: null });
 
@@ -168,7 +170,7 @@ describe('FriendService', () => {
   describe('declineFriendRequest', () => {
     it('deletes the friendship row', async () => {
       const selectQuery = mockQuery({
-        data: { id: 'f-1', addresseeId: 'user-2', status: 'pending' },
+        data: { id: 'f-1', addressee_id: 'user-2', status: 'pending' },
       });
       const deleteQuery = mockQuery({ data: null, error: null });
 
@@ -187,7 +189,7 @@ describe('FriendService', () => {
   describe('removeFriend', () => {
     it('allows either party to remove friendship', async () => {
       const selectQuery = mockQuery({
-        data: { id: 'f-1', requesterId: 'user-1', addresseeId: 'user-2' },
+        data: { id: 'f-1', requester_id: 'user-1', addressee_id: 'user-2' },
       });
       const deleteQuery = mockQuery({ data: null, error: null });
 
@@ -204,7 +206,7 @@ describe('FriendService', () => {
 
     it('rejects removal by non-member', async () => {
       const selectQuery = mockQuery({
-        data: { id: 'f-1', requesterId: 'user-1', addresseeId: 'user-2' },
+        data: { id: 'f-1', requester_id: 'user-1', addressee_id: 'user-2' },
       });
       mockFrom.mockReturnValue(selectQuery);
 
@@ -236,14 +238,14 @@ describe('FriendService', () => {
     it('returns only accepted friendships with profile data', async () => {
       const friendshipsQuery = mockQuery({
         data: [
-          { id: 'f-1', requesterId: 'user-1', addresseeId: 'user-2' },
-          { id: 'f-2', requesterId: 'user-3', addresseeId: 'user-1' },
+          { id: 'f-1', requester_id: 'user-1', addressee_id: 'user-2' },
+          { id: 'f-2', requester_id: 'user-3', addressee_id: 'user-1' },
         ],
       });
       const profilesQuery = mockQuery({
         data: [
-          { userId: 'user-2', username: 'bob', matchmakingRating: 1200, gamesPlayed: 25 },
-          { userId: 'user-3', username: 'alice', matchmakingRating: 1100, gamesPlayed: 10 },
+          { id: 'user-2', username: 'bob', rating: 1200, games_played: 25 },
+          { id: 'user-3', username: 'alice', rating: 1100, games_played: 10 },
         ],
       });
 
@@ -265,10 +267,10 @@ describe('FriendService', () => {
   describe('getPendingRequests', () => {
     it('returns only pending where user is addressee', async () => {
       const friendshipsQuery = mockQuery({
-        data: [{ id: 'f-1', requesterId: 'user-2', createdAt: '2026-01-01' }],
+        data: [{ id: 'f-1', requester_id: 'user-2', created_at: '2026-01-01' }],
       });
       const profilesQuery = mockQuery({
-        data: [{ userId: 'user-2', username: 'bob', matchmakingRating: 1200, gamesPlayed: 25 }],
+        data: [{ id: 'user-2', username: 'bob', rating: 1200, games_played: 25 }],
       });
 
       let callCount = 0;
@@ -289,12 +291,12 @@ describe('FriendService', () => {
     it('returns search results with friendship status', async () => {
       const usersQuery = mockQuery({
         data: [
-          { userId: 'user-2', username: 'bob', matchmakingRating: 1200, gamesPlayed: 25 },
-          { userId: 'user-3', username: 'bobby', matchmakingRating: 1100, gamesPlayed: 10 },
+          { id: 'user-2', username: 'bob', rating: 1200, games_played: 25 },
+          { id: 'user-3', username: 'bobby', rating: 1100, games_played: 10 },
         ],
       });
       const friendshipsQuery = mockQuery({
-        data: [{ id: 'f-1', requesterId: 'user-1', addresseeId: 'user-2', status: 'accepted' }],
+        data: [{ id: 'f-1', requester_id: 'user-1', addressee_id: 'user-2', status: 'accepted' }],
       });
 
       let callCount = 0;
