@@ -1,6 +1,7 @@
 /**
  * Theme Registry
- * Central export point for all themes
+ * Central export point for all themes.
+ * Only glassmorphism is active — other themes were removed (see git history).
  */
 
 // Export types
@@ -8,29 +9,18 @@ export * from './types';
 
 // Export individual themes
 export { glassmorphismTheme } from './glassmorphism';
-export { retro8bitTheme } from './retro8bit';
-export { neonCyberpunkTheme } from './neonCyberpunk';
-export { isometric3dTheme } from './isometric3d';
-export { liquidMorphingTheme } from './liquidMorphing';
 
 import type { Theme, ThemeRegistry, ThemeCategoryGroups } from './types';
 import type { TetrominoType } from '@tetris-battle/game-core';
 import { glassmorphismTheme } from './glassmorphism';
-import { retro8bitTheme } from './retro8bit';
-import { neonCyberpunkTheme } from './neonCyberpunk';
-import { isometric3dTheme } from './isometric3d';
-import { liquidMorphingTheme } from './liquidMorphing';
 
 /**
  * Theme Registry
- * Maps theme IDs to theme objects
+ * Maps theme IDs to theme objects.
+ * To add a new theme: create a file in this directory and add an entry here.
  */
 export const THEME_REGISTRY: ThemeRegistry = {
   'glassmorphism': glassmorphismTheme,
-  'retro-8bit': retro8bitTheme,
-  'neon-cyberpunk': neonCyberpunkTheme,
-  'isometric-3d': isometric3dTheme,
-  'liquid-morphing': liquidMorphingTheme,
 };
 
 /**
@@ -66,21 +56,16 @@ export const DEFAULT_THEME = THEME_REGISTRY[DEFAULT_THEME_ID];
  * Theme categories for filtering
  */
 export const THEME_CATEGORIES: ThemeCategoryGroups = {
-  retro: ['retro-8bit'],
-  modern: ['glassmorphism', 'neon-cyberpunk'],
-  artistic: ['liquid-morphing'],
-  experimental: ['isometric-3d'],
+  modern: ['glassmorphism'],
 };
 
 /**
  * Backward compatibility: THEMES array
- * For existing code that uses the old THEMES array
  */
 export const THEMES = getAllThemes();
 
 /**
  * Backward compatibility: getThemeByName
- * For existing code that uses name instead of ID
  */
 export function getThemeByName(name: string): Theme {
   const theme = getAllThemes().find(t => t.name === name);
@@ -89,7 +74,6 @@ export function getThemeByName(name: string): Theme {
 
 /**
  * Backward compatibility: Legacy theme interface adapter
- * For components expecting the old Theme interface
  */
 export interface LegacyTheme {
   name: string;

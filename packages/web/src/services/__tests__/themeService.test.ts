@@ -24,18 +24,7 @@ vi.mock('../../lib/supabase', () => ({
 vi.mock('../../themes', () => ({
   getTheme: vi.fn((id: string) => ({ id, name: 'Mock Theme' })),
   DEFAULT_THEME_ID: 'glassmorphism',
-  THEME_IDS: [
-    'glassmorphism',
-    'retro-8bit',
-    'neon-cyberpunk',
-    'minimalist-flat',
-    'brutalist',
-    'isometric-3d',
-    'hand-drawn',
-    'nature-organic',
-    'terminal-hacker',
-    'liquid-morphing',
-  ],
+  THEME_IDS: ['glassmorphism'],
 }));
 
 import {
@@ -74,9 +63,9 @@ describe('Theme Service', () => {
       expect(localStorage.getItem('tetris-theme-preference')).toBe('glassmorphism');
     });
 
-    it('should save valid theme ID (retro-8bit)', () => {
-      saveThemeToLocalStorage('retro-8bit');
-      expect(localStorage.getItem('tetris-theme-preference')).toBe('retro-8bit');
+    it('should save valid theme ID (glassmorphism again)', () => {
+      saveThemeToLocalStorage('glassmorphism');
+      expect(localStorage.getItem('tetris-theme-preference')).toBe('glassmorphism');
     });
 
     it('should fallback to default for invalid theme ID', () => {
@@ -89,8 +78,8 @@ describe('Theme Service', () => {
 
   describe('loadThemeFromLocalStorage', () => {
     it('should load saved theme from localStorage', () => {
-      localStorage.setItem('tetris-theme-preference', 'neon-cyberpunk');
-      expect(loadThemeFromLocalStorage()).toBe('neon-cyberpunk');
+      localStorage.setItem('tetris-theme-preference', 'glassmorphism');
+      expect(loadThemeFromLocalStorage()).toBe('glassmorphism');
     });
 
     it('should return null when nothing saved', () => {
@@ -100,9 +89,9 @@ describe('Theme Service', () => {
 
   describe('getCurrentThemeId', () => {
     it('should return localStorage theme when available', async () => {
-      localStorage.setItem('tetris-theme-preference', 'retro-8bit');
+      localStorage.setItem('tetris-theme-preference', 'glassmorphism');
       const themeId = await getCurrentThemeId();
-      expect(themeId).toBe('retro-8bit');
+      expect(themeId).toBe('glassmorphism');
     });
 
     it('should return default when nothing saved', async () => {
