@@ -1,13 +1,14 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { PartykitMatchmaking } from '../services/partykit/matchmaking';
 import { normalizePartykitHost } from '../services/partykit/host';
+import type { LegacyTheme } from '../themes/index';
 
 interface MatchmakingProps {
   playerId: string;
   rank: number;
   onMatchFound: (roomId: string, player1Id: string, player2Id: string, aiOpponent?: any) => void;
   onCancel: () => void;
-  theme: any;
+  theme: LegacyTheme;
 }
 
 interface WebSocketEvent {

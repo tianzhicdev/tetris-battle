@@ -38,7 +38,7 @@ describe('FriendStore', () => {
   describe('loadFriends', () => {
     it('loads friends and sets state', async () => {
       const mockFriends = [
-        { friendshipId: 'f1', userId: 'u2', username: 'bob', level: 5, rank: 1200, onlineStatus: 'offline' as const },
+        { friendshipId: 'f1', userId: 'u2', username: 'bob', matchmakingRating: 1200, gamesPlayed: 15, onlineStatus: 'offline' as const },
       ];
       mockFriendService.getFriendList.mockResolvedValue(mockFriends);
 
@@ -53,7 +53,7 @@ describe('FriendStore', () => {
   describe('loadPendingRequests', () => {
     it('loads pending requests', async () => {
       const mockRequests = [
-        { friendshipId: 'f1', requesterId: 'u2', username: 'bob', level: 5, rank: 1200, createdAt: '2026-01-01' },
+        { friendshipId: 'f1', requesterId: 'u2', username: 'bob', matchmakingRating: 1200, gamesPlayed: 15, createdAt: '2026-01-01' },
       ];
       mockFriendService.getPendingRequests.mockResolvedValue(mockRequests);
 
@@ -122,7 +122,7 @@ describe('FriendStore', () => {
   describe('searchUsers', () => {
     it('searches and updates results', async () => {
       const mockResults = [
-        { userId: 'u2', username: 'bob', level: 5, rank: 1200, friendshipStatus: 'none' as const },
+        { userId: 'u2', username: 'bob', matchmakingRating: 1200, gamesPlayed: 15, friendshipStatus: 'none' as const },
       ];
       mockFriendService.searchUsers.mockResolvedValue(mockResults);
 
@@ -143,7 +143,7 @@ describe('FriendStore', () => {
     it('updates friend online status', () => {
       useFriendStore.setState({
         friends: [
-          { friendshipId: 'f1', userId: 'u2', username: 'bob', level: 5, rank: 1200, onlineStatus: 'offline' },
+          { friendshipId: 'f1', userId: 'u2', username: 'bob', matchmakingRating: 1200, gamesPlayed: 15, onlineStatus: 'offline' },
         ],
       });
 
@@ -156,13 +156,13 @@ describe('FriendStore', () => {
   describe('challenge state', () => {
     it('sets and clears incoming challenge', () => {
       const challenge = {
-        challengeId: 'c1',
+        id: 'c1',
         challengerId: 'u2',
         challengedId: 'u1',
         challengerUsername: 'bob',
-        challengerRank: 1200,
-        challengerLevel: 5,
-        expiresAt: Date.now() + 120000,
+        status: 'pending' as const,
+        createdAt: new Date().toISOString(),
+        expiresAt: new Date(Date.now() + 120000).toISOString(),
       };
 
       useFriendStore.getState().setIncomingChallenge(challenge);
@@ -174,13 +174,13 @@ describe('FriendStore', () => {
 
     it('sets and clears outgoing challenge', () => {
       const challenge = {
-        challengeId: 'c1',
+        id: 'c1',
         challengerId: 'u1',
         challengedId: 'u2',
         challengerUsername: 'bob',
-        challengerRank: 1200,
-        challengerLevel: 5,
-        expiresAt: Date.now() + 120000,
+        status: 'pending' as const,
+        createdAt: new Date().toISOString(),
+        expiresAt: new Date(Date.now() + 120000).toISOString(),
       };
 
       useFriendStore.getState().setOutgoingChallenge(challenge);

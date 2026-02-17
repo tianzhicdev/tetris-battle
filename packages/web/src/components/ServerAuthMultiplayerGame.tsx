@@ -19,7 +19,7 @@ import { DebugPanel } from './debug/DebugPanel';
 import { useDebugStore } from '../stores/debugStore';
 import {
   AbilityEffectManager,
-  ABILITIES,
+  getAbilityById,
 } from '@tetris-battle/game-core';
 import type { Ability, UserProfile } from '@tetris-battle/game-core';
 import { awardMatchRewards, type MatchRewards } from '../lib/rewards';
@@ -663,7 +663,7 @@ export function ServerAuthMultiplayerGame({
       }
     }
 
-    const abilityFromCatalog = ABILITIES[result.abilityType as keyof typeof ABILITIES];
+    const abilityFromCatalog = getAbilityById(result.abilityType);
     const ability = pending?.ability || abilityFromCatalog;
     const target = pending?.target || (result.targetPlayerId === playerId ? 'self' : 'opponent');
 
@@ -719,8 +719,7 @@ export function ServerAuthMultiplayerGame({
     }
     console.log('[SERVER-AUTH] Received ability from opponent:', abilityType);
 
-    const abilities = Object.values(ABILITIES);
-    const ability = abilities.find((a: any) => a.type === abilityType);
+    const ability = getAbilityById(abilityType);
 
     if (!ability) return;
 
@@ -1677,7 +1676,7 @@ export function ServerAuthMultiplayerGame({
           yourState={yourState}
           opponentState={opponentState}
           onAbilityTrigger={(abilityType, target) => {
-            const ability = ABILITIES[abilityType as keyof typeof ABILITIES];
+            const ability = getAbilityById(abilityType);
             if (!ability) return;
             // Target selection is validated server-side by ability category.
             // In debug mode this still uses the standard activation pathway.

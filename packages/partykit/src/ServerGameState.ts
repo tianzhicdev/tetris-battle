@@ -252,7 +252,7 @@ export class ServerGameState {
       this.gameState.currentPiece = createWeirdShape(this.gameState.board.width, this.rng);
       this.activeEffects.delete('weird_shapes');
     } else if (this.miniBlocksRemaining > 0) {
-      this.gameState.currentPiece = createMiniBlock(this.gameState.board.width);
+      this.gameState.currentPiece = createMiniBlock(this.gameState.board.width, this.rng);
       this.miniBlocksRemaining--;
     } else {
       const nextType = this.gameState.nextPieces[0];
@@ -289,11 +289,11 @@ export class ServerGameState {
         break;
 
       case 'row_rotate':
-        this.gameState.board = applyRowRotate(this.gameState.board);
+        this.gameState.board = applyRowRotate(this.gameState.board, this.rng);
         break;
 
       case 'death_cross':
-        this.gameState.board = applyDeathCross(this.gameState.board);
+        this.gameState.board = applyDeathCross(this.gameState.board, this.rng);
         break;
 
       case 'gold_digger':

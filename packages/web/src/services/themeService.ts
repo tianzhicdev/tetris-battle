@@ -33,8 +33,8 @@ export async function saveThemeToProfile(userId: string, themeId: string): Promi
   try {
     const { error } = await supabase
       .from('user_profiles')
-      .update({ theme_preference: themeId })
-      .eq('user_id', userId);
+      .update({ themePreference: themeId })
+      .eq('userId', userId);
 
     if (error) {
       console.error('[THEME] Failed to save to profile:', error);
@@ -54,8 +54,8 @@ export async function loadThemeFromProfile(userId: string): Promise<string | nul
   try {
     const { data, error } = await supabase
       .from('user_profiles')
-      .select('theme_preference')
-      .eq('user_id', userId)
+      .select('themePreference')
+      .eq('userId', userId)
       .single();
 
     if (error || !data) {
@@ -63,7 +63,7 @@ export async function loadThemeFromProfile(userId: string): Promise<string | nul
       return null;
     }
 
-    return data.theme_preference;
+    return data.themePreference || null;
   } catch (err) {
     console.error('[THEME] Error loading theme:', err);
     return null;

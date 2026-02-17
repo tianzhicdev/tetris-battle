@@ -28,12 +28,7 @@ vi.mock('../../themes', () => ({
     'glassmorphism',
     'retro-8bit',
     'neon-cyberpunk',
-    'minimalist-flat',
-    'brutalist',
     'isometric-3d',
-    'hand-drawn',
-    'nature-organic',
-    'terminal-hacker',
     'liquid-morphing',
   ],
 }));
@@ -100,9 +95,9 @@ describe('Theme Service', () => {
 
   describe('getCurrentThemeId', () => {
     it('should return localStorage theme when available', async () => {
-      localStorage.setItem('tetris-theme-preference', 'minimalist-flat');
+      localStorage.setItem('tetris-theme-preference', 'isometric-3d');
       const themeId = await getCurrentThemeId();
-      expect(themeId).toBe('minimalist-flat');
+      expect(themeId).toBe('isometric-3d');
     });
 
     it('should return default when nothing saved', async () => {

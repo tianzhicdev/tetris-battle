@@ -8,8 +8,8 @@
     "dev": "tsc --watch",
     "build": "tsc",
     "type-check": "tsc --noEmit",
-    "test": "vitest",
-    "test:watch": "vitest --watch",
+    "test": "vitest run",
+    "test:watch": "vitest",
     "test:ui": "vitest --ui"
   },
   "devDependencies": {

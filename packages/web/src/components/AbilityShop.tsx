@@ -1,6 +1,6 @@
 import { useState } from 'react';
-import { ABILITIES } from '@tetris-battle/game-core';
 import { ABILITY_UNLOCKS } from '@tetris-battle/game-core';
+import { getAbilityById } from '@tetris-battle/game-core';
 import type { UserProfile } from '@tetris-battle/game-core';
 import { progressionService } from '../lib/supabase';
 import { AbilityCopy } from './AbilityCopy';
@@ -124,7 +124,7 @@ export function AbilityShop({ profile, onClose, onProfileUpdate }: AbilityShopPr
             gap: 'clamp(10px, 2.5vw, 12px)',
           }}>
             {ABILITY_UNLOCKS.map(unlock => {
-                    const ability = Object.values(ABILITIES).find((a: any) => a.type === unlock.abilityId);
+                    const ability = getAbilityById(unlock.abilityId);
                     if (!ability) return null;
 
                     const isUnlocked = profile.unlockedAbilities.includes(unlock.abilityId);
@@ -242,16 +242,6 @@ export function AbilityShop({ profile, onClose, onProfileUpdate }: AbilityShopPr
                               fontWeight: '600',
                             }}>
                               Not enough coins
-                            </div>
-                          )}
-
-                          {!isUnlocked && false && (
-                            <div style={{
-                              color: '#888',
-                              fontSize: 'clamp(10px, 2.5vw, 11px)',
-                              fontWeight: '600',
-                            }}>
-                              Level {unlock.level} required
                             </div>
                           )}
                         </div>

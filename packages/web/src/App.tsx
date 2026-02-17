@@ -77,12 +77,6 @@ function GameApp({ profile: initialProfile }: { profile: UserProfile }) {
         // Use store method directly instead of from props
         useFriendStore.getState().updatePresence(userId, status);
       },
-      // Challenge callbacks - no-ops since now handled by Supabase Realtime
-      onChallengeReceived: () => {},
-      onChallengeAccepted: () => {},
-      onChallengeDeclined: () => {},
-      onChallengeExpired: () => {},
-      onChallengeCancelled: () => {},
     });
 
     presenceRef.current = presence;

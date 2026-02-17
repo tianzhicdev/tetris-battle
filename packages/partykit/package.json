@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "partykit dev",
     "deploy": "partykit deploy",
-    "test": "vitest run"
+    "test": "vitest run",
+    "type-check": "tsc --noEmit"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.95.3",

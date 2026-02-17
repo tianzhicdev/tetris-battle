@@ -1,144 +1,106 @@
 import { describe, it, expect } from 'vitest';
 import { createBoard } from '../engine';
+import { SeededRandom } from '../SeededRandom';
 import {
-  applyAddJunkRows,
-  applyScrambleBoard,
-  applyGravityFlip,
+  applyClearRows,
+  applyDeathCross,
+  applyFillHoles,
+  applyGoldDigger,
+  applyRandomSpawner,
 } from '../abilityEffects';
 
 describe('Ability Effects', () => {
-  describe('applyAddJunkRows', () => {
-    it('adds garbage rows to the bottom of the board', () => {
+  describe('applyClearRows', () => {
+    it('clears bottom rows and preserves board height', () => {
       const board = createBoard(10, 20);
-      const result = applyAddJunkRows(board, 2);
-
-      // Bottom 2 rows should have blocks (with 1 gap each)
-      for (let row = 18; row < 20; row++) {
-        const filledCount = result.grid[row].filter(cell => cell !== null).length;
-        expect(filledCount).toBe(9); // 10 columns - 1 gap = 9 filled
+      for (let y = 15; y < 20; y++) {
+        for (let x = 0; x < 10; x++) {
+          board.grid[y][x] = 'I';
+        }
       }
 
-      // Top rows should still be empty
-      expect(result.grid[0].every(cell => cell === null)).toBe(true);
-    });
+      const result = applyClearRows(board, 3);
 
-    it('pushes existing content up when adding junk rows', () => {
-      const board = createBoard(10, 20);
-      // Place a block at row 19 (bottom)
-      board.grid[19][5] = 'T';
-
-      const result = applyAddJunkRows(board, 2);
-
-      // The T block that was at row 19 should now be at row 17 (pushed up by 2)
-      expect(result.grid[17][5]).toBe('T');
-    });
-
-    it('each junk row has exactly one gap', () => {
-      const board = createBoard(10, 20);
-      const result = applyAddJunkRows(board, 3);
-
-      for (let row = 17; row < 20; row++) {
-        const nullCount = result.grid[row].filter(cell => cell === null).length;
-        expect(nullCount).toBe(1);
-      }
+      expect(result.rowsCleared).toBe(3);
+      expect(result.board.grid.length).toBe(20);
+      expect(result.board.grid[19].every((cell) => cell === 'I')).toBe(true);
+      expect(result.board.grid[0].every((cell) => cell === null)).toBe(true);
     });
   });
 
-  describe('applyScrambleBoard', () => {
-    it('preserves the total number of filled cells', () => {
+  describe('applyRandomSpawner', () => {
+    it('adds blocks into valid empty cells', () => {
       const board = createBoard(10, 20);
-      // Fill some cells
-      board.grid[19][0] = 'I';
-      board.grid[19][1] = 'T';
-      board.grid[19][2] = 'O';
-      board.grid[18][0] = 'S';
-      board.grid[18][1] = 'Z';
-
-      const originalFilledCount = board.grid.flat().filter(c => c !== null).length;
-      const result = applyScrambleBoard(board);
-      const newFilledCount = result.grid.flat().filter(c => c !== null).length;
-
-      expect(newFilledCount).toBe(originalFilledCount);
-    });
-
-    it('places cells in bottom rows (gravity-settled)', () => {
-      const board = createBoard(10, 20);
-      // Fill 15 cells
-      for (let x = 0; x < 10; x++) {
-        board.grid[19][x] = 'I';
-      }
-      for (let x = 0; x < 5; x++) {
-        board.grid[18][x] = 'T';
-      }
-
-      const result = applyScrambleBoard(board);
-
-      // All 15 cells should be in the bottom 2 rows
-      // Row 19 should be fully filled (10 cells)
-      const row19Filled = result.grid[19].filter(c => c !== null).length;
-      expect(row19Filled).toBe(10);
-
-      // Row 18 should have the remaining 5 cells
-      const row18Filled = result.grid[18].filter(c => c !== null).length;
-      expect(row18Filled).toBe(5);
-
-      // Row 17 and above should be empty
-      const row17Filled = result.grid[17].filter(c => c !== null).length;
-      expect(row17Filled).toBe(0);
-    });
-
-    it('returns unchanged board for empty board', () => {
-      const board = createBoard(10, 20);
-      const result = applyScrambleBoard(board);
-
-      expect(result.grid.flat().every(cell => cell === null)).toBe(true);
-    });
-  });
-
-  describe('applyGravityFlip', () => {
-    it('reverses the board vertically', () => {
-      const board = createBoard(10, 20);
-      // Place blocks at the bottom
-      board.grid[19][0] = 'I';
-      board.grid[19][1] = 'T';
+      board.grid[19][0] = 'T';
       board.grid[18][0] = 'O';
+      const beforeCount = board.grid.flat().filter((cell) => cell !== null).length;
 
-      const result = applyGravityFlip(board);
+      const seeded = new SeededRandom(42);
+      const result = applyRandomSpawner(board, 4, seeded);
+      const afterCount = result.grid.flat().filter((cell) => cell !== null).length;
 
-      // Bottom row becomes top row (row 0)
-      expect(result.grid[0][0]).toBe('I');
-      expect(result.grid[0][1]).toBe('T');
-
-      // Second-from-bottom becomes second-from-top (row 1)
-      expect(result.grid[1][0]).toBe('O');
-
-      // Old top (empty) becomes new bottom
-      expect(result.grid[19][0]).toBe(null);
+      expect(afterCount).toBeGreaterThan(beforeCount);
+      expect(afterCount - beforeCount).toBeLessThanOrEqual(4);
     });
+  });
 
-    it('preserves total number of filled cells', () => {
+  describe('applyGoldDigger', () => {
+    it('removes up to N filled cells', () => {
       const board = createBoard(10, 20);
-      board.grid[19][0] = 'I';
-      board.grid[18][1] = 'T';
-      board.grid[17][2] = 'O';
+      for (let y = 10; y < 20; y++) {
+        for (let x = 0; x < 10; x++) {
+          board.grid[y][x] = 'L';
+        }
+      }
 
-      const originalCount = board.grid.flat().filter(c => c !== null).length;
-      const result = applyGravityFlip(board);
-      const newCount = result.grid.flat().filter(c => c !== null).length;
+      const beforeCount = board.grid.flat().filter((cell) => cell !== null).length;
+      const seeded = new SeededRandom(99);
+      const result = applyGoldDigger(board, 5, seeded);
+      const afterCount = result.grid.flat().filter((cell) => cell !== null).length;
 
-      expect(newCount).toBe(originalCount);
+      expect(beforeCount - afterCount).toBe(5);
     });
+  });
 
-    it('double flip restores original board', () => {
+  describe('applyDeathCross', () => {
+    it('toggles both diagonals', () => {
       const board = createBoard(10, 20);
-      board.grid[19][3] = 'S';
-      board.grid[15][7] = 'Z';
+      const maxDiagonal = Math.min(board.width, board.height);
 
-      const flipped = applyGravityFlip(board);
-      const doubleFlipped = applyGravityFlip(flipped);
+      // Fill both diagonal tracks so death_cross must clear them.
+      for (let i = 0; i < maxDiagonal; i++) {
+        const y = board.height - 1 - i;
+        board.grid[y][i] = 'S';
+        board.grid[y][board.width - 1 - i] = 'Z';
+      }
 
-      expect(doubleFlipped.grid[19][3]).toBe('S');
-      expect(doubleFlipped.grid[15][7]).toBe('Z');
+      const result = applyDeathCross(board);
+
+      for (let i = 0; i < maxDiagonal; i++) {
+        const y = board.height - 1 - i;
+        expect(result.grid[y][i]).toBe(null);
+        expect(result.grid[y][board.width - 1 - i]).toBe(null);
+      }
+    });
+  });
+
+  describe('applyFillHoles', () => {
+    it('fills enclosed empty regions', () => {
+      const board = createBoard(10, 20);
+
+      // Build a boxed cavity centered at (5, 15).
+      for (let x = 3; x <= 7; x++) {
+        board.grid[13][x] = 'J';
+        board.grid[17][x] = 'J';
+      }
+      for (let y = 13; y <= 17; y++) {
+        board.grid[y][3] = 'J';
+        board.grid[y][7] = 'J';
+      }
+      board.grid[15][5] = null;
+
+      const result = applyFillHoles(board);
+      expect(result.grid[15][5]).not.toBe(null);
     });
   });
 });

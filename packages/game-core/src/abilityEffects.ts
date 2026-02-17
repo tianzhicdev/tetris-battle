@@ -1,11 +1,6 @@
 import type { Board, Tetromino, CellValue, TetrominoType } from './types';
 import type { SeededRandom } from './SeededRandom';
 
-export interface AbilityEffect {
-  type: 'buff' | 'debuff';
-  execute: (data: any) => any;
-}
-
 const CELL_TYPES: CellValue[] = ['I', 'O', 'T', 'S', 'Z', 'L', 'J'];
 
 function randomInt(maxExclusive: number, rng?: SeededRandom): number {
@@ -19,16 +14,6 @@ function randomCellType(rng?: SeededRandom): CellValue {
 }
 
 // BUFF EFFECTS (Self-Enhancement)
-
-export function applySpeedBoost(currentSpeed: number): number {
-  // Increase fall speed by 2x
-  return currentSpeed * 0.5; // Halve the tick rate = faster
-}
-
-export function applyBomb(board: Board, centerX: number, centerY: number): Board {
-  // Destroy 4x4 area centered at position (backward compatibility)
-  return applyCrossBomb(board, centerX, centerY);
-}
 
 export function applyCrossBomb(board: Board, centerX: number, centerY: number): Board {
   // Clear 3 rows and 3 columns in a cross pattern
@@ -102,7 +87,7 @@ export function applyClearRows(board: Board, numRows: number = 5): { board: Boar
 
 // DEBUFF EFFECTS (Opponent Disruption)
 
-export function applyWeirdShapes(piece: Tetromino): Tetromino {
+export function applyWeirdShapes(piece: Tetromino, rng?: SeededRandom): Tetromino {
   // Predefined hollowed shapes: square, triangle, circle
   const shapes = [
     // Hollowed square
@@ -129,7 +114,7 @@ export function applyWeirdShapes(piece: Tetromino): Tetromino {
   ];
 
   // Randomly select one of the predefined shapes
-  const randomShape = shapes[Math.floor(Math.random() * shapes.length)];
+  const randomShape = shapes[randomInt(shapes.length, rng)];
 
   return {
     ...piece,
@@ -201,24 +186,7 @@ export function applyEarthquake(board: Board, rng?: SeededRandom): Board {
   return { ...board, grid: newGrid };
 }
 
-export function applyColumnBomb(board: Board): Board {
-  // Drop 8 garbage blocks into a random column
-  const newGrid = board.grid.map(row => [...row]);
-  const targetColumn = Math.floor(Math.random() * board.width);
-
-  // Find the first 8 empty cells from bottom in the target column
-  let blocksAdded = 0;
-  for (let y = board.height - 1; y >= 0 && blocksAdded < 8; y--) {
-    if (!newGrid[y][targetColumn]) {
-      newGrid[y][targetColumn] = randomCellType();
-      blocksAdded++;
-    }
-  }
-
-  return { ...board, grid: newGrid };
-}
-
-export function applyDeathCross(board: Board): Board {
+export function applyDeathCross(board: Board, rng?: SeededRandom): Board {
   // Diagonal lines from bottom corners toggle blocks: filled->empty, empty->filled
   const newGrid = board.grid.map(row => [...row]);
 
@@ -232,7 +200,7 @@ export function applyDeathCross(board: Board): Board {
         newGrid[y][x] = null;
       } else {
         // Empty -> filled
-        newGrid[y][x] = randomCellType();
+        newGrid[y][x] = randomCellType(rng);
       }
     }
   }
@@ -247,7 +215,7 @@ export function applyDeathCross(board: Board): Board {
         newGrid[y][x] = null;
       } else {
         // Empty -> filled
-        newGrid[y][x] = randomCellType();
+        newGrid[y][x] = randomCellType(rng);
       }
     }
   }
@@ -281,13 +249,14 @@ export function applyGoldDigger(board: Board, blockCount: number = 1, rng?: Seed
   return { ...board, grid: newGrid };
 }
 
-export function applyRowRotate(board: Board): Board {
+export function applyRowRotate(board: Board, rng?: SeededRandom): Board {
   // Each row rotates 1-8 positions randomly left or right
   const newGrid = board.grid.map(row => [...row]);
+  const maxShift = Math.min(8, board.width);
 
   for (let y = 0; y < board.height; y++) {
-    const positions = Math.floor(Math.random() * 8) + 1; // 1-8 positions
-    const direction = Math.random() > 0.5 ? 1 : -1; // 1 = right, -1 = left
+    const positions = randomInt(maxShift, rng) + 1; // 1..maxShift positions
+    const direction = randomInt(2, rng) === 0 ? 1 : -1; // 1 = right, -1 = left
     const rotatedRow: CellValue[] = Array(board.width).fill(null);
 
     for (let x = 0; x < board.width; x++) {
@@ -366,70 +335,6 @@ function isEnclosed(grid: CellValue[][], startX: number, startY: number, visited
   return { isEnclosed: !touchesBorder && cells.length > 0, cells };
 }
 
-// ADDITIONAL ABILITY EFFECTS (for AI and spec 003)
-
-export function applyAddJunkRows(board: Board, numRows: number = 2): Board {
-  // Add garbage rows to the bottom of the board, pushing existing content up
-  const newGrid = board.grid.map(row => [...row]);
-
-  // Remove top rows to make room (content pushed up and lost if at top)
-  for (let i = 0; i < numRows; i++) {
-    newGrid.shift();
-  }
-
-  // Add garbage rows at bottom with 1 random gap per row
-  for (let i = 0; i < numRows; i++) {
-    const gapColumn = Math.floor(Math.random() * board.width);
-    const junkRow: CellValue[] = [];
-    for (let x = 0; x < board.width; x++) {
-      junkRow.push(x === gapColumn ? null : randomCellType());
-    }
-    newGrid.push(junkRow);
-  }
-
-  return { ...board, grid: newGrid };
-}
-
-export function applyScrambleBoard(board: Board): Board {
-  // Collect all filled cells, then redistribute them randomly
-  const filledCells: CellValue[] = [];
-
-  for (let y = 0; y < board.height; y++) {
-    for (let x = 0; x < board.width; x++) {
-      if (board.grid[y][x] !== null) {
-        filledCells.push(board.grid[y][x]);
-      }
-    }
-  }
-
-  // Create empty grid
-  const newGrid: CellValue[][] = Array(board.height)
-    .fill(null)
-    .map(() => Array(board.width).fill(null));
-
-  // Shuffle the filled cells
-  for (let i = filledCells.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [filledCells[i], filledCells[j]] = [filledCells[j], filledCells[i]];
-  }
-
-  // Place cells in bottom rows (gravity-settled)
-  let cellIndex = 0;
-  for (let y = board.height - 1; y >= 0 && cellIndex < filledCells.length; y--) {
-    for (let x = 0; x < board.width && cellIndex < filledCells.length; x++) {
-      newGrid[y][x] = filledCells[cellIndex++];
-    }
-  }
-
-  return { ...board, grid: newGrid };
-}
-
-export function applyGravityFlip(board: Board): Board {
-  // Reverse the board vertically (top becomes bottom)
-  const newGrid = [...board.grid].reverse().map(row => [...row]);
-  return { ...board, grid: newGrid };
-}
-
 // ABILITY STATE MANAGEMENT
 
 export interface ActiveAbilityEffect {
@@ -442,10 +347,10 @@ export interface ActiveAbilityEffect {
   lastTriggerTime?: number;  // When it last triggered
 }
 
-export function createMiniBlock(boardWidth: number = 10): Tetromino {
+export function createMiniBlock(boardWidth: number = 10, rng?: SeededRandom): Tetromino {
   // Create a 2-cell domino piece (horizontal or vertical)
-  const isHorizontal = Math.random() > 0.5;
-  const type: TetrominoType = ['I', 'O', 'T', 'S', 'Z', 'L', 'J'][Math.floor(Math.random() * 7)] as TetrominoType;
+  const isHorizontal = randomInt(2, rng) === 1;
+  const type: TetrominoType = CELL_TYPES[randomInt(CELL_TYPES.length, rng)] as TetrominoType;
 
   return {
     type,

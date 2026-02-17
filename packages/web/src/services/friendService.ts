@@ -4,8 +4,8 @@ export interface Friend {
   friendshipId: string;
   userId: string;
   username: string;
-  level: number;
-  rank: number;
+  matchmakingRating: number;
+  gamesPlayed: number;
   onlineStatus: 'online' | 'in_game' | 'offline';
 }
 
@@ -13,16 +13,16 @@ export interface FriendRequest {
   friendshipId: string;
   requesterId: string;
   username: string;
-  level: number;
-  rank: number;
+  matchmakingRating: number;
+  gamesPlayed: number;
   createdAt: string;
 }
 
 export interface UserSearchResult {
   userId: string;
   username: string;
-  level: number;
-  rank: number;
+  matchmakingRating: number;
+  gamesPlayed: number;
   friendshipStatus: 'none' | 'pending_sent' | 'pending_received' | 'accepted' | 'blocked';
 }
 
@@ -252,7 +252,7 @@ class FriendService {
     // Fetch friend profiles
     const { data: profiles, error: profileError } = await supabase
       .from('user_profiles')
-      .select('"userId", username, level, rank')
+      .select('"userId", username, "matchmakingRating", "gamesPlayed"')
       .in('userId', friendUserIds);
 
     if (profileError || !profiles) {
@@ -271,8 +271,8 @@ class FriendService {
         friendshipId: f.id,
         userId: friendUserId,
         username: profile.username,
-        level: profile.level,
-        rank: profile.rank,
+        matchmakingRating: profile.matchmakingRating ?? 1000,
+        gamesPlayed: profile.gamesPlayed ?? 0,
         onlineStatus: 'offline',
       });
     }
@@ -299,7 +299,7 @@ class FriendService {
 
     const { data: profiles, error: profileError } = await supabase
       .from('user_profiles')
-      .select('"userId", username, level, rank')
+      .select('"userId", username, "matchmakingRating", "gamesPlayed"')
       .in('userId', requesterIds);
 
     if (profileError || !profiles) {
@@ -316,8 +316,8 @@ class FriendService {
           friendshipId: f.id,
           requesterId: f.requesterId,
           username: profile.username,
-          level: profile.level,
-          rank: profile.rank,
+          matchmakingRating: profile.matchmakingRating ?? 1000,
+          gamesPlayed: profile.gamesPlayed ?? 0,
           createdAt: f.createdAt,
         };
       })
@@ -330,7 +330,7 @@ class FriendService {
     // Search users by username
     const { data: users, error } = await supabase
       .from('user_profiles')
-      .select('"userId", username, level, rank')
+      .select('"userId", username, "matchmakingRating", "gamesPlayed"')
       .ilike('username', `%${query}%`)
       .neq('userId', currentUserId)
       .limit(10);
@@ -379,8 +379,8 @@ class FriendService {
       return {
         userId: user.userId,
         username: user.username,
-        level: user.level,
-        rank: user.rank,
+        matchmakingRating: user.matchmakingRating ?? 1000,
+        gamesPlayed: user.gamesPlayed ?? 0,
         friendshipStatus,
       };
     });

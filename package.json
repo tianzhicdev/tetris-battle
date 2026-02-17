@@ -13,6 +13,7 @@
     "dev:core": "pnpm --filter game-core dev",
     "build:all": "pnpm -r build",
     "type-check": "pnpm -r type-check",
+    "test:integration:deployed": "node test-two-player-game.mjs",
     "generate-icons": "node scripts/generate-ability-icons.js",
     "test-icon-styles": "node scripts/test-icon-styles.js"
   },

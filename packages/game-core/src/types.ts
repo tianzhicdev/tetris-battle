@@ -1,4 +1,5 @@
 // Core game types - platform-agnostic
+import abilitiesConfig from './abilities.json';
 
 export type TetrominoType = 'I' | 'O' | 'T' | 'S' | 'Z' | 'L' | 'J';
 
@@ -59,28 +60,8 @@ export function createInitialPlayerMetrics(): PlayerMetrics {
   };
 }
 
-// Abilities
-export type AbilityType =
-  // Buffs
-  | 'cross_firebomb'
-  | 'circle_bomb'
-  | 'clear_rows'
-  | 'cascade_multiplier'
-  | 'mini_blocks'
-  | 'fill_holes'
-  // Debuffs
-  | 'speed_up_opponent'
-  | 'weird_shapes'
-  | 'random_spawner'
-  | 'rotation_lock'
-  | 'blind_spot'
-  | 'reverse_controls'
-  | 'earthquake'
-  | 'screen_shake'
-  | 'shrink_ceiling'
-  | 'death_cross'
-  | 'gold_digger'
-  | 'row_rotate';
+// Abilities (derived from abilities.json).
+export type AbilityType = keyof typeof abilitiesConfig.abilities;
 
 export interface Ability {
   id: string;

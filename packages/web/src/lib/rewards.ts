@@ -1,5 +1,5 @@
 import { progressionService } from './supabase';
-import { COIN_VALUES, ABILITIES } from '@tetris-battle/game-core';
+import { COIN_VALUES, ABILITY_LIST } from '@tetris-battle/game-core';
 
 export interface MatchRewards {
   coins: number;
@@ -94,8 +94,8 @@ export async function awardMatchRewards(
     });
 
     // Find next unlock suggestion
-    const availableAbilities = Object.values(ABILITIES)
-      .filter(a => !profile.unlockedAbilities.includes(a.id))
+    const availableAbilities = ABILITY_LIST
+      .filter((ability) => !profile.unlockedAbilities.includes(ability.id))
       .sort((a, b) => a.unlockCost - b.unlockCost);
 
     const nextUnlock = availableAbilities.length > 0 ? {

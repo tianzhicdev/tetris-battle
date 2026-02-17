@@ -38,6 +38,10 @@ interface AbilityActivationResult {
   serverTime: number;
 }
 
+const AI_DEBUFF_LOADOUT: string[] = Object.values(ABILITIES)
+  .filter((ability) => ability.category === 'debuff')
+  .map((ability) => ability.id);
+
 export default class GameRoomServer implements Party.Server {
   players: Map<string, PlayerState> = new Map();
   roomStatus: 'waiting' | 'playing' | 'finished' = 'waiting';
@@ -344,20 +348,7 @@ export default class GameRoomServer implements Party.Server {
     this.adaptiveAI = new AdaptiveAI(humanPlayer.metrics);
 
     // Set AI ability loadout (debuff-focused)
-    this.aiAbilityLoadout = [
-      'earthquake',
-      'random_spawner',
-      'death_cross',
-      'row_rotate',
-      'gold_digger',
-      'speed_up_opponent',
-      'reverse_controls',
-      'rotation_lock',
-      'blind_spot',
-      'screen_shake',
-      'shrink_ceiling',
-      'weird_shapes',
-    ];
+    this.aiAbilityLoadout = [...AI_DEBUFF_LOADOUT];
     aiState.loadout = [...this.aiAbilityLoadout];
     this.aiLastAbilityUse = Date.now();
 

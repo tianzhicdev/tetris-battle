@@ -220,8 +220,8 @@ describe('FriendService', () => {
       });
       const profilesQuery = mockQuery({
         data: [
-          { userId: 'user-2', username: 'bob', level: 5, rank: 1200 },
-          { userId: 'user-3', username: 'alice', level: 3, rank: 1100 },
+          { userId: 'user-2', username: 'bob', matchmakingRating: 1200, gamesPlayed: 20 },
+          { userId: 'user-3', username: 'alice', matchmakingRating: 1100, gamesPlayed: 8 },
         ],
       });
 
@@ -246,7 +246,7 @@ describe('FriendService', () => {
         data: [{ id: 'f-1', requesterId: 'user-2', createdAt: '2026-01-01' }],
       });
       const profilesQuery = mockQuery({
-        data: [{ userId: 'user-2', username: 'bob', level: 5, rank: 1200 }],
+        data: [{ userId: 'user-2', username: 'bob', matchmakingRating: 1200, gamesPlayed: 20 }],
       });
 
       let callCount = 0;
@@ -267,8 +267,8 @@ describe('FriendService', () => {
     it('returns search results with friendship status', async () => {
       const usersQuery = mockQuery({
         data: [
-          { userId: 'user-2', username: 'bob', level: 5, rank: 1200 },
-          { userId: 'user-3', username: 'bobby', level: 3, rank: 1100 },
+          { userId: 'user-2', username: 'bob', matchmakingRating: 1200, gamesPlayed: 20 },
+          { userId: 'user-3', username: 'bobby', matchmakingRating: 1100, gamesPlayed: 8 },
         ],
       });
       const friendshipsQuery = mockQuery({

@@ -1,5 +1,9 @@
 import { create } from 'zustand';
 
+function canUseLocalStorage(): boolean {
+  return typeof window !== 'undefined' && typeof window.localStorage !== 'undefined';
+}
+
 interface DebugPanelState {
   isOpen: boolean;
   position: { x: number; y: number };
@@ -68,6 +72,7 @@ export const useDebugStore = create<DebugPanelState>((set, get) => ({
   },
 
   loadFromLocalStorage: () => {
+    if (!canUseLocalStorage()) return;
     try {
       const position = localStorage.getItem('tetris_debug_panel_position');
       const collapsed = localStorage.getItem('tetris_debug_panel_collapsed');
@@ -85,6 +90,7 @@ export const useDebugStore = create<DebugPanelState>((set, get) => ({
   },
 
   saveToLocalStorage: () => {
+    if (!canUseLocalStorage()) return;
     const { position, collapsedSections, eventLimit, autoScroll } = get();
     try {
       localStorage.setItem('tetris_debug_panel_position', JSON.stringify(position));

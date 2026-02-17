@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { TetrisRenderer } from '../renderer/TetrisRenderer';
-import { ABILITIES } from '@tetris-battle/game-core';
+import { ABILITY_LIST, getAbilityById } from '@tetris-battle/game-core';
 import type { Board, Tetromino, CellValue } from '@tetris-battle/game-core';
 import { DEFAULT_THEME } from '../themes';
 import { audioManager } from '../services/audioManager';
@@ -129,7 +129,7 @@ export function AbilityEffectsDemo() {
 
   const triggerAbilityEffect = (abilityType: string) => {
     setSelectedAbility(abilityType);
-    const ability = Object.values(ABILITIES).find((a: any) => a.type === abilityType);
+    const ability = getAbilityById(abilityType);
 
     if (!ability || !rendererRef.current) return;
 
@@ -288,8 +288,8 @@ export function AbilityEffectsDemo() {
     });
   };
 
-  const buffs = Object.values(ABILITIES).filter((a: any) => a.category === 'buff');
-  const debuffs = Object.values(ABILITIES).filter((a: any) => a.category === 'debuff');
+  const buffs = ABILITY_LIST.filter((ability) => ability.category === 'buff');
+  const debuffs = ABILITY_LIST.filter((ability) => ability.category === 'debuff');
 
   return (
     <div style={{

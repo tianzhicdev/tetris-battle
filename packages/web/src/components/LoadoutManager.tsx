@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ABILITIES } from '@tetris-battle/game-core';
+import { getAbilityById } from '@tetris-battle/game-core';
 import type { UserProfile } from '@tetris-battle/game-core';
 import { progressionService } from '../lib/supabase';
 import { AbilityCopy } from './AbilityCopy';
@@ -107,7 +107,7 @@ export function LoadoutManager({ profile, onClose, onProfileUpdate }: LoadoutMan
           }}>
             {Array.from({ length: maxSlots }).map((_, i) => {
               const abilityId = loadout[i];
-              const ability = abilityId ? Object.values(ABILITIES).find((a: any) => a.type === abilityId) : null;
+              const ability = abilityId ? getAbilityById(abilityId) : null;
 
               return (
                 <div
@@ -176,7 +176,7 @@ export function LoadoutManager({ profile, onClose, onProfileUpdate }: LoadoutMan
             gap: 'clamp(10px, 2.5vw, 12px)',
           }}>
             {profile.unlockedAbilities.map(abilityId => {
-              const ability = Object.values(ABILITIES).find((a: any) => a.type === abilityId);
+              const ability = getAbilityById(abilityId);
               if (!ability) return null;
 
               const inLoadout = loadout.includes(abilityId);

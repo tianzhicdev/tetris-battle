@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import type { Ability } from '@tetris-battle/game-core';
-import { ABILITIES, getRandomAbilities } from '@tetris-battle/game-core';
+import { ABILITY_IDS, ABILITY_LIST, getAbilityById, getRandomAbilities } from '@tetris-battle/game-core';
 
 interface AbilityState {
   availableAbilities: Ability[];
@@ -24,12 +24,12 @@ const isTestMode = urlParams.get('testMode') === 'true';
 // Get initial abilities - all abilities in test mode, random 3 otherwise
 const getInitialAbilities = (): Ability[] => {
   if (isTestMode) {
-    return Object.values(ABILITIES);
+    return ABILITY_LIST;
   }
   return getRandomAbilities(3);
 };
 
-const VALID_ABILITY_IDS = new Set(Object.keys(ABILITIES));
+const VALID_ABILITY_IDS = new Set<string>(ABILITY_IDS);
 
 export const useAbilityStore = create<AbilityState>((set, get) => ({
   availableAbilities: getInitialAbilities(),
@@ -49,7 +49,7 @@ export const useAbilityStore = create<AbilityState>((set, get) => ({
 
     // Get abilities from loadout
     const abilities = sanitizedLoadout
-      .map(id => ABILITIES[id as keyof typeof ABILITIES])
+      .map((id) => getAbilityById(id))
       .filter(Boolean) as Ability[];
 
     console.log('[ABILITY STORE] Loadout abilities:', abilities);
@@ -77,7 +77,7 @@ export const useAbilityStore = create<AbilityState>((set, get) => ({
   },
 
   canActivate: (abilityId: string, currentStars: number) => {
-    const ability = ABILITIES[abilityId as keyof typeof ABILITIES];
+    const ability = getAbilityById(abilityId);
     if (!ability) return false;
 
     // Only check star cost (no cooldowns)

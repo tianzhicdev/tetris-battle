@@ -297,7 +297,7 @@ export function FriendList({ profile, onClose, onChallenge }: FriendListProps) {
                         }} />
                       </div>
                       <div style={{ color: '#888', fontSize: '11px', fontFamily: 'monospace', marginTop: '2px' }}>
-                        Lv {friend.level} · Rank {friend.rank} · {statusText(friend.onlineStatus)}
+                        Rating {friend.matchmakingRating} · {friend.gamesPlayed} games · {statusText(friend.onlineStatus)}
                       </div>
                     </div>
 
@@ -400,7 +400,7 @@ export function FriendList({ profile, onClose, onChallenge }: FriendListProps) {
                         {request.username}
                       </span>
                       <div style={{ color: '#888', fontSize: '11px', fontFamily: 'monospace', marginTop: '2px' }}>
-                        Lv {request.level} · Rank {request.rank}
+                        Rating {request.matchmakingRating} · {request.gamesPlayed} games
                       </div>
                     </div>
 
@@ -567,7 +567,7 @@ export function FriendList({ profile, onClose, onChallenge }: FriendListProps) {
                         {user.username}
                       </span>
                       <div style={{ color: '#888', fontSize: '11px', fontFamily: 'monospace', marginTop: '2px' }}>
-                        Lv {user.level} · Rank {user.rank}
+                        Rating {user.matchmakingRating} · {user.gamesPlayed} games
                       </div>
                     </div>
 

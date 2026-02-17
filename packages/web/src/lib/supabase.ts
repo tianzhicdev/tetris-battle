@@ -1,6 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
 import type { UserProfile, MatchResult } from '@tetris-battle/game-core';
-import { ABILITIES, STARTER_ABILITIES } from '@tetris-battle/game-core';
+import { ABILITY_IDS, STARTER_ABILITIES } from '@tetris-battle/game-core';
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
@@ -17,7 +17,7 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   },
 });
 
-const VALID_ABILITY_IDS = new Set(Object.keys(ABILITIES));
+const VALID_ABILITY_IDS = new Set<string>(ABILITY_IDS);
 
 function sanitizeAbilityIds(ids: string[] | undefined | null): string[] {
   if (!Array.isArray(ids)) return [];
