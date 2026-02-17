@@ -267,97 +267,73 @@ export class ServerGameState {
     }
   }
 
+  // ============================================================================
+  // Ability dispatch table — add a new entry here to register a new ability.
+  // Static so it is allocated once; private so only this class can mutate it.
+  // Each handler receives the instance (s) to access any field, including
+  // private ones (TypeScript allows static members to access private fields).
+  // ============================================================================
+  private static readonly ABILITY_HANDLERS: Record<string, (s: ServerGameState) => void> = {
+    // ── Debuff abilities (applied to opponent's state) ──────────────────────
+    earthquake:  (s) => { s.gameState.board = applyEarthquake(s.gameState.board, s.rng); },
+    row_rotate:  (s) => { s.gameState.board = applyRowRotate(s.gameState.board); },
+    death_cross: (s) => { s.gameState.board = applyDeathCross(s.gameState.board); },
+    fill_holes:  (s) => { s.gameState.board = applyFillHoles(s.gameState.board); },
+
+    clear_rows: (s) => {
+      const { board } = applyClearRows(s.gameState.board, 5);
+      s.gameState.board = board;
+    },
+
+    random_spawner: (s) => {
+      const dur = s.getDurationMs('random_spawner', 20000);
+      s.activeEffects.set('random_spawner', Date.now() + dur);
+      s.periodicLastTrigger.set('random_spawner', Date.now());
+    },
+
+    gold_digger: (s) => {
+      const dur = s.getDurationMs('gold_digger', 20000);
+      s.activeEffects.set('gold_digger', Date.now() + dur);
+      s.periodicLastTrigger.set('gold_digger', Date.now());
+    },
+
+    speed_up_opponent: (s) => {
+      const dur = s.getDurationMs('speed_up_opponent', 10000);
+      s.tickRate = 1000 / 3; // 3× faster
+      s.activeEffects.set('speed_up_opponent', Date.now() + dur);
+      setTimeout(() => {
+        s.tickRate = 1000;
+        s.activeEffects.delete('speed_up_opponent');
+      }, dur);
+    },
+
+    // Timed active-effect debuffs
+    reverse_controls:   (s) => { s.activeEffects.set('reverse_controls',   Date.now() + s.getDurationMs('reverse_controls',   8000)); },
+    rotation_lock:      (s) => { s.activeEffects.set('rotation_lock',      Date.now() + s.getDurationMs('rotation_lock',      6000)); },
+    blind_spot:         (s) => { s.activeEffects.set('blind_spot',         Date.now() + s.getDurationMs('blind_spot',         10000)); },
+    screen_shake:       (s) => { s.activeEffects.set('screen_shake',       Date.now() + s.getDurationMs('screen_shake',       12000)); },
+    shrink_ceiling:     (s) => { s.activeEffects.set('shrink_ceiling',     Date.now() + s.getDurationMs('shrink_ceiling',     8000)); },
+    cascade_multiplier: (s) => { s.activeEffects.set('cascade_multiplier', Date.now() + s.getDurationMs('cascade_multiplier', 15000)); },
+
+    // Single-use pending effect — consumed at next piece spawn
+    weird_shapes: (s) => { s.activeEffects.set('weird_shapes', Number.POSITIVE_INFINITY); },
+
+    // ── Buff abilities (applied to self) ────────────────────────────────────
+    circle_bomb:    (s) => { s.bombMode = { type: 'circle' }; },
+    cross_firebomb: (s) => { s.bombMode = { type: 'cross' }; },
+    mini_blocks:    (s) => { s.miniBlocksRemaining = s.getDurationMs('mini_blocks', 5); },
+  };
+
   /**
-   * Apply ability effect (can be buff or debuff)
+   * Apply ability effect (can be buff or debuff).
+   * To add a new ability: add one entry to ABILITY_HANDLERS above.
    */
   applyAbility(abilityType: string): void {
-    switch (abilityType) {
-      // DEBUFF ABILITIES (from opponent)
-      case 'earthquake':
-        this.gameState.board = applyEarthquake(this.gameState.board, this.rng);
-        break;
-
-      case 'clear_rows': {
-        const { board: clearedBoard } = applyClearRows(this.gameState.board, 5);
-        this.gameState.board = clearedBoard;
-        break;
-      }
-
-      case 'random_spawner':
-        this.activeEffects.set('random_spawner', Date.now() + this.getDurationMs('random_spawner', 20000));
-        this.periodicLastTrigger.set('random_spawner', Date.now());
-        break;
-
-      case 'row_rotate':
-        this.gameState.board = applyRowRotate(this.gameState.board);
-        break;
-
-      case 'death_cross':
-        this.gameState.board = applyDeathCross(this.gameState.board);
-        break;
-
-      case 'gold_digger':
-        this.activeEffects.set('gold_digger', Date.now() + this.getDurationMs('gold_digger', 20000));
-        this.periodicLastTrigger.set('gold_digger', Date.now());
-        break;
-
-      case 'speed_up_opponent':
-        this.tickRate = 1000 / 3; // 3x faster
-        this.activeEffects.set('speed_up_opponent', Date.now() + this.getDurationMs('speed_up_opponent', 10000));
-        setTimeout(() => {
-          this.tickRate = 1000;
-          this.activeEffects.delete('speed_up_opponent');
-        }, this.getDurationMs('speed_up_opponent', 10000));
-        break;
-
-      case 'reverse_controls':
-        this.activeEffects.set('reverse_controls', Date.now() + this.getDurationMs('reverse_controls', 8000));
-        break;
-
-      case 'rotation_lock':
-        this.activeEffects.set('rotation_lock', Date.now() + this.getDurationMs('rotation_lock', 6000));
-        break;
-
-      case 'blind_spot':
-        this.activeEffects.set('blind_spot', Date.now() + this.getDurationMs('blind_spot', 10000));
-        break;
-
-      case 'screen_shake':
-        this.activeEffects.set('screen_shake', Date.now() + this.getDurationMs('screen_shake', 12000));
-        break;
-
-      case 'shrink_ceiling':
-        this.activeEffects.set('shrink_ceiling', Date.now() + this.getDurationMs('shrink_ceiling', 8000));
-        break;
-
-      case 'weird_shapes':
-        // Single-use pending effect: stays active until next spawn consumes it.
-        this.activeEffects.set('weird_shapes', Number.POSITIVE_INFINITY);
-        break;
-
-      // BUFF ABILITIES (self-targeting)
-      case 'circle_bomb':
-        this.bombMode = { type: 'circle' };
-        break;
-
-      case 'cross_firebomb':
-        this.bombMode = { type: 'cross' };
-        break;
-
-      case 'mini_blocks':
-        this.miniBlocksRemaining = this.getDurationMs('mini_blocks', 5);
-        break;
-
-      case 'fill_holes':
-        this.gameState.board = applyFillHoles(this.gameState.board);
-        break;
-
-      case 'cascade_multiplier':
-        this.activeEffects.set('cascade_multiplier', Date.now() + this.getDurationMs('cascade_multiplier', 15000));
-        break;
-
-      default:
-        console.warn(`[ServerGameState] Unknown ability type: ${abilityType}`);
+    const handler = ServerGameState.ABILITY_HANDLERS[abilityType];
+    if (handler) {
+      handler(this);
+    } else {
+      console.warn(`[ServerGameState] Unknown ability type: ${abilityType}`);
     }
   }
 
