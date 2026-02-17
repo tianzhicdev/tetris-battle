@@ -12,6 +12,7 @@ import { useFriendRequests } from './hooks/useFriendRequests';
 import { supabase } from './lib/supabase';
 import { AbilityEffectsDemo } from './components/AbilityEffectsDemo';
 import { VisualEffectsDemo } from './components/VisualEffectsDemo';
+import { TetriminoBgPreviewAll } from './components/TetriminoBgPreview';
 import { ThemeProvider, useTheme } from './contexts/ThemeContext';
 import { toLegacyTheme } from './themes/index';
 import { progressionService } from './lib/supabase';
@@ -285,6 +286,14 @@ function App() {
 
   if (demoMode === 'effects') {
     return <VisualEffectsDemo />;
+  }
+
+  if (demoMode === 'bg') {
+    return (
+      <ThemeProvider userId="preview">
+        <TetriminoBgPreviewAll />
+      </ThemeProvider>
+    );
   }
 
   return (

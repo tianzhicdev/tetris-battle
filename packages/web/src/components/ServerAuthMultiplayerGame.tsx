@@ -187,20 +187,13 @@ export function ServerAuthMultiplayerGame({
   const [isDebugMode, setIsDebugMode] = useState(false);
   const [connectionStats, setConnectionStats] = useState<ConnectionStats | null>(null);
 
-  const { availableAbilities, setLoadout, useAbility, getCooldownRemaining } = useAbilityStore();
+  const { availableAbilities, setLoadout } = useAbilityStore();
 
   // Set player's loadout
   useEffect(() => {
     console.log('[SERVER-AUTH] Setting player loadout:', profile.loadout);
     setLoadout(profile.loadout);
   }, [profile.loadout, setLoadout]);
-
-  // Tick to keep cooldown displays current (5fps is enough)
-  const [, cooldownTick] = useState(0);
-  useEffect(() => {
-    const id = setInterval(() => cooldownTick(n => n + 1), 200);
-    return () => clearInterval(id);
-  }, []);
 
   // Initialize debug mode
   useEffect(() => {
@@ -632,9 +625,6 @@ export function ServerAuthMultiplayerGame({
       });
       return;
     }
-
-    // Record activation for client-side cooldown display
-    useAbility(ability.id);
 
     pendingAbilityActivationsRef.current.set(requestId, { ability, target });
     debugLoggerRef.current?.logEvent('ability_attempted', `Attempted ${ability.name} (${ability.shortName}) on ${target}`, {
@@ -1197,10 +1187,7 @@ export function ServerAuthMultiplayerGame({
             paddingRight: 'clamp(2px, 0.5vw, 3px)',
           }}>
             {yourState && availableAbilities.slice(0, 8).map((ability, index) => {
-              const cooldownMs = getCooldownRemaining(ability.id);
-              const isOnCooldown = cooldownMs > 0;
-              const isAffordable = !isOnCooldown && yourState.stars >= ability.cost;
-              const isDisabled = isOnCooldown || yourState.stars < ability.cost;
+              const isAffordable = yourState.stars >= ability.cost;
 
               return (
                 <motion.button
@@ -1215,7 +1202,7 @@ export function ServerAuthMultiplayerGame({
                       handleAbilityActivate(ability);
                     }
                   }}
-                  disabled={isDisabled}
+                  disabled={!isAffordable}
                   style={{
                     padding: 'clamp(6px, 1.5vw, 8px) clamp(8px, 2vw, 12px)',
                     background: isAffordable ? 'rgba(10, 10, 30, 0.6)' : 'rgba(10, 10, 30, 0.3)',
@@ -1231,23 +1218,9 @@ export function ServerAuthMultiplayerGame({
                     gap: 'clamp(4px, 1vw, 6px)',
                     boxShadow: isAffordable ? '0 4px 15px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.1)' : 'none',
                     minHeight: 'clamp(32px, 8vw, 40px)',
-                    position: 'relative',
-                    overflow: 'hidden',
                   }}
                   title={`${ability.name}: ${ability.description}`}
                 >
-                  {/* Cooldown progress bar overlay */}
-                  {isOnCooldown && (
-                    <div style={{
-                      position: 'absolute',
-                      bottom: 0,
-                      left: 0,
-                      height: '2px',
-                      width: `${(cooldownMs / 5000) * 100}%`,
-                      background: ability.category === 'buff' ? '#00d4ff' : '#ff006e',
-                      transition: 'width 0.2s linear',
-                    }} />
-                  )}
                   <div style={{
                     fontSize: 'clamp(9px, 2.2vw, 11px)',
                     fontWeight: '800',
@@ -1278,7 +1251,7 @@ export function ServerAuthMultiplayerGame({
                     minWidth: 'clamp(20px, 5vw, 28px)',
                     textAlign: 'center',
                   }}>
-                    {isOnCooldown ? `${Math.ceil(cooldownMs / 1000)}s` : ability.cost}
+                    {ability.cost}
                   </div>
                 </motion.button>
               );
@@ -1616,25 +1589,6 @@ export function ServerAuthMultiplayerGame({
                         {matchRewards.newCoins} 💰
                       </span>
                     </div>
-                    {matchRewards.nextUnlock && matchRewards.nextUnlock.coinsNeeded > 0 && (
-                      <div style={{
-                        marginTop: 'clamp(6px, 1.5vw, 8px)',
-                        padding: 'clamp(8px, 2vw, 10px)',
-                        background: 'rgba(0, 255, 136, 0.15)',
-                        borderRadius: 'clamp(4px, 1vw, 6px)',
-                        border: '1px solid rgba(0, 255, 136, 0.3)',
-                      }}>
-                        <div style={{ fontSize: 'clamp(11px, 2.75vw, 13px)', color: '#aaa', marginBottom: 'clamp(2px, 0.5vw, 4px)' }}>
-                          NEXT UNLOCK
-                        </div>
-                        <div style={{ color: '#00ff88', fontWeight: '700', fontSize: 'clamp(13px, 3.2vw, 16px)' }}>
-                          {matchRewards.nextUnlock.abilityName}
-                        </div>
-                        <div style={{ fontSize: 'clamp(11px, 2.75vw, 13px)', color: '#aaa', marginTop: 'clamp(2px, 0.5vw, 4px)' }}>
-                          {matchRewards.nextUnlock.coinsNeeded} more coins needed
-                        </div>
-                      </div>
-                    )}
                   </div>
                 </div>
               )}

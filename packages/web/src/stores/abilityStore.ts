@@ -2,25 +2,17 @@ import { create } from 'zustand';
 import type { Ability } from '@tetris-battle/game-core';
 import { ABILITIES, getRandomAbilities } from '@tetris-battle/game-core';
 
-/** Per-ability cooldown after activation (ms). Prevents spam-clicking. */
-export const ABILITY_COOLDOWN_MS = 5000;
-
 interface AbilityState {
   availableAbilities: Ability[];
   lastRefreshTime: number;
   isTestMode: boolean;
   loadout: string[]; // Player's selected abilities
 
-  /** Tracks last-activation timestamp per ability id */
-  lastUseTimes: Record<string, number>;
-
   // Actions
   setLoadout: (loadout: string[]) => void;
   refreshAbilities: () => void;
   canActivate: (abilityId: string, currentStars: number) => boolean;
   useAbility: (abilityId: string) => void;
-  /** Returns remaining cooldown ms (0 = ready) */
-  getCooldownRemaining: (abilityId: string) => number;
 }
 
 const REFRESH_INTERVAL = 10000; // 10 seconds
@@ -44,7 +36,6 @@ export const useAbilityStore = create<AbilityState>((set, get) => ({
   lastRefreshTime: Date.now(),
   isTestMode,
   loadout: [],
-  lastUseTimes: {},
 
   setLoadout: (loadout: string[]) => {
     const sanitizedLoadout = (loadout || []).filter(id => VALID_ABILITY_IDS.has(id));
@@ -89,23 +80,11 @@ export const useAbilityStore = create<AbilityState>((set, get) => ({
     const ability = ABILITIES[abilityId as keyof typeof ABILITIES];
     if (!ability) return false;
 
-    // Check per-ability cooldown
-    const { lastUseTimes } = get();
-    const lastUse = lastUseTimes[abilityId] ?? 0;
-    if (Date.now() - lastUse < ABILITY_COOLDOWN_MS) return false;
-
+    // Only check star cost (no cooldowns)
     return currentStars >= ability.cost;
   },
 
-  useAbility: (abilityId: string) => {
-    set(state => ({
-      lastUseTimes: { ...state.lastUseTimes, [abilityId]: Date.now() },
-    }));
-  },
-
-  getCooldownRemaining: (abilityId: string) => {
-    const { lastUseTimes } = get();
-    const lastUse = lastUseTimes[abilityId] ?? 0;
-    return Math.max(0, ABILITY_COOLDOWN_MS - (Date.now() - lastUse));
+  useAbility: (_abilityId: string) => {
+    // No cooldowns to track
   },
 }));

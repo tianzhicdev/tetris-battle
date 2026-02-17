@@ -97,26 +97,6 @@ export function PostMatchScreen({ outcome, rewards, onContinue }: PostMatchScree
               </div>
             </div>
 
-            {/* Next Unlock */}
-            {rewards.nextUnlock && rewards.nextUnlock.coinsNeeded > 0 && (
-              <div style={{
-                background: 'rgba(0, 255, 136, 0.1)',
-                border: '1px solid rgba(0, 255, 136, 0.3)',
-                borderRadius: '8px',
-                padding: '15px',
-                marginBottom: '20px',
-              }}>
-                <div style={{ fontSize: '14px', color: '#aaa', marginBottom: '5px' }}>
-                  NEXT UNLOCK
-                </div>
-                <div style={{ fontSize: '18px', color: '#00ff88', fontWeight: 'bold' }}>
-                  {rewards.nextUnlock.abilityName}
-                </div>
-                <div style={{ fontSize: '14px', color: '#888', marginTop: '5px' }}>
-                  {rewards.nextUnlock.coinsNeeded} more coins needed
-                </div>
-              </div>
-            )}
           </div>
         )}
 
