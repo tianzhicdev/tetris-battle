@@ -688,6 +688,30 @@ export class ServerGameState {
     return snapshots;
   }
 
+  getPieceCountEffects(): Array<{ abilityType: string; remaining: number; total: number }> {
+    const effects: Array<{ abilityType: string; remaining: number; total: number }> = [];
+
+    if (this.miniBlocksRemaining > 0) {
+      effects.push({ abilityType: 'mini_blocks', remaining: this.miniBlocksRemaining, total: 5 });
+    }
+    if (this.weirdShapesRemaining > 0) {
+      effects.push({ abilityType: 'weird_shapes', remaining: this.weirdShapesRemaining, total: 1 });
+    }
+    if (this.shapeshifterPiecesRemaining > 0 || this.currentPieceIsShapeshifter) {
+      const remaining = this.shapeshifterPiecesRemaining + (this.currentPieceIsShapeshifter ? 1 : 0);
+      effects.push({ abilityType: 'shapeshifter', remaining, total: 3 });
+    }
+    if (this.magnetPiecesRemaining > 0 || this.currentPieceIsMagnetized) {
+      const remaining = this.magnetPiecesRemaining + (this.currentPieceIsMagnetized ? 1 : 0);
+      effects.push({ abilityType: 'magnet', remaining, total: 3 });
+    }
+    if (this.overchargeCharges > 0) {
+      effects.push({ abilityType: 'overcharge', remaining: this.overchargeCharges, total: 3 });
+    }
+
+    return effects;
+  }
+
   consumeDefensiveInterception(now: number = Date.now()): 'shield' | 'reflect' | null {
     // Reflect has priority over shield.
     if (this.isEffectActive('reflect', now)) {
@@ -1214,6 +1238,7 @@ export class ServerGameState {
       isGameOver: this.gameState.isGameOver,
       activeEffects: this.getActiveEffects(),
       timedEffects: this.getTimedEffectSnapshots(now),
+      pieceCountEffects: this.getPieceCountEffects(),
       tiltDirection: this.isEffectActive('tilt', now) ? this.tiltDirection : 0,
     };
   }

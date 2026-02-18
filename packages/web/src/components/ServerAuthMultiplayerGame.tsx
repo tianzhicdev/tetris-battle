@@ -221,7 +221,8 @@ export function ServerAuthMultiplayerGame({
   const [particles, setParticles] = useState<{ x: number; y: number; id: number; count?: number; colors?: string[] } | null>(null);
   const [selfBoardFx, setSelfBoardFx] = useState<BoardFxState | null>(null);
   const [opponentBoardFx, setOpponentBoardFx] = useState<BoardFxState | null>(null);
-  const [abilityNotification, setAbilityNotification] = useState<{ name: string; description: string; category: 'buff' | 'debuff' } | null>(null);
+  const [abilityNotifications, setAbilityNotifications] = useState<Array<{ id: number; name: string; description: string; category: 'buff' | 'debuff' }>>([]);
+  const notificationIdRef = useRef(0);
   const [matchRewards, setMatchRewards] = useState<MatchRewards | null>(null);
   const matchStartTimeRef = useRef<number>(Date.now());
   const pendingAbilityActivationsRef = useRef(new Map<string, { ability: Ability; target: 'self' | 'opponent' }>());
@@ -264,6 +265,45 @@ export function ServerAuthMultiplayerGame({
         durationMs: entry.durationMs as number,
       }));
   }, [opponentState?.timedEffects, effectClockMs]);
+
+  // Piece count effects (mini_blocks, shapeshifter, magnet, etc.)
+  const yourPieceCountEffects = useMemo(() => {
+    const raw = Array.isArray(yourState?.pieceCountEffects) ? yourState.pieceCountEffects : [];
+    return raw.filter((e: any) => e?.remaining > 0);
+  }, [yourState?.pieceCountEffects]);
+
+  const opponentPieceCountEffects = useMemo(() => {
+    const raw = Array.isArray(opponentState?.pieceCountEffects) ? opponentState.pieceCountEffects : [];
+    return raw.filter((e: any) => e?.remaining > 0);
+  }, [opponentState?.pieceCountEffects]);
+
+  // Defensive ability indicators
+  const yourDefensiveAbility = useMemo(() => {
+    const effects = yourState?.activeEffects || [];
+    if (effects.includes('reflect')) return 'reflect';
+    if (effects.includes('shield')) return 'shield';
+    return null;
+  }, [yourState?.activeEffects]);
+
+  const opponentDefensiveAbility = useMemo(() => {
+    const effects = opponentState?.activeEffects || [];
+    if (effects.includes('reflect')) return 'reflect';
+    if (effects.includes('shield')) return 'shield';
+    return null;
+  }, [opponentState?.activeEffects]);
+
+  // Helper to queue notifications (max 2 visible, auto-dismiss after 2.5s)
+  const queueNotification = useCallback((name: string, description: string, category: 'buff' | 'debuff') => {
+    const id = ++notificationIdRef.current;
+    setAbilityNotifications(prev => {
+      const next = [...prev, { id, name, description, category }];
+      // Keep only last 2
+      return next.slice(-2);
+    });
+    setTimeout(() => {
+      setAbilityNotifications(prev => prev.filter(n => n.id !== id));
+    }, 2500);
+  }, []);
 
   const displayNextPieces = useMemo(() => {
     if (!yourState?.nextPieces) return [];
@@ -782,12 +822,11 @@ export function ServerAuthMultiplayerGame({
 
     if (result.accepted) {
       if (ability) {
-        setAbilityNotification({
-          name: ability.name,
-          description: ability.description,
-          category: isDebuffAbility(ability) ? 'debuff' : 'buff',
-        });
-        setTimeout(() => setAbilityNotification(null), 3000);
+        queueNotification(
+          ability.name,
+          ability.description,
+          isDebuffAbility(ability) ? 'debuff' : 'buff'
+        );
         if (isDebuffAbility(ability)) {
           audioManager.playSfx('ability_debuff_activate');
         } else {
@@ -845,14 +884,11 @@ export function ServerAuthMultiplayerGame({
     });
 
     // Show notification for the ability received
-    setAbilityNotification({
-      name: ability.name,
-      description: ability.description,
-      category: isDebuffAbility(ability) ? 'debuff' : 'buff',
-    });
-    // Auto-dismiss notification after 3 seconds (instant abilities)
-    // Duration abilities are surfaced by server-timed countdown bars at the top.
-    setTimeout(() => setAbilityNotification(null), 3000);
+    queueNotification(
+      ability.name,
+      ability.description,
+      isDebuffAbility(ability) ? 'debuff' : 'buff'
+    );
 
     audioManager.playSfx('ability_debuff_activate');
 
@@ -1051,7 +1087,7 @@ export function ServerAuthMultiplayerGame({
           </span>
         </div>
       )}
-      {(yourTimedEffects.length > 0 || opponentTimedEffects.length > 0) && (
+      {(yourTimedEffects.length > 0 || opponentTimedEffects.length > 0 || yourPieceCountEffects.length > 0 || opponentPieceCountEffects.length > 0) && (
         <div
           style={{
             position: 'absolute',
@@ -1066,8 +1102,10 @@ export function ServerAuthMultiplayerGame({
             pointerEvents: 'none',
           }}
         >
-          {yourTimedEffects.length > 0 && (
+          {/* Your effects row */}
+          {(yourTimedEffects.length > 0 || yourPieceCountEffects.length > 0) && (
             <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap', justifyContent: 'center' }}>
+              {/* Timed effects */}
               {yourTimedEffects.map((effect: TimedEffectEntry) => {
                 const progress = Math.max(0, Math.min(1, effect.remainingMs / effect.durationMs));
                 const ability = ABILITIES[effect.abilityType as keyof typeof ABILITIES];
@@ -1099,10 +1137,34 @@ export function ServerAuthMultiplayerGame({
                   </div>
                 );
               })}
+              {/* Piece count effects */}
+              {yourPieceCountEffects.map((effect: any) => {
+                const ability = ABILITIES[effect.abilityType as keyof typeof ABILITIES];
+                return (
+                  <div
+                    key={`you-pc-${effect.abilityType}`}
+                    style={{
+                      width: 'min(22vw, 110px)',
+                      minWidth: '88px',
+                      background: 'rgba(6, 22, 10, 0.85)',
+                      border: '1px solid rgba(0, 255, 136, 0.28)',
+                      borderRadius: '5px',
+                      padding: '2px 5px',
+                    }}
+                  >
+                    <div style={{ fontSize: '9px', color: '#7dffb0', fontWeight: 700, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <span>{ability?.shortName || effect.abilityType}</span>
+                      <span style={{ fontSize: '10px', color: '#b0ffcf' }}>{effect.remaining}/{effect.total}</span>
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           )}
-          {opponentTimedEffects.length > 0 && (
+          {/* Opponent effects row */}
+          {(opponentTimedEffects.length > 0 || opponentPieceCountEffects.length > 0) && (
             <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap', justifyContent: 'center' }}>
+              {/* Timed effects */}
               {opponentTimedEffects.map((effect: TimedEffectEntry) => {
                 const progress = Math.max(0, Math.min(1, effect.remainingMs / effect.durationMs));
                 const ability = ABILITIES[effect.abilityType as keyof typeof ABILITIES];
@@ -1134,6 +1196,28 @@ export function ServerAuthMultiplayerGame({
                   </div>
                 );
               })}
+              {/* Piece count effects */}
+              {opponentPieceCountEffects.map((effect: any) => {
+                const ability = ABILITIES[effect.abilityType as keyof typeof ABILITIES];
+                return (
+                  <div
+                    key={`opp-pc-${effect.abilityType}`}
+                    style={{
+                      width: 'min(22vw, 110px)',
+                      minWidth: '88px',
+                      background: 'rgba(22, 10, 6, 0.85)',
+                      border: '1px solid rgba(255, 165, 0, 0.28)',
+                      borderRadius: '5px',
+                      padding: '2px 5px',
+                    }}
+                  >
+                    <div style={{ fontSize: '9px', color: '#ffb07d', fontWeight: 700, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <span>{ability?.shortName || effect.abilityType}</span>
+                      <span style={{ fontSize: '10px', color: '#ffd0a0' }}>{effect.remaining}/{effect.total}</span>
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           )}
         </div>
@@ -1141,7 +1225,44 @@ export function ServerAuthMultiplayerGame({
       {/* Main Game Area */}
       <div style={{ display: 'flex', flex: 1, overflow: 'hidden', padding: 'clamp(2px, 0.5vw, 4px)', gap: 'clamp(2px, 0.5vw, 4px)' }}>
         {/* Left: Your Board */}
-        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0 }}>
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, position: 'relative' }}>
+          {/* Defensive Ability Indicator - Your Board */}
+          {yourDefensiveAbility && (
+            <div
+              style={{
+                position: 'absolute',
+                top: '10px',
+                left: '10px',
+                zIndex: 20,
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+                background: yourDefensiveAbility === 'reflect' 
+                  ? 'rgba(201, 66, 255, 0.2)' 
+                  : 'rgba(0, 212, 255, 0.2)',
+                border: `2px solid ${yourDefensiveAbility === 'reflect' ? 'rgba(201, 66, 255, 0.6)' : 'rgba(0, 212, 255, 0.6)'}`,
+                borderRadius: '8px',
+                padding: '6px 10px',
+                boxShadow: yourDefensiveAbility === 'reflect'
+                  ? '0 0 15px rgba(201, 66, 255, 0.5), inset 0 0 10px rgba(201, 66, 255, 0.2)'
+                  : '0 0 15px rgba(0, 212, 255, 0.5), inset 0 0 10px rgba(0, 212, 255, 0.2)',
+                animation: 'pulse 2s ease-in-out infinite',
+              }}
+            >
+              <span style={{ fontSize: '18px' }}>
+                {yourDefensiveAbility === 'reflect' ? '🪞' : '🛡️'}
+              </span>
+              <span style={{ 
+                fontSize: '11px', 
+                fontWeight: 700, 
+                color: yourDefensiveAbility === 'reflect' ? '#c942ff' : '#00d4ff',
+                textTransform: 'uppercase',
+                letterSpacing: '0.5px',
+              }}>
+                {yourDefensiveAbility === 'reflect' ? 'REFLECT' : 'SHIELD'}
+              </span>
+            </div>
+          )}
           <motion.div
             animate={
               screenShake > 0
@@ -1389,7 +1510,43 @@ export function ServerAuthMultiplayerGame({
 	            background: 'transparent',
 	            padding: 'clamp(4px, 1vw, 6px)',
 	            borderRadius: 'clamp(6px, 1.5vw, 10px)',
+	            position: 'relative',
 	          }}>
+	            {/* Defensive Ability Indicator - Opponent */}
+	            {opponentDefensiveAbility && (
+	              <div
+	                style={{
+	                  position: 'absolute',
+	                  top: '-4px',
+	                  right: '-4px',
+	                  zIndex: 20,
+	                  display: 'flex',
+	                  alignItems: 'center',
+	                  gap: '3px',
+	                  background: opponentDefensiveAbility === 'reflect' 
+	                    ? 'rgba(201, 66, 255, 0.25)' 
+	                    : 'rgba(255, 0, 110, 0.25)',
+	                  border: `1px solid ${opponentDefensiveAbility === 'reflect' ? 'rgba(201, 66, 255, 0.7)' : 'rgba(255, 0, 110, 0.7)'}`,
+	                  borderRadius: '5px',
+	                  padding: '3px 6px',
+	                  boxShadow: opponentDefensiveAbility === 'reflect'
+	                    ? '0 0 10px rgba(201, 66, 255, 0.5)'
+	                    : '0 0 10px rgba(255, 0, 110, 0.5)',
+	                }}
+	              >
+	                <span style={{ fontSize: '12px' }}>
+	                  {opponentDefensiveAbility === 'reflect' ? '🪞' : '🛡️'}
+	                </span>
+	                <span style={{ 
+	                  fontSize: '8px', 
+	                  fontWeight: 700, 
+	                  color: opponentDefensiveAbility === 'reflect' ? '#c942ff' : '#ff006e',
+	                  textTransform: 'uppercase',
+	                }}>
+	                  {opponentDefensiveAbility === 'reflect' ? 'REFL' : 'SHLD'}
+	                </span>
+	              </div>
+	            )}
 	            <div
 	              style={{
 	                position: 'relative',
@@ -1923,12 +2080,28 @@ export function ServerAuthMultiplayerGame({
         />
       )}
 
-      <Notification
-        visible={!!abilityNotification}
-        title={abilityNotification?.name || ''}
-        message={abilityNotification?.description}
-        variant={abilityNotification?.category}
-      />
+      {/* Stacked ability notifications */}
+      <div style={{
+        position: 'fixed',
+        top: 'clamp(60px, 10vh, 80px)',
+        left: '50%',
+        transform: 'translateX(-50%)',
+        zIndex: 10000,
+        display: 'flex',
+        flexDirection: 'column',
+        gap: '8px',
+        pointerEvents: 'none',
+      }}>
+        {abilityNotifications.map((notif, idx) => (
+          <Notification
+            key={notif.id}
+            visible={true}
+            title={notif.name}
+            message={notif.description}
+            variant={notif.category}
+          />
+        ))}
+      </div>
 
       {/* Debug Panel */}
       {isDebugMode && debugLogger && (
