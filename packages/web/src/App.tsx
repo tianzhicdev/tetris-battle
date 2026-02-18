@@ -244,7 +244,7 @@ function GameApp({ profile: initialProfile }: { profile: UserProfile }) {
       )}
 
       {mode === 'solo' && (
-        <TetrisGame onExit={handleExitGame} currentTheme={currentTheme} onThemeChange={() => {}} />
+        <TetrisGame onExit={handleExitGame} currentTheme={currentTheme} />
       )}
 
       {mode === 'matchmaking' && (
