@@ -29,6 +29,12 @@ import { audioManager } from '../services/audioManager';
 import { normalizePartykitHost } from '../services/partykit/host';
 import { haptics } from '../utils/haptics';
 import { buttonVariants, springs, scoreVariants, overlayVariants, modalVariants } from '../utils/animations';
+import { GameHeader } from './game/GameHeader';
+import { NextPieceQueue } from './game/NextPieceQueue';
+import { OpponentPreview } from './game/OpponentPreview';
+import { AbilityDock } from './game/AbilityDock';
+import { GameTouchControls } from './game/GameTouchControls';
+import { MobileGameLayout } from './game/MobileGameLayout';
 
 interface ServerAuthMultiplayerGameProps {
   roomId: string;
@@ -241,6 +247,10 @@ export function ServerAuthMultiplayerGame({
   const [isDebugMode, setIsDebugMode] = useState(false);
   const [connectionStats, setConnectionStats] = useState<ConnectionStats | null>(null);
   const [effectClockMs, setEffectClockMs] = useState(() => Date.now());
+  const [isMobilePortrait, setIsMobilePortrait] = useState(() => {
+    if (typeof window === 'undefined') return false;
+    return window.matchMedia('(max-width: 900px) and (orientation: portrait)').matches;
+  });
 
   const { availableAbilities, setLoadout } = useAbilityStore();
 
@@ -322,6 +332,22 @@ export function ServerAuthMultiplayerGame({
   useEffect(() => {
     const interval = setInterval(() => setEffectClockMs(Date.now()), 100);
     return () => clearInterval(interval);
+  }, []);
+
+  useEffect(() => {
+    const mediaQuery = window.matchMedia('(max-width: 900px) and (orientation: portrait)');
+    const updateLayout = () => {
+      setIsMobilePortrait(mediaQuery.matches);
+    };
+
+    updateLayout();
+    mediaQuery.addEventListener('change', updateLayout);
+    window.addEventListener('resize', updateLayout);
+
+    return () => {
+      mediaQuery.removeEventListener('change', updateLayout);
+      window.removeEventListener('resize', updateLayout);
+    };
   }, []);
 
   // Initialize debug mode
@@ -927,6 +953,38 @@ export function ServerAuthMultiplayerGame({
     }
   }, [profile, opponentId, aiOpponent]);
 
+  const sendMobileInput = useCallback((input: 'move_left' | 'move_right' | 'soft_drop' | 'hard_drop' | 'rotate_cw') => {
+    if (!gameClientRef.current || !yourState || yourState.isGameOver || gameFinished) return;
+
+    switch (input) {
+      case 'move_left':
+      case 'move_right':
+        haptics.light();
+        audioManager.playSfx('piece_move', 0.3);
+        break;
+      case 'soft_drop':
+        haptics.light();
+        audioManager.playSfx('soft_drop', 0.4);
+        break;
+      case 'hard_drop':
+        haptics.medium();
+        audioManager.playSfx('hard_drop');
+        break;
+      case 'rotate_cw':
+        haptics.light();
+        audioManager.playSfx('piece_rotate', 0.5);
+        break;
+    }
+
+    gameClientRef.current.sendInput(input);
+  }, [yourState, gameFinished]);
+
+  const handleMoveLeft = useCallback(() => sendMobileInput('move_left'), [sendMobileInput]);
+  const handleMoveRight = useCallback(() => sendMobileInput('move_right'), [sendMobileInput]);
+  const handleSoftDrop = useCallback(() => sendMobileInput('soft_drop'), [sendMobileInput]);
+  const handleHardDrop = useCallback(() => sendMobileInput('hard_drop'), [sendMobileInput]);
+  const handleRotateCw = useCallback(() => sendMobileInput('rotate_cw'), [sendMobileInput]);
+
 
   // Keyboard controls - send inputs to server
   useEffect(() => {
@@ -1029,6 +1087,192 @@ export function ServerAuthMultiplayerGame({
         left: 0,
       }}
     >
+      {isMobilePortrait ? (
+        <MobileGameLayout
+          header={(
+            <GameHeader
+              score={yourState?.score ?? 0}
+              stars={yourState?.stars ?? 0}
+              notifications={abilityNotifications}
+              isConnected={isConnected}
+              connectionStats={connectionStats}
+            />
+          )}
+          nextQueue={<NextPieceQueue nextPieces={displayNextPieces} maxItems={5} />}
+          board={(
+            <motion.div
+              animate={
+                screenShake > 0
+                  ? {
+                      x: [0, -10 * screenShake, 10 * screenShake, -10 * screenShake, 10 * screenShake, 0],
+                      y: [0, -5 * screenShake, 5 * screenShake, -5 * screenShake, 5 * screenShake, 0],
+                      rotate: [0, -2 * screenShake, 2 * screenShake, -2 * screenShake, 2 * screenShake, 0],
+                    }
+                  : stateHasEffect(yourState, 'screen_shake')
+                  ? {
+                      x: [0, -5, 5, -5, 5, 0],
+                      y: [0, -3, 3, -3, 3, 0],
+                      rotate: [0, -1, 1, -1, 1, 0],
+                    }
+                  : { x: 0, y: 0, rotate: 0 }
+              }
+              transition={{
+                duration: 0.4,
+                repeat: stateHasEffect(yourState, 'screen_shake') ? Infinity : 0,
+                ease: 'easeOut',
+              }}
+              style={{
+                width: '100%',
+                height: '100%',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                position: 'relative',
+              }}
+            >
+              {yourDefensiveAbility && (
+                <div
+                  style={{
+                    position: 'absolute',
+                    top: '6px',
+                    left: '6px',
+                    zIndex: 12,
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '4px',
+                    fontSize: '10px',
+                    fontWeight: 700,
+                    padding: '4px 6px',
+                    borderRadius: '6px',
+                    background: yourDefensiveAbility === 'reflect' ? 'rgba(201,66,255,0.2)' : 'rgba(0,212,255,0.2)',
+                    border: `1px solid ${yourDefensiveAbility === 'reflect' ? 'rgba(201,66,255,0.5)' : 'rgba(0,212,255,0.5)'}`,
+                    color: yourDefensiveAbility === 'reflect' ? '#c942ff' : '#00d4ff',
+                  }}
+                >
+                  <span>{yourDefensiveAbility === 'reflect' ? '🪞' : '🛡️'}</span>
+                  <span>{yourDefensiveAbility === 'reflect' ? 'REFLECT' : 'SHIELD'}</span>
+                </div>
+              )}
+              <div
+                style={{
+                  maxHeight: '100%',
+                  maxWidth: '100%',
+                  transform: getTiltAngle(yourState) ? `rotate(${getTiltAngle(yourState)}deg) scale(0.96)` : 'none',
+                  transition: 'transform 200ms ease-out',
+                  position: 'relative',
+                }}
+              >
+                <canvas
+                  ref={canvasRef}
+                  width={250}
+                  height={500}
+                  style={{
+                    display: 'block',
+                    height: '100%',
+                    maxHeight: 'calc(100dvh - 170px)',
+                    width: 'auto',
+                    maxWidth: '100%',
+                    borderRadius: '9px',
+                    border: `2px solid ${selfBoardFx?.borderColor || '#00d4ff'}`,
+                    backgroundColor: 'rgba(5,5,15,0.8)',
+                    boxShadow: selfBoardFx?.glow || '0 0 18px rgba(0, 212, 255, 0.45), inset 0 0 18px rgba(0, 212, 255, 0.08)',
+                  }}
+                />
+                {stateHasEffect(yourState, 'ink_splash') && (
+                  <div
+                    style={{
+                      position: 'absolute',
+                      inset: 0,
+                      borderRadius: '9px',
+                      overflow: 'hidden',
+                      pointerEvents: 'none',
+                      zIndex: 6,
+                      mixBlendMode: 'multiply',
+                    }}
+                  >
+                    <div
+                      style={{
+                        position: 'absolute',
+                        inset: 0,
+                        background: 'radial-gradient(circle at 50% 50%, rgba(0,0,0,0.12) 0%, rgba(0,0,0,0.45) 100%)',
+                      }}
+                    />
+                    {INK_SPLASH_BLOBS.map((blob, index) => (
+                      <div
+                        key={`mobile-self-ink-${index}`}
+                        style={{
+                          position: 'absolute',
+                          top: blob.top,
+                          left: blob.left,
+                          width: blob.w,
+                          height: blob.h,
+                          borderRadius: blob.r,
+                          background: 'radial-gradient(circle at 35% 35%, rgba(18,18,18,0.98) 0%, rgba(0,0,0,0.88) 70%, rgba(0,0,0,0.75) 100%)',
+                        }}
+                      />
+                    ))}
+                  </div>
+                )}
+              </div>
+              <AnimatePresence>
+                {starPopups.map((popup) => (
+                  <motion.div
+                    key={popup.id}
+                    initial={{ opacity: 0, y: 0, scale: 0.7 }}
+                    animate={{ opacity: 1, y: -16, scale: 1 }}
+                    exit={{ opacity: 0, y: -46, scale: 0.85 }}
+                    transition={{ duration: 0.45, ease: 'easeOut' }}
+                    style={{
+                      position: 'absolute',
+                      top: '34%',
+                      left: '50%',
+                      transform: 'translateX(-50%)',
+                      pointerEvents: 'none',
+                      zIndex: 50,
+                      fontSize: '18px',
+                      fontWeight: 900,
+                      color: '#c942ff',
+                      textShadow: '0 0 16px rgba(201,66,255,0.9), 0 0 32px rgba(201,66,255,0.5)',
+                      whiteSpace: 'nowrap',
+                    }}
+                  >
+                    +{popup.amount} ⭐
+                  </motion.div>
+                ))}
+              </AnimatePresence>
+            </motion.div>
+          )}
+          opponentPreview={(
+            <OpponentPreview
+              canvasRef={opponentCanvasRef}
+              score={opponentState?.score ?? 0}
+              stars={opponentState?.stars ?? 0}
+              defensiveAbility={opponentDefensiveAbility}
+            />
+          )}
+          abilityDock={(
+            <AbilityDock
+              abilities={availableAbilities}
+              stars={yourState?.stars ?? 0}
+              timedEffects={yourTimedEffects}
+              onActivate={(ability) => {
+                haptics.medium();
+                handleAbilityActivate(ability);
+              }}
+            />
+          )}
+          controls={(
+            <GameTouchControls
+              onMoveLeft={handleMoveLeft}
+              onMoveRight={handleMoveRight}
+              onHardDrop={handleHardDrop}
+              onSoftDrop={handleSoftDrop}
+              onRotateCw={handleRotateCw}
+            />
+          )}
+        />
+      ) : (
+        <>
       {/* Connection Quality Indicator - Top Left */}
       {connectionStats && (
         <div
@@ -1875,6 +2119,8 @@ export function ServerAuthMultiplayerGame({
           </svg>
         </motion.button>
       </div>
+        </>
+      )}
 
       {!isConnected && (
         <div style={{
@@ -2092,7 +2338,7 @@ export function ServerAuthMultiplayerGame({
         gap: '8px',
         pointerEvents: 'none',
       }}>
-        {abilityNotifications.map((notif, idx) => (
+        {abilityNotifications.map((notif) => (
           <Notification
             key={notif.id}
             visible={true}
