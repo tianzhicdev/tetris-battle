@@ -1,16 +1,14 @@
 import { useState, useEffect } from 'react';
 import { UserButton } from '@clerk/clerk-react';
 import type { UserProfile } from '@tetris-battle/game-core';
-import { AbilityShop } from './AbilityShop';
-import { LoadoutManager } from './LoadoutManager';
+import { AbilityManager } from './AbilityManager';
 import { ProfilePage } from './ProfilePage';
-import { AbilityInfo } from './AbilityInfo';
 import { FriendList } from './FriendList';
 import { ThemeSelector } from './ThemeSelector';
 import { audioManager } from '../services/audioManager';
 import { useFriendStore } from '../stores/friendStore';
 import { useTheme } from '../contexts/ThemeContext';
-import { glassSuccess, glassGold, glassBlue, glassPurple, mergeGlass } from '../styles/glassUtils';
+import { glassSuccess, glassBlue, glassPurple, mergeGlass } from '../styles/glassUtils';
 
 interface MainMenuProps {
   onSelectMode: (mode: 'solo' | 'multiplayer') => void;
@@ -21,10 +19,8 @@ interface MainMenuProps {
 }
 
 export function MainMenu({ onSelectMode, theme, profile, onProfileUpdate, onChallenge }: MainMenuProps) {
-  const [showShop, setShowShop] = useState(false);
-  const [showLoadout, setShowLoadout] = useState(false);
+  const [showAbilities, setShowAbilities] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
-  const [showAbilityInfo, setShowAbilityInfo] = useState(false);
   const [showFriends, setShowFriends] = useState(false);
   const [showThemeSelector, setShowThemeSelector] = useState(false);
   const pendingRequests = useFriendStore(state => state.pendingRequests);
@@ -186,29 +182,7 @@ export function MainMenu({ onSelectMode, theme, profile, onProfileUpdate, onChal
         <button
           onClick={() => {
             audioManager.playSfx('button_click');
-            setShowShop(true);
-          }}
-          style={mergeGlass(glassGold(), {
-            padding: '12px 20px',
-            fontSize: '14px',
-            color: '#ffd700',
-            cursor: 'pointer',
-            fontFamily: 'monospace',
-            fontWeight: 'bold',
-            minWidth: '90px',
-            touchAction: 'manipulation',
-            borderRadius: '8px',
-            textShadow: '0 0 10px rgba(255, 215, 0, 0.5)',
-            transition: 'all 0.2s ease',
-          })}
-        >
-          Shop
-        </button>
-
-        <button
-          onClick={() => {
-            audioManager.playSfx('button_click');
-            setShowLoadout(true);
+            setShowAbilities(true);
           }}
           style={mergeGlass(glassSuccess(), {
             padding: '12px 20px',
@@ -221,28 +195,6 @@ export function MainMenu({ onSelectMode, theme, profile, onProfileUpdate, onChal
             touchAction: 'manipulation',
             borderRadius: '8px',
             textShadow: '0 0 10px rgba(0, 255, 136, 0.5)',
-            transition: 'all 0.2s ease',
-          })}
-        >
-          Loadout
-        </button>
-
-        <button
-          onClick={() => {
-            audioManager.playSfx('button_click');
-            setShowAbilityInfo(true);
-          }}
-          style={mergeGlass(glassPurple(), {
-            padding: '12px 20px',
-            fontSize: '14px',
-            color: '#ff00ff',
-            cursor: 'pointer',
-            fontFamily: 'monospace',
-            fontWeight: 'bold',
-            minWidth: '90px',
-            touchAction: 'manipulation',
-            borderRadius: '8px',
-            textShadow: '0 0 10px rgba(255, 0, 255, 0.5)',
             transition: 'all 0.2s ease',
           })}
         >
@@ -274,18 +226,10 @@ export function MainMenu({ onSelectMode, theme, profile, onProfileUpdate, onChal
       </div>
 
       {/* Modals */}
-      {showShop && (
-        <AbilityShop
+      {showAbilities && (
+        <AbilityManager
           profile={profile}
-          onClose={() => setShowShop(false)}
-          onProfileUpdate={onProfileUpdate}
-        />
-      )}
-
-      {showLoadout && (
-        <LoadoutManager
-          profile={profile}
-          onClose={() => setShowLoadout(false)}
+          onClose={() => setShowAbilities(false)}
           onProfileUpdate={onProfileUpdate}
         />
       )}
@@ -295,10 +239,6 @@ export function MainMenu({ onSelectMode, theme, profile, onProfileUpdate, onChal
           profile={profile}
           onClose={() => setShowProfile(false)}
         />
-      )}
-
-      {showAbilityInfo && (
-        <AbilityInfo onClose={() => setShowAbilityInfo(false)} />
       )}
 
       {showFriends && (

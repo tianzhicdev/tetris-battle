@@ -9,7 +9,7 @@ import {
 } from '../services/partykit/ServerAuthGameClient';
 import type { ConnectionStats } from '../services/ConnectionMonitor';
 import { NextPiecePanel } from './NextPiecePanel';
-import { AbilityInfo } from './AbilityInfo';
+
 import { ParticleEffect } from './ParticleEffect';
 import { FlashOverlay } from './FlashOverlay';
 import { Notification } from './Notification';
@@ -215,7 +215,7 @@ export function ServerAuthMultiplayerGame({
   const [isConnected, setIsConnected] = useState(false);
   const [gameFinished, setGameFinished] = useState(false);
   const [winnerId, setWinnerId] = useState<string | null>(null);
-  const [showAbilityInfo, setShowAbilityInfo] = useState(false);
+
   const [screenShake, setScreenShake] = useState(0);
   const [flashEffect, setFlashEffect] = useState<{ color: string } | null>(null);
   const [particles, setParticles] = useState<{ x: number; y: number; id: number; count?: number; colors?: string[] } | null>(null);
@@ -1379,34 +1379,6 @@ export function ServerAuthMultiplayerGame({
               />
             </div>
 
-            <motion.button
-              whileTap="tap"
-              variants={buttonVariants}
-              transition={springs.snappy}
-              onClick={() => {
-                haptics.light();
-                setShowAbilityInfo(true);
-              }}
-              style={{
-                padding: '6px',
-                background: 'rgba(10, 10, 30, 0.4)',
-                backdropFilter: 'blur(20px)',
-                border: '1px solid rgba(255, 255, 255, 0.1)',
-                borderRadius: '50%',
-                color: '#ffffff',
-                fontSize: 'clamp(14px, 3.5vw, 18px)',
-                fontWeight: 'bold',
-                cursor: 'pointer',
-                width: 'clamp(30px, 7.5vw, 38px)',
-                height: 'clamp(30px, 7.5vw, 38px)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                boxShadow: '0 4px 15px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.1)',
-              }}
-            >
-              ?
-            </motion.button>
           </div>
 
 	          {/* Opponent's Board */}
@@ -1932,11 +1904,6 @@ export function ServerAuthMultiplayerGame({
         )}
       </AnimatePresence>
 
-      <AnimatePresence>
-        {showAbilityInfo && (
-          <AbilityInfo onClose={() => setShowAbilityInfo(false)} />
-        )}
-      </AnimatePresence>
 
       {flashEffect && (
         <FlashOverlay
