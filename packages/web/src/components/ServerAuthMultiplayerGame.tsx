@@ -576,6 +576,10 @@ export function ServerAuthMultiplayerGame({
     prevOpponentStateRef.current = opponentState;
   }, [opponentState, debugLogger]);
 
+  // Star earned popup state
+  const prevStarsRef = useRef(0);
+  const [starPopups, setStarPopups] = useState<Array<{ id: number; amount: number; combo: number }>>([]);
+
   // Track line clears from server for effects
   const prevLinesRef = useRef(0);
   useEffect(() => {
@@ -608,6 +612,20 @@ export function ServerAuthMultiplayerGame({
     }
     prevLinesRef.current = yourState.linesCleared;
   }, [yourState?.linesCleared]);
+
+  // Show "+N ⭐" popup when stars are earned (threshold filters passive regen)
+  useEffect(() => {
+    if (!yourState) return;
+    const diff = yourState.stars - prevStarsRef.current;
+    // Passive regen is ~1/sec; only pop on meaningful earns (line clears, abilities, etc.)
+    if (diff >= 3) {
+      const id = Date.now();
+      const combo = yourState.comboCount ?? 0;
+      setStarPopups(prev => [...prev, { id, amount: diff, combo }]);
+      setTimeout(() => setStarPopups(prev => prev.filter(p => p.id !== id)), 1400);
+    }
+    prevStarsRef.current = yourState.stars;
+  }, [yourState?.stars]);
 
   // Handle ability activation
   const handleAbilityActivate = (ability: Ability) => {
@@ -1016,6 +1034,40 @@ export function ServerAuthMultiplayerGame({
                 <NextPiecePanel nextPieces={yourState.nextPieces} />
               )}
             </div>
+            {/* Stars earned popups */}
+            <AnimatePresence>
+              {starPopups.map(popup => (
+                <motion.div
+                  key={popup.id}
+                  initial={{ opacity: 0, y: 0, scale: 0.7 }}
+                  animate={{ opacity: 1, y: -20, scale: 1 }}
+                  exit={{ opacity: 0, y: -55, scale: 0.85 }}
+                  transition={{ duration: 0.45, ease: 'easeOut' }}
+                  style={{
+                    position: 'absolute',
+                    top: '38%',
+                    left: '50%',
+                    transform: 'translateX(-50%)',
+                    pointerEvents: 'none',
+                    zIndex: 50,
+                    fontSize: 'clamp(20px, 5vw, 28px)',
+                    fontWeight: '900',
+                    color: '#c942ff',
+                    textShadow: '0 0 16px rgba(201,66,255,0.9), 0 0 32px rgba(201,66,255,0.5)',
+                    letterSpacing: '1px',
+                    whiteSpace: 'nowrap',
+                    userSelect: 'none',
+                  }}
+                >
+                  +{popup.amount} ⭐
+                  {popup.combo > 0 && (
+                    <span style={{ fontSize: '0.6em', opacity: 0.85, marginLeft: '6px', color: '#ffd700', textShadow: '0 0 12px rgba(255,215,0,0.8)' }}>
+                      COMBO x{popup.combo + 1}
+                    </span>
+                  )}
+                </motion.div>
+              ))}
+            </AnimatePresence>
           </motion.div>
           <AbilityEffects activeEffects={activeEffects} theme={theme} />
           {yourState && (
