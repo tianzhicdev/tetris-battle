@@ -1,15 +1,14 @@
 import { useEffect, useRef } from 'react';
 import { useGameStore } from '../stores/gameStore';
 import { TetrisRenderer } from '../renderer/TetrisRenderer';
-import { THEMES, type Theme } from '../themes';
+import type { Theme } from '../themes';
 
 interface TetrisGameProps {
   onExit?: () => void;
   currentTheme: Theme;
-  onThemeChange: (theme: Theme) => void;
 }
 
-export function TetrisGame({ onExit, currentTheme, onThemeChange }: TetrisGameProps) {
+export function TetrisGame({ onExit, currentTheme }: TetrisGameProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const rendererRef = useRef<TetrisRenderer | null>(null);
   const gameLoopRef = useRef<number | null>(null);
@@ -209,35 +208,6 @@ export function TetrisGame({ onExit, currentTheme, onThemeChange }: TetrisGamePr
           <p>Stars: {gameState.stars} ⭐</p>
           <p>Lines: {gameState.linesCleared}</p>
           <p>Combo: {gameState.comboCount}x</p>
-        </div>
-
-        {/* Theme Selector */}
-        <div style={{
-          backgroundColor: currentTheme.uiBackgroundColor,
-          padding: '15px',
-          borderRadius: '5px',
-          marginBottom: '20px',
-        }}>
-          <h3 style={{ marginTop: 0 }}>Theme</h3>
-          {THEMES.map(theme => (
-            <button
-              key={theme.name}
-              onClick={() => onThemeChange(theme)}
-              style={{
-                display: 'block',
-                width: '100%',
-                padding: '10px',
-                marginBottom: '5px',
-                backgroundColor: currentTheme.name === theme.name ? '#4a4a4a' : '#2a2a2a',
-                color: currentTheme.textColor,
-                border: 'none',
-                borderRadius: '3px',
-                cursor: 'pointer',
-              }}
-            >
-              {theme.name}
-            </button>
-          ))}
         </div>
 
         {/* Back Button */}

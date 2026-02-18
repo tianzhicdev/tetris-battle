@@ -1,14 +1,15 @@
 import { useState, useEffect } from 'react';
 import { UserButton } from '@clerk/clerk-react';
 import type { UserProfile } from '@tetris-battle/game-core';
-import { AbilityManager } from './AbilityManager';
+import { AbilityShop } from './AbilityShop';
+import { LoadoutManager } from './LoadoutManager';
 import { ProfilePage } from './ProfilePage';
+import { AbilityInfo } from './AbilityInfo';
 import { FriendList } from './FriendList';
-import { ThemeSelector } from './ThemeSelector';
 import { audioManager } from '../services/audioManager';
 import { useFriendStore } from '../stores/friendStore';
-import { useTheme } from '../contexts/ThemeContext';
-import { glassSuccess, glassBlue, glassPurple, mergeGlass } from '../styles/glassUtils';
+import { glassSuccess, glassGold, glassBlue, glassPurple, mergeGlass } from '../styles/glassUtils';
+import { FloatingBackground } from './FloatingBackground';
 
 interface MainMenuProps {
   onSelectMode: (mode: 'solo' | 'multiplayer') => void;
@@ -19,12 +20,12 @@ interface MainMenuProps {
 }
 
 export function MainMenu({ onSelectMode, theme, profile, onProfileUpdate, onChallenge }: MainMenuProps) {
-  const [showAbilities, setShowAbilities] = useState(false);
+  const [showShop, setShowShop] = useState(false);
+  const [showLoadout, setShowLoadout] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
+  const [showAbilityInfo, setShowAbilityInfo] = useState(false);
   const [showFriends, setShowFriends] = useState(false);
-  const [showThemeSelector, setShowThemeSelector] = useState(false);
   const pendingRequests = useFriendStore(state => state.pendingRequests);
-  const { themeId, setTheme } = useTheme();
 
   // Play menu music on mount
   useEffect(() => {
@@ -49,6 +50,8 @@ export function MainMenu({ onSelectMode, theme, profile, onProfileUpdate, onChal
         position: 'relative',
       }}
     >
+      <FloatingBackground />
+
       {/* User Button - Top Right */}
       <div style={{
         position: 'absolute',
@@ -182,7 +185,29 @@ export function MainMenu({ onSelectMode, theme, profile, onProfileUpdate, onChal
         <button
           onClick={() => {
             audioManager.playSfx('button_click');
-            setShowAbilities(true);
+            setShowShop(true);
+          }}
+          style={mergeGlass(glassGold(), {
+            padding: '12px 20px',
+            fontSize: '14px',
+            color: '#ffd700',
+            cursor: 'pointer',
+            fontFamily: 'monospace',
+            fontWeight: 'bold',
+            minWidth: '90px',
+            touchAction: 'manipulation',
+            borderRadius: '8px',
+            textShadow: '0 0 10px rgba(255, 215, 0, 0.5)',
+            transition: 'all 0.2s ease',
+          })}
+        >
+          Shop
+        </button>
+
+        <button
+          onClick={() => {
+            audioManager.playSfx('button_click');
+            setShowLoadout(true);
           }}
           style={mergeGlass(glassSuccess(), {
             padding: '12px 20px',
@@ -198,38 +223,46 @@ export function MainMenu({ onSelectMode, theme, profile, onProfileUpdate, onChal
             transition: 'all 0.2s ease',
           })}
         >
-          Abilities
+          Loadout
         </button>
 
         <button
           onClick={() => {
             audioManager.playSfx('button_click');
-            setShowThemeSelector(true);
+            setShowAbilityInfo(true);
           }}
           style={mergeGlass(glassPurple(), {
             padding: '12px 20px',
             fontSize: '14px',
-            color: '#c942ff',
+            color: '#ff00ff',
             cursor: 'pointer',
             fontFamily: 'monospace',
             fontWeight: 'bold',
             minWidth: '90px',
             touchAction: 'manipulation',
             borderRadius: '8px',
-            textShadow: '0 0 10px rgba(201, 66, 255, 0.5)',
+            textShadow: '0 0 10px rgba(255, 0, 255, 0.5)',
             transition: 'all 0.2s ease',
           })}
         >
-          Themes
+          Abilities
         </button>
 
       </div>
 
       {/* Modals */}
-      {showAbilities && (
-        <AbilityManager
+      {showShop && (
+        <AbilityShop
           profile={profile}
-          onClose={() => setShowAbilities(false)}
+          onClose={() => setShowShop(false)}
+          onProfileUpdate={onProfileUpdate}
+        />
+      )}
+
+      {showLoadout && (
+        <LoadoutManager
+          profile={profile}
+          onClose={() => setShowLoadout(false)}
           onProfileUpdate={onProfileUpdate}
         />
       )}
@@ -241,6 +274,10 @@ export function MainMenu({ onSelectMode, theme, profile, onProfileUpdate, onChal
         />
       )}
 
+      {showAbilityInfo && (
+        <AbilityInfo onClose={() => setShowAbilityInfo(false)} />
+      )}
+
       {showFriends && (
         <FriendList
           profile={profile}
@@ -249,17 +286,6 @@ export function MainMenu({ onSelectMode, theme, profile, onProfileUpdate, onChal
             setShowFriends(false);
             onChallenge?.(friendUserId, friendUsername);
           }}
-        />
-      )}
-
-      {showThemeSelector && (
-        <ThemeSelector
-          currentThemeId={themeId}
-          onSelectTheme={(newThemeId) => {
-            setTheme(newThemeId);
-            audioManager.playSfx('button_click');
-          }}
-          onClose={() => setShowThemeSelector(false)}
         />
       )}
 
