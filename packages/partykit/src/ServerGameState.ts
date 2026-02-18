@@ -275,14 +275,14 @@ export class ServerGameState {
     earthquake:  (s) => { s.gameState.board = applyEarthquake(s.gameState.board, s.rng); },
     row_rotate:  (s) => { s.gameState.board = applyRowRotate(s.gameState.board); },
     death_cross: (s) => { s.gameState.board = applyDeathCross(s.gameState.board); },
-    fill_holes:  (s) => { s.gameState.board = applyFillHoles(s.gameState.board); },
+    fill_holes:  (s) => { s.gameState.board = s.clearAndReward(applyFillHoles(s.gameState.board)); },
 
     clear_rows: (s) => {
       const { board } = applyClearRows(s.gameState.board, 5);
       s.gameState.board = board;
     },
 
-    random_spawner: (s) => { s.gameState.board = applyRandomSpawner(s.gameState.board, 5, s.rng); },
+    random_spawner: (s) => { s.gameState.board = clearLines(applyRandomSpawner(s.gameState.board, 5, s.rng)).board; },
 
     gold_digger: (s) => { s.gameState.board = applyGoldDigger(s.gameState.board, 5, s.rng); },
 
@@ -346,6 +346,20 @@ export class ServerGameState {
     }
 
     return active;
+  }
+
+  /**
+   * Clear any completed rows after a self-buff board mutation, and award stars.
+   * Do NOT call this for opponent-targeted abilities (opponent would get free stars).
+   */
+  private clearAndReward(board: Board): Board {
+    const { board: cleared, linesCleared } = clearLines(board);
+    if (linesCleared > 0) {
+      this.gameState.linesCleared += linesCleared;
+      const starsEarned = calculateStars(linesCleared, 0); // no combo credit for ability clears
+      this.gameState.stars = Math.min(STAR_VALUES.maxCapacity, this.gameState.stars + starsEarned);
+    }
+    return cleared;
   }
 
   private getDurationMs(abilityType: string, fallbackMs: number): number {
