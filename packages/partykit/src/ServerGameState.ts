@@ -374,6 +374,7 @@ export class ServerGameState {
     return {
       board: this.gameState.board.grid,
       currentPiece: this.gameState.currentPiece,
+      nextPieces: this.gameState.nextPieces.slice(0, 5),
       score: this.gameState.score,
       stars: this.gameState.stars,
       linesCleared: this.gameState.linesCleared,

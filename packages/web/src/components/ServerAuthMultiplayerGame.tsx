@@ -9,6 +9,7 @@ import {
 } from '../services/partykit/ServerAuthGameClient';
 import type { ConnectionStats } from '../services/ConnectionMonitor';
 import { AbilityEffects } from './AbilityEffects';
+import { NextPiecePanel } from './NextPiecePanel';
 import { AbilityInfo } from './AbilityInfo';
 import { ParticleEffect } from './ParticleEffect';
 import { FlashOverlay } from './FlashOverlay';
@@ -988,22 +989,27 @@ export function ServerAuthMultiplayerGame({
               position: 'relative',
             }}
           >
-            <canvas
-              ref={canvasRef}
-              width={250}
-              height={500}
-              style={{
-                border: `2px solid ${selfBoardFx?.borderColor || '#00d4ff'}`,
-                backgroundColor: 'rgba(5,5,15,0.8)',
-                maxHeight: 'calc(100dvh - 110px)',
-                maxWidth: '100%',
-                height: 'auto',
-                width: 'auto',
-                objectFit: 'contain',
-                borderRadius: 'clamp(6px, 1.5vw, 10px)',
-                boxShadow: selfBoardFx?.glow || '0 0 20px rgba(0, 212, 255, 0.5), 0 0 40px rgba(0, 212, 255, 0.2), inset 0 0 20px rgba(0, 212, 255, 0.05)',
-              }}
-            />
+            <div style={{ display: 'flex', alignItems: 'flex-start', gap: '4px' }}>
+              <canvas
+                ref={canvasRef}
+                width={250}
+                height={500}
+                style={{
+                  border: `2px solid ${selfBoardFx?.borderColor || '#00d4ff'}`,
+                  backgroundColor: 'rgba(5,5,15,0.8)',
+                  maxHeight: 'calc(100dvh - 110px)',
+                  maxWidth: '100%',
+                  height: 'auto',
+                  width: 'auto',
+                  objectFit: 'contain',
+                  borderRadius: 'clamp(6px, 1.5vw, 10px)',
+                  boxShadow: selfBoardFx?.glow || '0 0 20px rgba(0, 212, 255, 0.5), 0 0 40px rgba(0, 212, 255, 0.2), inset 0 0 20px rgba(0, 212, 255, 0.05)',
+                }}
+              />
+              {yourState?.nextPieces?.length > 0 && (
+                <NextPiecePanel nextPieces={yourState.nextPieces} />
+              )}
+            </div>
           </motion.div>
           <AbilityEffects activeEffects={activeEffects} theme={theme} />
           {yourState && (

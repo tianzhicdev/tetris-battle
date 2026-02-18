@@ -1,0 +1,869 @@
+{
+  "metadata": {
+    "version": "2.0",
+    "date": "2025-02-18",
+    "description": "Complete ability system design with justified economy for competitive puzzle battle game"
+  },
+
+  "economy_design": {
+    "overview": "Two-currency system: STARS (in-match, resets each battle) and COINS (meta-progression, persistent). Stars fuel abilities during play. Coins unlock abilities between matches.",
+
+    "stars": {
+      "description": "In-match resource spent to cast abilities. Resets to startingStars at the beginning of each battle.",
+      "startingStars": 100,
+      "maxStars": 300,
+      "passiveRegenPerSecond": 1,
+
+      "justification": {
+        "startingStars_100": "Borrowed from Clash Royale's start-at-5/10-max model. 100 starting stars lets players fire 2-3 cheap poke abilities (35-45★) immediately, creating an exciting opening phase. It's NOT enough for expensive abilities, so players must earn first. This prevents 'alpha strike' openers where someone dumps expensive debuffs before you've placed a piece.",
+        "maxStars_300": "Cap prevents infinite hoarding. A player who ignores abilities and saves for 2 minutes would have ~220 passive + 100 starting + ~400 earned = ~720 total, but the 300 cap means they'd overflow. This forces active spending — sitting on resources is punished, just like leaking elixir in Clash Royale. The cap is set at 300 because that's enough for 1 ultimate (250) + 1 poke (45), or 3 medium abilities — a meaningful burst but not infinite.",
+        "passiveRegen_1": "1 star/second = 120 stars over 2 minutes from just existing. This is the 'floor' — even a struggling player who clears zero lines can still use 3-4 cheap abilities per match. This keeps losing players engaged (they still get to DO things). Clash Royale's 1 elixir/2.8s serves the same purpose. Without passive regen, a player who falls behind in line clearing also falls behind in ability economy, creating a snowball effect that makes games feel hopeless."
+      },
+
+      "earningRates": {
+        "lineClear": {
+          "single": 5,
+          "double": 12,
+          "triple": 22,
+          "quad": 35
+        },
+        "bonuses": {
+          "comboPerLevel": 3,
+          "backToBack": 5,
+          "perfectClear": 50,
+          "tSpinSingle": 8,
+          "tSpinDouble": 20,
+          "tSpinTriple": 30
+        },
+        "justification": {
+          "superlinear_scaling": "Standard Tetris attack tables use superlinear scaling: Single=0, Double=1, Triple=2, Quad=4 lines sent. We mirror this ratio. Singles earn 5★ (baseline), Doubles earn 12★ (2.4x single, not 2x), Triples earn 22★ (4.4x, not 3x), Quads earn 35★ (7x, not 4x). This rewards multi-line clears disproportionately, just like competitive Tetris rewards Tetrises and T-Spins over singles.",
+          "combo_bonus": "3★ per combo level encourages consecutive clears. A 5-combo adds 15★ total across the chain — meaningful but not dominant. This mirrors TETR.IO's multiplier combo system where combos amplify larger attacks.",
+          "b2b_bonus": "5★ per back-to-back clear rewards the core competitive Tetris skill (chaining Tetrises and T-Spins). This is significant — a B2B Quad earns 35+5=40★ vs a broken-chain Quad at 35★. Over a match, consistent B2B play might add 50-80★ total.",
+          "perfect_clear_bonus": "50★ is a massive reward for a rare, high-skill action. Perfect Clears send 10 lines in standard Tetris — they should fund a major ability.",
+          "t_spin_bonuses": "T-Spin rewards are ADDITIVE to line clear rewards. A T-Spin Double clears 2 lines (12★ for double) + 20★ T-Spin bonus = 32★ total. This matches competitive Tetris where TSDs are valued equally to Quads despite clearing fewer lines."
+        },
+
+        "model_match_median_player": {
+          "description": "Projected star income for a median-skill player over a 2-minute match",
+          "passive_regen": "120 seconds × 1★/s = 120★",
+          "line_clears": {
+            "25_singles_x5": 125,
+            "12_doubles_x12": 144,
+            "4_triples_x22": 88,
+            "3_quads_x35": 105,
+            "combo_bonuses_est": 45,
+            "b2b_bonuses_est": 30,
+            "t_spin_bonuses_est": 40
+          },
+          "total_earned": "~697★",
+          "plus_starting": "697 + 100 = ~797★ total budget",
+          "ability_usage": "At average ability cost of ~80★, supports 7-10 ability uses per match — roughly one every 12-17 seconds. This matches the target pace.",
+          "note": "Skilled players (faster PPS, more T-Spins, better combos) can generate 1000-1200★, supporting 12-15 uses. This 1.5x advantage from skill feels meaningful but not insurmountable."
+        }
+      }
+    },
+
+    "coins": {
+      "description": "Persistent currency earned across matches. Used to unlock new abilities in the shop.",
+
+      "earningRates": {
+        "basePerMatch": 20,
+        "winBonus": 15,
+        "linesCleared": "1 coin per 10 lines cleared",
+        "abilitiesUsed": "1 coin per ability used in match",
+        "dailyFirstWin": 25,
+        "justification": {
+          "base_20": "Every match rewards participation. Even a quick loss gives 20 coins. This prevents 'wasted time' feeling that kills retention in F2P games.",
+          "win_bonus_15": "75% of base, not 100%. Losing still progresses you meaningfully. Target ratio is ~60-65% of winner's earnings for loser, preventing frustration spirals. (Winner: ~42 coins avg, Loser: ~27 coins avg — ratio is 64%.)",
+          "lines_bonus": "Rewards active play regardless of outcome. A player who loses but cleared 80 lines still gets 8 extra coins. This encourages fighting to the end rather than giving up.",
+          "ability_bonus": "Encourages engaging with the ability system. New players who avoid using abilities get a gentle push.",
+          "daily_first_win": "25 coin daily bonus creates a 'login + play one match' habit loop. Standard mobile game retention mechanic. The bonus equals ~1 match worth of coins, so daily players progress ~12% faster than non-daily players."
+        }
+      },
+
+      "model_progression": {
+        "avg_coins_per_match": "~35 (assuming 50% win rate, ~70 lines, 5 abilities used)",
+        "daily_play_8_matches": "8 × 35 + 25 daily = 305 coins/day",
+        "unlock_timeline": {
+          "week_1": "~2,135 coins → Unlock all Tier 2 (800 total) + start Tier 3. Have ~14 abilities.",
+          "week_2": "~4,270 coins cumulative → Finish Tier 3 (1,800 total). Have ~20 abilities.",
+          "week_3": "~6,405 coins → Deep into Tier 4 (3,600 total). Have ~24 abilities.",
+          "week_4_5": "~8,540-10,675 coins → Finish Tier 4, start Tier 5 (7,200 total). Have ~28 abilities.",
+          "week_6_7": "Full collection unlocked (~13,400 total). All 32 abilities available."
+        },
+        "dedicated_player_15_matches": "Can complete full collection in ~4 weeks",
+        "design_note": "6-7 weeks for casual, 4 weeks for dedicated. This is intentionally faster than League of Legends (months for full roster) because we have fewer abilities and competitive integrity matters more. Players should feel 'caught up' quickly."
+      }
+    }
+  },
+
+  "duration_strategy": {
+    "overview": "Duration is calibrated to 'pieces placed under effect'. At competitive speed (1-2 pieces/second), duration maps to gameplay impact.",
+    "tiers": {
+      "instant": {
+        "duration": 0,
+        "pieces_affected": "0 (one-time board change)",
+        "examples": "Earthquake, Flip Board, Death Cross, Clear Rows, Fill Holes",
+        "design_note": "Instant effects are 'fire and forget'. Their power is in the immediate board state change. No counterplay window once fired — you just deal with the aftermath."
+      },
+      "poke_3_to_5s": {
+        "duration": "3-5 seconds",
+        "pieces_affected": "3-10 pieces",
+        "examples": "Ink Splash (4s), Screen Shake (5s), Mirage (5s)",
+        "design_note": "Short enough that timing matters. Firing Ink Splash right when opponent is setting up a T-Spin is much more valuable than random firing. Creates 'read your opponent' skill."
+      },
+      "tactical_6_to_10s": {
+        "duration": "6-10 seconds",
+        "pieces_affected": "6-20 pieces",
+        "examples": "Reverse Controls (6s), Speed Up (8s), Tilt (10s)",
+        "design_note": "Long enough to force adaptation. Opponent can't just 'wait it out' — they MUST place pieces during this window. This is where skill differentiation happens: good players adapt, weak players panic."
+      },
+      "strategic_12_to_15s": {
+        "duration": "12-15 seconds",
+        "pieces_affected": "12-30 pieces",
+        "examples": "Wide Load (15s), Narrow Escape (15s), Shrink Ceiling (12s), Cascade Multiplier (15s)",
+        "design_note": "Deliberately long for expensive abilities. 15 seconds is ~12-25% of a match — a significant phase. Board geometry effects MUST be long because the punishment IS the mental adjustment. A 5-second Wide Load would end before the opponent even recalibrates. 15 seconds means they must actually PLAY in the altered board, creating memorable moments."
+      },
+      "conditional": {
+        "duration": "Until triggered or expired",
+        "examples": "Shield (15s or until hit), Reflect (12s or until hit)",
+        "design_note": "Time-limited but trigger-based. Creates mind games: does opponent know you have Shield up? Do they bait it with a cheap ability?"
+      }
+    },
+    "narrow_escape_duration_answer": "15 seconds is correct, not too short. At 15s with pieces falling every 0.5-1s, the player places 15-30 pieces on the narrowed board. That's enough to clear 3-8 rows on the easier 7-column board, generating meaningful star income. Shorter durations (say 8s) would end before the player can capitalize on the easier row clears, making it overpriced at 100★."
+  },
+
+  "ability_categories": {
+    "debuff_visual": "Obscure or distort opponent's visual information",
+    "debuff_board": "Directly alter opponent's board state",
+    "debuff_controls": "Change how opponent's pieces behave or are controlled",
+    "debuff_geometry": "Alter the shape/size/physics of opponent's playfield",
+    "buff_board": "Improve your own board state",
+    "buff_pieces": "Give yourself better or easier pieces",
+    "buff_economy": "Increase your star earning rate",
+    "defensive": "Counter, block, or cleanse opponent's abilities"
+  },
+
+  "balance_rules": [
+    "Every debuff has counterplay: either a specific defensive ability, a skill-based adaptation, or both.",
+    "Buffs are never more cost-efficient than debuffs at the same tier. Attacking should be cheaper than defending or self-improving, to encourage aggression.",
+    "Board geometry effects are high-cost because they stack multiplicatively with other effects (Wide Load + Blind Spot = nightmare).",
+    "Visual debuffs are cheapest because skilled players can partially play through them from memory.",
+    "Control debuffs are mid-cost because they're universally disruptive regardless of skill level.",
+    "No ability should be strictly better than another at the same cost. Each should have a unique situation where it's optimal.",
+    "Starter abilities must form a competitively viable loadout. No 'training wheels' that get replaced."
+  ],
+
+  "costFactor": 1,
+
+  "abilities": {
+
+    "________TIER_1_FREE________": "=== STARTER ABILITIES (Free, unlockCost: 0) ===",
+
+    "earthquake": {
+      "id": "earthquake",
+      "type": "earthquake",
+      "name": "Earthquake",
+      "shortName": "QUAKE",
+      "description": "Shift each of opponent's rows 1 cell left or right randomly",
+      "cost": 40,
+      "duration": 0,
+      "category": "debuff_board",
+      "unlockTier": 1,
+      "unlockCost": 0,
+      "balance_notes": "Cheapest board disruption. Creates small gaps but rarely fatal on its own. Good opener to soften opponent. Counterplay: clean, flat stacking minimizes damage since rows shift intact. Synergy: great follow-up to Blind Spot (shuffles the board they just memorized).",
+      "implementation": "For each row on opponent's board, shift all cells 1 position left or right (50/50 random). Cells pushed off-edge wrap to the other side OR are destroyed (design choice). Rows with zero cells are unaffected."
+    },
+
+    "screen_shake": {
+      "id": "screen_shake",
+      "type": "screen_shake",
+      "name": "Screen Shake",
+      "shortName": "CHAOS",
+      "description": "Shake opponent's screen for 5 seconds",
+      "cost": 40,
+      "duration": 5000,
+      "category": "debuff_visual",
+      "unlockTier": 1,
+      "unlockCost": 0,
+      "balance_notes": "Pure annoyance, not information denial. Skilled players can play through it (the board data is still visible, just jittering). Cheaper than Ink Splash because it's less impactful. Best used to stack with other debuffs — Screen Shake + Speed Up is much worse than either alone.",
+      "implementation": "Apply sinusoidal offset to opponent's board rendering. Amplitude: 3-5px. Frequency: ~15Hz. Affects board container only, not UI/ability bar."
+    },
+
+    "ink_splash": {
+      "id": "ink_splash",
+      "type": "ink_splash",
+      "name": "Ink Splash",
+      "shortName": "INK",
+      "description": "Splatter 5 opaque ink blobs on random areas of opponent's board for 4 seconds",
+      "cost": 35,
+      "duration": 4000,
+      "category": "debuff_visual",
+      "unlockTier": 1,
+      "unlockCost": 0,
+      "balance_notes": "Cheapest ability in the game. Partial information denial — blocks are still visible between ink blobs. Skilled players who know their board layout can play through it. Short duration means timing matters: fire it when opponent is mid-setup for maximum disruption.",
+      "implementation": "Render 5 semi-transparent black/dark blobs at random positions overlaid on opponent's board. Blobs should be irregular shapes (not perfect circles) covering ~15-20% of board area total. Fade out over final 0.5s."
+    },
+
+    "mini_blocks": {
+      "id": "mini_blocks",
+      "type": "mini_blocks",
+      "name": "Mini Blocks",
+      "shortName": "TINY",
+      "description": "Your next 5 pieces become 2-cell dominoes (easier to fill gaps)",
+      "cost": 35,
+      "duration": 5,
+      "category": "buff_pieces",
+      "unlockTier": 1,
+      "unlockCost": 0,
+      "balance_notes": "Cheapest buff. Great for patching holes in messy stacks. Low ceiling — dominoes can't clear rows by themselves (you need 5 dominoes to fill one row). Best used defensively after receiving debuffs that messed up your board.",
+      "implementation": "Replace next 5 pieces in queue with random 2-cell domino shapes (horizontal or vertical). These follow normal gravity, rotation (90° only), and placement rules. Count down from 5, display counter."
+    },
+
+    "fill_holes": {
+      "id": "fill_holes",
+      "type": "fill_holes",
+      "name": "Fill Holes",
+      "shortName": "PATCH",
+      "description": "Fill up to 4 enclosed empty cells on your board, prioritizing lowest cells first",
+      "cost": 75,
+      "duration": 0,
+      "category": "buff_board",
+      "unlockTier": 1,
+      "unlockCost": 0,
+      "balance_notes": "Capped at 4 cells maximum. Lowest-first priority prevents exploit where players intentionally create a large hollow structure then fill it all at once. 4 cells = potentially completing 1-2 rows if holes are aligned. Rewards clean play with small gaps rather than intentionally messy play. At 75★ it's a significant investment for a self-buff.",
+      "implementation": "Scan board bottom-to-top for empty cells where all 4 cardinal neighbors (up/down/left/right) are either filled cells or walls. Fill the first 4 found. Trigger line-clear check after filling."
+    },
+
+    "clear_rows": {
+      "id": "clear_rows",
+      "type": "clear_rows",
+      "name": "Clear Rows",
+      "shortName": "SWEEP",
+      "description": "Instantly clear your bottom 4 rows",
+      "cost": 100,
+      "duration": 0,
+      "category": "buff_board",
+      "unlockTier": 1,
+      "unlockCost": 0,
+      "balance_notes": "Emergency survival tool. Most expensive starter ability. Reduced from 5 to 4 rows for balance. Wastes value on a clean board (if bottom rows are empty, you're paying 100★ for nothing). Best saved as a panic button when board is dangerously high. Does NOT earn line-clear stars (it's an ability effect, not a line clear).",
+      "implementation": "Remove all cells in rows 1-4 (bottom). Shift remaining rows down. This does NOT trigger line-clear star rewards — otherwise it would partially pay for itself."
+    },
+
+    "________TIER_2_100_COINS________": "=== TIER 2 (unlockCost: 100 coins each) ===",
+
+    "random_spawner": {
+      "id": "random_spawner",
+      "type": "random_spawner",
+      "name": "Random Spawner",
+      "shortName": "PEST",
+      "description": "Spawn 4 random isolated blocks on opponent's board",
+      "cost": 45,
+      "duration": 0,
+      "category": "debuff_board",
+      "unlockTier": 2,
+      "unlockCost": 100,
+      "balance_notes": "Cheap harass. Blocks spawn in positions that are hard to clear (isolated from existing structures). Can occasionally help opponent if blocks land in useful spots — the randomness creates variance. Think of it as 'sand in the gears'.",
+      "implementation": "Find 4 empty cells that have no filled neighbors within Manhattan distance 1. Fill them with gray blocks. If fewer than 4 such cells exist, fill what's available."
+    },
+
+    "garbage_rain": {
+      "id": "garbage_rain",
+      "type": "garbage_rain",
+      "name": "Garbage Rain",
+      "shortName": "JUNK",
+      "description": "Add 2 garbage rows to the bottom of opponent's board",
+      "cost": 55,
+      "duration": 0,
+      "category": "debuff_board",
+      "unlockTier": 2,
+      "unlockCost": 100,
+      "balance_notes": "Direct damage, like standard Tetris garbage. 2 rows is modest (a Quad sends 4 in standard Tetris). Each garbage row has one random gap. At 55★ it's cost-efficient harass but low impact. Multiple uses stack up. Counterplay: downstacking (a core Tetris skill).",
+      "implementation": "Insert 2 garbage rows at bottom (each row is 9 filled cells + 1 random gap). Push existing board up by 2. If this causes top-out, normal loss condition applies."
+    },
+
+    "speed_up_opponent": {
+      "id": "speed_up_opponent",
+      "type": "speed_up_opponent",
+      "name": "Speed Up",
+      "shortName": "RUSH",
+      "description": "Opponent's pieces fall 2.5x faster for 8 seconds",
+      "cost": 60,
+      "duration": 8000,
+      "category": "debuff_controls",
+      "unlockTier": 2,
+      "unlockCost": 100,
+      "balance_notes": "Very effective against slow, methodical players. Less effective against fast players who already play at high gravity. 2.5x multiplier on gravity (not instant drop). 8 seconds = ~8-16 pieces affected. Counterplay: hard-drop everything (removes gravity from the equation). Reduced from 3x/10s to 2.5x/8s.",
+      "implementation": "Multiply opponent's gravity value by 2.5 for 8 seconds. Display timer on opponent's board. Does not affect lock delay."
+    },
+
+    "circle_bomb": {
+      "id": "circle_bomb",
+      "type": "circle_bomb",
+      "name": "Circle Bomb",
+      "shortName": "O BOOM",
+      "description": "Your next piece explodes in a 3-cell radius on placement, clearing nearby blocks",
+      "cost": 65,
+      "duration": 1,
+      "category": "buff_board",
+      "unlockTier": 2,
+      "unlockCost": 100,
+      "balance_notes": "Reliable board-clearing tool. The 3-cell radius is fixed, so skilled placement maximizes value (center the explosion on the densest area). Slightly cheaper than Cross Firebomb but less precise. Doesn't clear full rows — it makes a circular hole.",
+      "implementation": "Mark next piece as 'bomb'. On placement, clear all filled cells within Chebyshev distance 3 from the piece's center. Show explosion VFX. Cleared cells do NOT count as line clears for star earning."
+    },
+
+    "cascade_multiplier": {
+      "id": "cascade_multiplier",
+      "type": "cascade_multiplier",
+      "name": "Cascade Multiplier",
+      "shortName": "DOUBLE",
+      "description": "Double all stars earned from line clears for 15 seconds",
+      "cost": 70,
+      "duration": 15000,
+      "category": "buff_economy",
+      "unlockTier": 2,
+      "unlockCost": 100,
+      "balance_notes": "Pure economy play. Zero immediate board impact. At 70★ cost, it pays for itself if you earn 70+ stars from line clears during the 15-second window (roughly 6+ singles or 3+ doubles). The long duration (15s) gives time to capitalize. Enables 'save up for ultimate' strategies. Pairs with Narrow Escape for accelerated farming.",
+      "implementation": "Apply 2x multiplier to all line-clear star rewards (not passive regen, not combo/B2B bonuses) for 15 seconds. Display golden glow on star counter. Does not stack with itself."
+    },
+
+    "shield": {
+      "id": "shield",
+      "type": "shield",
+      "name": "Shield",
+      "shortName": "GUARD",
+      "description": "Block the next enemy ability that targets you. Lasts 15 seconds or until triggered.",
+      "cost": 80,
+      "duration": 15000,
+      "category": "defensive",
+      "unlockTier": 2,
+      "unlockCost": 100,
+      "balance_notes": "Core defensive ability. Blocks exactly ONE incoming debuff, then expires. The 15-second window creates timing decisions: use too early = might expire before opponent attacks. Use too late = eat the debuff. Opponent can bait Shield with a cheap 35★ Ink Splash, then follow with an expensive debuff. This creates a poker-like meta-game. At 80★ it's pricier than most cheap debuffs, so using Shield against a 35★ ability is a net-negative trade.",
+      "implementation": "Set a 'shielded' flag on player for 15 seconds. When an opponent's ability targets this player, consume the shield instead of applying the effect. Display shield icon. Play absorption VFX when triggered."
+    },
+
+    "time_warp": {
+      "id": "time_warp",
+      "type": "time_warp",
+      "name": "Time Warp",
+      "shortName": "SLOW",
+      "description": "Slow YOUR piece fall speed to 0.5x for 10 seconds, giving more thinking time",
+      "cost": 50,
+      "duration": 10000,
+      "category": "buff_pieces",
+      "unlockTier": 2,
+      "unlockCost": 100,
+      "balance_notes": "Defensive buff that's most valuable for less skilled players or during crisis moments. A skilled player who already hard-drops everything gets zero value from this. Creates an interesting skill-inverse: weaker players get more value. This is intentional — it's a 'training wheel' ability that naturally falls out of loadouts as players improve. Counters Speed Up if cast on yourself while Speed Up is active (0.5 × 2.5 = 1.25x, nearly normal).",
+      "implementation": "Multiply your own gravity by 0.5 for 10 seconds. If Speed Up is active, multiply the combined values. Display hourglass icon."
+    },
+
+    "________TIER_3_300_COINS________": "=== TIER 3 (unlockCost: 300 coins each) ===",
+
+    "reverse_controls": {
+      "id": "reverse_controls",
+      "type": "reverse_controls",
+      "name": "Reverse Controls",
+      "shortName": "FLIP",
+      "description": "Swap opponent's left and right controls for 6 seconds",
+      "cost": 70,
+      "duration": 6000,
+      "category": "debuff_controls",
+      "unlockTier": 3,
+      "unlockCost": 300,
+      "balance_notes": "Extremely disorienting for first 2-3 seconds, then players partially adapt. Diminishing returns on repeated use (players build mental calluses). At 6 seconds (reduced from 8), it's painful but survivable. Counterplay: hard-drop immediately, ride it out. Stacks devastatingly with Tilt.",
+      "implementation": "Swap left/right key mappings for opponent for 6 seconds. Rotation is NOT reversed (that would be too much). Display mirrored arrow icon on opponent's board."
+    },
+
+    "mirage": {
+      "id": "mirage",
+      "type": "mirage",
+      "name": "Mirage",
+      "shortName": "DECOY",
+      "description": "Opponent's piece preview queue shows wrong pieces for 5 seconds",
+      "cost": 75,
+      "duration": 5000,
+      "category": "debuff_visual",
+      "unlockTier": 3,
+      "unlockCost": 300,
+      "balance_notes": "Information warfare. Devastating to players who pre-plan from their queue (most skilled players). Useless against players who don't look at preview (beginners). Creates a skill-inverse where it's MOST effective against the BEST players, which is a unique and interesting property. Counterplay: rely on current piece only, ignore queue. 5 seconds affects ~5-10 pieces of planning.",
+      "implementation": "For 5 seconds, replace the visual rendering of opponent's next-queue pieces with random incorrect piece shapes. The actual piece that spawns is correct — only the PREVIEW is wrong. This means the first moment a piece spawns, the deception ends for that piece."
+    },
+
+    "gold_digger": {
+      "id": "gold_digger",
+      "type": "gold_digger",
+      "name": "Gold Digger",
+      "shortName": "MINE",
+      "description": "Remove 6 random filled cells from opponent's board",
+      "cost": 75,
+      "duration": 0,
+      "category": "debuff_board",
+      "unlockTier": 3,
+      "unlockCost": 300,
+      "balance_notes": "High variance ability. Can break nearly-complete rows (devastating), create unreachable holes (annoying), or accidentally help opponent by clearing clutter (backfire). The randomness is the design feature, not a bug — it creates memorable moments. 6 cells = potentially ruining 1-2 row completions.",
+      "implementation": "Select 6 random filled cells on opponent's board. Remove them (leave empty). Apply gravity (floating blocks fall). Check for any row clears that result from gravity settling."
+    },
+
+    "glue": {
+      "id": "glue",
+      "type": "glue",
+      "name": "Glue",
+      "shortName": "STICK",
+      "description": "Opponent's next 3 pieces stick to adjacent blocks — clearing rows drags stuck neighbors into the gap",
+      "cost": 80,
+      "duration": 3,
+      "category": "debuff_board",
+      "unlockTier": 3,
+      "unlockCost": 300,
+      "balance_notes": "Subtle but powerful. No visible impact on placement — the pain comes when opponent tries to clear lines. Glued blocks that are part of a cleared row pull adjacent non-cleared blocks down into the gap, creating cascading mess. Rewards patient play: opponent may not realize the trap until they clear a line and their board gets worse. Counterplay: avoid clearing lines for 3 pieces (extremely hard to do intentionally).",
+      "implementation": "Tag next 3 pieces as 'glued'. When a glued piece is part of a cleared row, any filled cells orthogonally adjacent to glued cells that are NOT in the cleared row are pulled down one row. This can cascade. Display sticky VFX on affected pieces."
+    },
+
+    "column_swap": {
+      "id": "column_swap",
+      "type": "column_swap",
+      "name": "Column Swap",
+      "shortName": "SWAP",
+      "description": "Swap two random columns on opponent's board",
+      "cost": 85,
+      "duration": 0,
+      "category": "debuff_board",
+      "unlockTier": 3,
+      "unlockCost": 300,
+      "balance_notes": "Surgical disruption. Swapping two columns can break multiple nearly-complete rows simultaneously. Unlike Earthquake (which shifts within rows), Column Swap rearranges vertically-aligned structures. Particularly effective against opponents who stack with a clean well on one side — swapping the well column with a filled column is devastating.",
+      "implementation": "Select 2 distinct random columns (0-9). Swap all cells in those two columns. Check for any row clears that result."
+    },
+
+    "purge": {
+      "id": "purge",
+      "type": "purge",
+      "name": "Purge",
+      "shortName": "WIPE",
+      "description": "Remove ALL active ability effects from both players",
+      "cost": 60,
+      "duration": 0,
+      "category": "defensive",
+      "unlockTier": 3,
+      "unlockCost": 300,
+      "balance_notes": "Emergency reset button. Crucially, it removes YOUR buffs too — so if you have Cascade Multiplier running, Purge kills it. This prevents 'free cleanse' scenarios. Best used when opponent has stacked 2-3 debuffs on you and you have no active buffs to lose. The 60★ cost is deliberately cheap — you want this available when you're in trouble. Useless if no effects are active (wasted 60★).",
+      "implementation": "Clear all active timed effects on both players. This includes: all visual debuffs, control changes, geometry changes, economy buffs, Shield, Reflect — everything with a duration. Does NOT undo instant effects (Earthquake, Garbage Rain, etc. that already resolved)."
+    },
+
+    "fog_of_war": {
+      "id": "fog_of_war",
+      "type": "fog_of_war",
+      "name": "Fog of War",
+      "shortName": "FOG",
+      "description": "Opponent cannot see YOUR board for 8 seconds",
+      "cost": 90,
+      "duration": 8000,
+      "category": "debuff_visual",
+      "unlockTier": 3,
+      "unlockCost": 300,
+      "balance_notes": "Unique reverse-information-denial. Instead of obscuring THEIR view of their own board, you obscure THEIR view of YOUR board. This means they can't react to your strategy (can't see if you're building for a Tetris, can't see how close you are to casting). Most valuable in high-level play where players constantly monitor opponent's board. Useless in low-level play where players rarely look at opponent. Counterplay: focus on your own play, ignore opponent.",
+      "implementation": "For 8 seconds, replace opponent's view of your board with a fog/static overlay. Your own view is unaffected. Display eye-slash icon."
+    },
+
+    "________TIER_4_600_COINS________": "=== TIER 4 (unlockCost: 600 coins each) ===",
+
+    "rotation_lock": {
+      "id": "rotation_lock",
+      "type": "rotation_lock",
+      "name": "Rotation Lock",
+      "shortName": "LOCK",
+      "description": "Disable opponent's piece rotation for 4 seconds",
+      "cost": 85,
+      "duration": 4000,
+      "category": "debuff_controls",
+      "unlockTier": 4,
+      "unlockCost": 600,
+      "balance_notes": "Forces opponent to place pieces in spawn orientation. Devastating for S/Z/T/L/J pieces (which usually NEED rotation), mild for O piece (never rotates) and I piece (can still be placed horizontally). At 4 seconds (~4-8 pieces), it's a short but intense window of forced suboptimal play. Counterplay: hold the awkward piece, wait for lock to expire. Reduced from 5s to 4s.",
+      "implementation": "Disable all rotation inputs for opponent for 4 seconds. Pieces can still move left/right and drop. Display lock icon on opponent's board."
+    },
+
+    "blind_spot": {
+      "id": "blind_spot",
+      "type": "blind_spot",
+      "name": "Blind Spot",
+      "shortName": "DARK",
+      "description": "Hide the bottom 5 rows of opponent's board for 5 seconds",
+      "cost": 100,
+      "duration": 5000,
+      "category": "debuff_visual",
+      "unlockTier": 4,
+      "unlockCost": 600,
+      "balance_notes": "Premium visual debuff targeting the most critical area (where pieces land, where gaps are). Players with good board memory can survive. 5 seconds is short enough that only 5-10 placements are blind. Devastating combo: Earthquake (shuffles rows) then Blind Spot (hides the shuffled result). Counterplay: memorize your board state before the effect hits, or stack conservatively on the visible portion.",
+      "implementation": "Render bottom 5 rows of opponent's board as solid black for 5 seconds. Ghost piece preview in hidden zone is also hidden. Piece preview and top portion of board remain visible."
+    },
+
+    "cross_firebomb": {
+      "id": "cross_firebomb",
+      "type": "cross_firebomb",
+      "name": "Cross Firebomb",
+      "shortName": "X FIRE",
+      "description": "Your next piece explodes in a cross pattern: 3 full rows + 3 full columns centered on placement",
+      "cost": 100,
+      "duration": 1,
+      "category": "buff_board",
+      "unlockTier": 4,
+      "unlockCost": 600,
+      "balance_notes": "Precision board-clearing. More expensive than Circle Bomb (65★) but much more powerful — clears entire rows and columns, not just a radius. Skilled placement can clear exactly the problem areas. A well-placed Cross Firebomb can recover from a nearly-topped-out board. Does NOT earn line-clear stars.",
+      "implementation": "Mark next piece as 'firebomb'. On placement, clear all cells in the 3 rows and 3 columns centered on the piece (±1 row, ±1 column from center). Show cross explosion VFX. Remaining blocks fall due to gravity."
+    },
+
+    "weird_shapes": {
+      "id": "weird_shapes",
+      "type": "weird_shapes",
+      "name": "Weird Shapes",
+      "shortName": "CURSED",
+      "description": "Opponent's next piece becomes a 3x3 hollow square frame (8 cells)",
+      "cost": 100,
+      "duration": 1,
+      "category": "debuff_controls",
+      "unlockTier": 4,
+      "unlockCost": 600,
+      "balance_notes": "Single-piece disruption with high impact. The 3x3 hollow frame is extremely hard to place cleanly — it creates internal holes wherever it lands. Opponent can mitigate by holding the weird piece and using their held piece instead, but they lose their hold slot. Only affects 1 piece, so the 100★ cost buys concentrated disruption vs spread harassment.",
+      "implementation": "Replace opponent's next piece with a 3x3 frame shape (8 filled outer cells, 1 empty center). This piece follows normal movement/rotation rules. It cannot be held (or if held, the piece in hold is swapped normally but the weird shape persists)."
+    },
+
+    "narrow_escape": {
+      "id": "narrow_escape",
+      "type": "narrow_escape",
+      "name": "Narrow Escape",
+      "shortName": "SLIM",
+      "description": "Narrow YOUR board from 10 to 7 columns for 15 seconds. Rows only need 7 cells to clear.",
+      "cost": 100,
+      "duration": 15000,
+      "category": "buff_board",
+      "unlockTier": 4,
+      "unlockCost": 600,
+      "balance_notes": "Risk/reward self-buff. 30% easier to clear rows (7 cells instead of 10) BUT 30% less maneuvering room AND if stored columns had blocks, they come back after 15s and might cause problems. Pairs incredibly well with Cascade Multiplier (farm rows fast with easy clears + double star earnings). The risk is that your 3 stored right columns may create a mess when they return.",
+      "implementation": "Shrink player's board to leftmost 7 columns. Rightmost 3 columns and their blocks are stored (hidden off-screen). Row clears require 7 filled cells. After 15s, stored columns return to their original position. Any blocks in stored columns reappear. Gravity applies to reappeared blocks. Check for row clears."
+    },
+
+    "reflect": {
+      "id": "reflect",
+      "type": "reflect",
+      "name": "Reflect",
+      "shortName": "MIRROR",
+      "description": "The next enemy ability that targets you is reflected back at them. Lasts 12 seconds or until triggered.",
+      "cost": 90,
+      "duration": 12000,
+      "category": "defensive",
+      "unlockTier": 4,
+      "unlockCost": 600,
+      "balance_notes": "Higher risk/reward than Shield (80★). Shield just blocks — Reflect sends it back. If opponent fires a cheap 35★ Ink Splash, you spent 90★ to reflect 35★ of damage (bad trade). If they fire Death Cross (250★), you just reflected a game-changing ability for 90★ (incredible trade). Creates mind games: does the opponent know you have Reflect? Do they bait it? Do they avoid casting entirely? Shorter window than Shield (12s vs 15s) because it's more powerful when triggered.",
+      "implementation": "Set 'reflect' flag on player for 12 seconds. When opponent's ability targets this player, consume Reflect and apply the ability to the OPPONENT instead. Display mirror icon. Play reflection VFX when triggered. If the reflected ability is a buff (e.g., opponent mistakenly cast a buff-type?), it still targets opponent."
+    },
+
+    "________TIER_5_1200_COINS________": "=== TIER 5 (unlockCost: 1200 coins each) ===",
+
+    "shapeshifter": {
+      "id": "shapeshifter",
+      "type": "shapeshifter",
+      "name": "Shapeshifter",
+      "shortName": "MORPH",
+      "description": "Opponent's next 3 pieces change shape randomly every 400ms while falling",
+      "cost": 110,
+      "duration": 3,
+      "category": "debuff_controls",
+      "unlockTier": 5,
+      "unlockCost": 1200,
+      "balance_notes": "Set to 3 pieces as you suggested. Each piece morphs between random standard Tetris shapes every 400ms. This forces fast hard-drops (lock in whatever shape it currently is) or acceptance of random shapes. Skilled counterplay: time your hard-drop to lock the desired shape. High skill ceiling on both sides — the caster wants to fire it during critical setup moments, the target wants to time drops perfectly. 400ms gives ~2-3 shape changes per second of fall time.",
+      "implementation": "Tag opponent's next 3 pieces as 'morphing'. While a morphing piece is falling, every 400ms replace it with a random standard piece (IJLOSTZ) at the same position, maintaining current rotation state. The piece locks normally when it touches the stack. Display morphing VFX (shimmer/glitch effect)."
+    },
+
+    "shrink_ceiling": {
+      "id": "shrink_ceiling",
+      "type": "shrink_ceiling",
+      "name": "Shrink Ceiling",
+      "shortName": "CRUSH",
+      "description": "Lower the top-out line by 3 rows for 12 seconds",
+      "cost": 110,
+      "duration": 12000,
+      "category": "debuff_geometry",
+      "unlockTier": 5,
+      "unlockCost": 1200,
+      "balance_notes": "Creates immediate pressure if opponent's stack is high. Standard board is 20 rows; this makes it effectively 17 rows. If opponent's highest block is at row 15, they now have only 2 rows of breathing room instead of 5. Useless if their board is clean (plenty of space). Best used reactively when you see them struggling. 12 seconds at this reduced height is very threatening. Counterplay: clear rows fast, keep board low.",
+      "implementation": "Draw a visible 'death line' 3 rows lower than normal top-out line. Pieces that lock above this line trigger top-out. After 12s, death line returns to normal. Display crushing ceiling VFX."
+    },
+
+    "wide_load": {
+      "id": "wide_load",
+      "type": "wide_load",
+      "name": "Wide Load",
+      "shortName": "WIDE",
+      "description": "Widen opponent's board from 10 to 13 columns for 15 seconds. Rows need 13 cells to clear.",
+      "cost": 120,
+      "duration": 15000,
+      "category": "debuff_geometry",
+      "unlockTier": 5,
+      "unlockCost": 1200,
+      "balance_notes": "Board geometry mutation. Very strong — 30% harder to complete rows. But the extra 3 columns provide maneuvering space, which is a silver lining for the opponent. When the effect expires, blocks in the extra columns are destroyed. This can accidentally help or hurt. 15-second duration is justified by the 120★ cost — the mental adjustment IS the punishment and takes 3-5 seconds alone. Viral potential: spectators love seeing the board change shape.",
+      "implementation": "Expand opponent's board to 13 columns. Existing blocks stay left-aligned. 3 new empty columns appear on right. Row clears now require 13 filled cells. After 15s, rightmost 3 columns and any blocks in them are removed. Remaining blocks are unaffected. Standard pieces continue to spawn (they're small relative to the wider board, making coverage harder)."
+    },
+
+    "tilt": {
+      "id": "tilt",
+      "type": "tilt",
+      "name": "Tilt",
+      "shortName": "LEAN",
+      "description": "Gravity pulls opponent's falling pieces diagonally (random direction) for 10 seconds",
+      "cost": 160,
+      "duration": 10000,
+      "category": "debuff_controls",
+      "unlockTier": 5,
+      "unlockCost": 1200,
+      "balance_notes": "Physics mutation. Pieces drift 1 column sideways for every 2 rows they fall. Direction (left or right) is chosen randomly when cast. At normal gravity, an I-piece dropped from the top would drift ~5 columns sideways. Completely changes placement strategy. Skilled counterplay: compensate by holding opposite direction while dropping. Stacks brutally with Speed Up (fast + drifting = near-impossible precision). 10 seconds at 160★ — a premium debuff that changes the physics of the game.",
+      "implementation": "For 10 seconds, apply horizontal drift to opponent's falling pieces. Every 2 rows of downward movement, shift piece 1 column in the tilt direction (left or right, chosen at cast time). If piece hits a wall, it stops drifting horizontally but continues falling. Display tilted arrow indicator."
+    },
+
+    "flip_board": {
+      "id": "flip_board",
+      "type": "flip_board",
+      "name": "Flip Board",
+      "shortName": "UPSIDE",
+      "description": "Rotate opponent's entire board 180 degrees. Gravity settles floating blocks after flip.",
+      "cost": 180,
+      "duration": 0,
+      "category": "debuff_board",
+      "unlockTier": 5,
+      "unlockCost": 1200,
+      "balance_notes": "Spectacular chaos. Less destructive than Death Cross on average but more disorienting. After the 180° rotation, gravity pulls all floating blocks down, which can accidentally clear rows for the opponent (silver lining). The 'highlight reel' ability — every use creates a memorable moment. At 180★, it requires significant resource investment. A player spending 180★ on Flip Board instead of 2-3 cheaper abilities is making a big strategic bet.",
+      "implementation": "Rotate all cells on opponent's board 180° (row 1 becomes row 20, column 1 becomes column 10, etc.). After rotation, apply gravity: all floating blocks fall until resting. Check for and execute any line clears that result from gravity settling. Show dramatic rotation VFX."
+    },
+
+    "death_cross": {
+      "id": "death_cross",
+      "type": "death_cross",
+      "name": "Death Cross",
+      "shortName": "☠ CROSS",
+      "description": "Invert both diagonals on opponent's board: filled cells become empty, empty cells become filled",
+      "cost": 250,
+      "duration": 0,
+      "category": "debuff_board",
+      "unlockTier": 5,
+      "unlockCost": 1200,
+      "balance_notes": "The ultimate ability. 250★ is the most expensive in the game. A median player generates ~800★ per match — Death Cross costs 31% of their entire match budget. Using it means forgoing 3-7 other abilities. Can backfire: if opponent has a messy board with lots of filled cells, inverting might create a cleaner board with more empty space. Most devastating against a clean, organized board (lots of empty space becomes lots of filled cells). Counterplay: keep your board messy (counterintuitive!), or use Reflect (90★ to redirect 250★ of damage). No delay, no warning — it's instant. The 'nuclear option'.",
+      "implementation": "For each cell on opponent's board: if filled, make empty; if empty, make filled. Apply gravity to all resulting floating blocks. Check for and execute line clears. The resulting board state can be wildly different depending on the opponent's board composition."
+    },
+
+    "________ADDITIONAL_ABILITIES________": "=== ADDITIONAL ABILITIES (various tiers) ===",
+
+    "gravity_well": {
+      "id": "gravity_well",
+      "type": "gravity_well",
+      "name": "Gravity Well",
+      "shortName": "PULL",
+      "description": "All floating blocks on opponent's board collapse downward, filling gaps",
+      "cost": 85,
+      "duration": 0,
+      "category": "debuff_board",
+      "unlockTier": 3,
+      "unlockCost": 300,
+      "balance_notes": "Anti-overhang ability. If opponent has built overhangs for T-Spin setups, Gravity Well collapses them, ruining the setup. Also fills in gaps under overhangs. Can accidentally help opponent if their floating blocks create row clears when they settle. Most effective against players using advanced T-Spin stacking techniques.",
+      "implementation": "For every column, drop all blocks to the lowest available position (close all vertical gaps). Apply row-clear check after settling. Show gravity-pull VFX."
+    },
+
+    "preview_steal": {
+      "id": "preview_steal",
+      "type": "preview_steal",
+      "name": "Preview Steal",
+      "shortName": "SPY",
+      "description": "See opponent's next 5 pieces for 10 seconds",
+      "cost": 55,
+      "duration": 10000,
+      "category": "buff_pieces",
+      "unlockTier": 2,
+      "unlockCost": 100,
+      "balance_notes": "Information advantage. Knowing opponent's pieces lets you predict their strategy (if they have an I-piece coming, they'll probably set up a Tetris). Most valuable in high-level play where players can exploit this info. Useless if you don't know how to read opponent's play. Cheap at 55★ because the value depends entirely on player skill.",
+      "implementation": "Display opponent's next-5 queue in a small overlay on your screen for 10 seconds. Does not affect opponent's display."
+    },
+
+    "overcharge": {
+      "id": "overcharge",
+      "type": "overcharge",
+      "name": "Overcharge",
+      "shortName": "SURGE",
+      "description": "Your next 3 abilities cost 40% less stars",
+      "cost": 50,
+      "duration": 3,
+      "category": "buff_economy",
+      "unlockTier": 3,
+      "unlockCost": 300,
+      "balance_notes": "Economy ability that enables burst combos. Pay 50★ now to save 40% on the next 3 abilities. If your next 3 abilities average 80★ each, you save 96★ total, net benefit of 46★. But you must actually USE 3 abilities quickly to capitalize — if the match ends or you don't have enough stars, the discount is wasted. Enables 'ability burst' turns where you fire 3-4 abilities in rapid succession. The 40% discount means a 100★ ability becomes 60★, and even Death Cross becomes 150★.",
+      "implementation": "Set a counter: next 3 abilities cast by this player cost 60% of normal (round down). Counter decrements on each ability use. Display 'OVERCHARGED' indicator with count remaining. Does not stack with itself (casting Overcharge while Overcharge is active refreshes the counter to 3)."
+    },
+
+    "magnet": {
+      "id": "magnet",
+      "type": "magnet",
+      "name": "Magnet",
+      "shortName": "SNAP",
+      "description": "Your next 3 pieces snap to the optimal column (the column where they'd clear the most lines or fill the most gaps)",
+      "cost": 90,
+      "duration": 3,
+      "category": "buff_pieces",
+      "unlockTier": 4,
+      "unlockCost": 600,
+      "balance_notes": "Auto-aim for puzzle games. The game calculates the best placement and highlights it. Player can still override. Most useful when board is messy and optimal placement isn't obvious. Less useful for skilled players who already see optimal placements. Creates an accessibility bridge for weaker players. At 90★ it's expensive for a buff, reflecting its power to essentially 'play for you' briefly.",
+      "implementation": "For next 3 pieces, calculate the placement (column + rotation) that maximizes: (rows cleared × 10) + (holes filled × 5) - (new holes created × 8). Show the optimal placement as a bright ghost piece. Player can still manually place elsewhere. If player does nothing, piece auto-places at optimal position after lock delay."
+    },
+
+    "clone": {
+      "id": "clone",
+      "type": "clone",
+      "name": "Clone",
+      "shortName": "COPY",
+      "description": "Copy and immediately cast the last ability your opponent used",
+      "cost": 65,
+      "duration": 0,
+      "category": "debuff_board",
+      "unlockTier": 3,
+      "unlockCost": 300,
+      "balance_notes": "Reactive ability. Its power depends entirely on what opponent just used. If opponent used Death Cross (250★), you get it for 65★ — incredible value. If opponent used Ink Splash (35★), you overpaid. Creates a meta-game: do opponents avoid using their best abilities because you might clone them? The 'copycat tax' of 65★ is flat regardless of what you copy, creating interesting cost dynamics. If opponent hasn't used any ability yet, Clone does nothing (wasted 65★).",
+      "implementation": "Check the last ability opponent cast this match. If none, refund stars and show 'nothing to copy'. Otherwise, apply that ability's effect as if you cast it (debuffs target opponent, buffs target you). Use original ability's parameters. Does not count as that ability for Clone purposes (can't infinite-clone)."
+    },
+
+    "quicksand": {
+      "id": "quicksand",
+      "type": "quicksand",
+      "name": "Quicksand",
+      "shortName": "SINK",
+      "description": "Opponent's bottom 2 rows sink off-screen every 4 seconds for 12 seconds (3 sinks total)",
+      "cost": 110,
+      "duration": 12000,
+      "category": "debuff_board",
+      "unlockTier": 4,
+      "unlockCost": 600,
+      "balance_notes": "Delayed, repeated damage. Unlike Garbage Rain (instant 2 rows), Quicksand removes bottom rows over time, giving opponent warning and counterplay opportunity. Each sink removes 2 bottom rows and shifts the board down. Over 12 seconds: 3 sinks × 2 rows = 6 rows removed from the bottom. Opponent can counter by keeping bottom rows clean (so sinking empty rows is painless) or by racing to clear rows before they sink. Creates urgency.",
+      "implementation": "Every 4 seconds for 12 seconds: remove the bottom 2 rows of opponent's board. Shift all remaining rows down by 2. Show sand/sinking VFX on bottom rows ~1 second before each sink as warning. 3 total sinks."
+    },
+
+    "gravity_flip": {
+      "id": "gravity_flip",
+      "type": "gravity_flip",
+      "name": "Gravity Flip",
+      "shortName": "ANTI-G",
+      "description": "Opponent's pieces fall UPWARD for 6 seconds. Pieces stack from the top.",
+      "cost": 130,
+      "duration": 6000,
+      "category": "debuff_controls",
+      "unlockTier": 5,
+      "unlockCost": 1200,
+      "balance_notes": "Physics inversion. Pieces spawn at the bottom and float up, stacking against the ceiling. This is completely disorienting — every muscle memory about placement is wrong. At 6 seconds (~6-12 pieces), it's a short but intense window. When gravity returns to normal after 6s, the top-stacked blocks fall down due to gravity, potentially creating chaos or line clears. Counterplay: hard-drop immediately (now hard-drops UP), try to keep ceiling clean.",
+      "implementation": "For 6 seconds, invert gravity: pieces spawn at bottom row and fall upward. Hard-drop moves piece to top. Pieces stack against the ceiling (row 20). When effect expires, all blocks above the existing stack fall down due to normal gravity. Apply row clears."
+    }
+  },
+
+  "summary": {
+    "total_abilities": 32,
+    "by_tier": {
+      "tier_1_free": ["earthquake", "screen_shake", "ink_splash", "mini_blocks", "fill_holes", "clear_rows"],
+      "tier_2_100coins": ["random_spawner", "garbage_rain", "speed_up_opponent", "circle_bomb", "cascade_multiplier", "shield", "time_warp", "preview_steal"],
+      "tier_3_300coins": ["reverse_controls", "mirage", "gold_digger", "glue", "column_swap", "purge", "fog_of_war", "gravity_well", "overcharge", "clone"],
+      "tier_4_600coins": ["rotation_lock", "blind_spot", "cross_firebomb", "weird_shapes", "narrow_escape", "reflect", "magnet", "quicksand"],
+      "tier_5_1200coins": ["shapeshifter", "shrink_ceiling", "wide_load", "tilt", "flip_board", "death_cross", "gravity_flip"]
+    },
+    "by_category": {
+      "debuff_visual": ["ink_splash(35)", "screen_shake(40)", "mirage(75)", "fog_of_war(90)", "blind_spot(100)"],
+      "debuff_board": ["earthquake(40)", "random_spawner(45)", "garbage_rain(55)", "gold_digger(75)", "glue(80)", "column_swap(85)", "gravity_well(85)", "quicksand(110)", "flip_board(180)", "death_cross(250)"],
+      "debuff_controls": ["speed_up(60)", "reverse_controls(70)", "rotation_lock(85)", "weird_shapes(100)", "shapeshifter(110)", "gravity_flip(130)", "tilt(160)"],
+      "debuff_geometry": ["shrink_ceiling(110)", "wide_load(120)"],
+      "buff_board": ["fill_holes(75)", "circle_bomb(65)", "cross_firebomb(100)", "clear_rows(100)", "narrow_escape(100)"],
+      "buff_pieces": ["mini_blocks(35)", "time_warp(50)", "preview_steal(55)", "magnet(90)"],
+      "buff_economy": ["cascade_multiplier(70)", "overcharge(50)"],
+      "defensive": ["purge(60)", "shield(80)", "reflect(90)", "clone(65)"]
+    },
+    "by_star_cost": {
+      "cheap_35_55": ["ink_splash(35)", "mini_blocks(35)", "earthquake(40)", "screen_shake(40)", "random_spawner(45)", "overcharge(50)", "time_warp(50)", "garbage_rain(55)", "preview_steal(55)"],
+      "medium_60_90": ["speed_up(60)", "purge(60)", "circle_bomb(65)", "clone(65)", "cascade_mult(70)", "reverse_controls(70)", "mirage(75)", "gold_digger(75)", "fill_holes(75)", "shield(80)", "glue(80)", "column_swap(85)", "gravity_well(85)", "rotation_lock(85)", "fog_of_war(90)", "reflect(90)", "magnet(90)"],
+      "expensive_100_130": ["cross_firebomb(100)", "blind_spot(100)", "clear_rows(100)", "weird_shapes(100)", "narrow_escape(100)", "shapeshifter(110)", "shrink_ceiling(110)", "quicksand(110)", "wide_load(120)", "gravity_flip(130)"],
+      "ultimate_160_250": ["tilt(160)", "flip_board(180)", "death_cross(250)"]
+    },
+    "starter_6_free": {
+      "abilities": ["earthquake", "screen_shake", "ink_splash", "mini_blocks", "fill_holes", "clear_rows"],
+      "design_rationale": "Covers 4 of 8 categories: debuff_board (earthquake), debuff_visual (screen_shake, ink_splash), buff_pieces (mini_blocks), buff_board (fill_holes, clear_rows). New player has cheap pokes AND emergency recovery. No defensive abilities in starter set — this is intentional. Learning to play WITHOUT Shield/Reflect teaches fundamentals. Defensive abilities are the first meaningful unlock decision."
+    },
+    "loadout_archetypes": {
+      "aggro_spam": {
+        "abilities": ["ink_splash", "screen_shake", "earthquake", "random_spawner", "garbage_rain", "speed_up"],
+        "avg_cost": 46,
+        "strategy": "Fire abilities constantly. Average 46★ per cast means you can fire every 12-15 seconds. Overwhelm with volume. No single ability is devastating, but the combined harassment degrades opponent's performance over time."
+      },
+      "board_destroyer": {
+        "abilities": ["earthquake", "gold_digger", "column_swap", "glue", "quicksand", "flip_board"],
+        "avg_cost": 93,
+        "strategy": "Target opponent's board structure. Each ability undermines their stacking. Glue makes their clears backfire. Column Swap ruins row completion. Flip Board is the finisher."
+      },
+      "control_denial": {
+        "abilities": ["speed_up", "reverse_controls", "rotation_lock", "shapeshifter", "tilt", "gravity_flip"],
+        "avg_cost": 103,
+        "strategy": "Make the game unplayable through control mutations. Stack two at once for devastating combos (Reverse Controls + Tilt = nightmare). Expensive but each effect is hard to play through."
+      },
+      "self_improvement": {
+        "abilities": ["mini_blocks", "fill_holes", "circle_bomb", "cross_firebomb", "clear_rows", "narrow_escape"],
+        "avg_cost": 76,
+        "strategy": "Ignore opponent entirely. Optimize your own board. Clear rows efficiently. Win through superior board state and line-clearing speed. The 'pure stacker' approach."
+      },
+      "economy_burst": {
+        "abilities": ["overcharge", "cascade_multiplier", "narrow_escape", "clear_rows", "flip_board", "death_cross"],
+        "avg_cost": 125,
+        "strategy": "Farm stars fast (Cascade Mult + Narrow Escape), then Overcharge into discounted ultimates. The 'save up for one big moment' approach. High risk, high reward."
+      },
+      "defensive_counter": {
+        "abilities": ["shield", "reflect", "purge", "clone", "fill_holes", "clear_rows"],
+        "avg_cost": 78,
+        "strategy": "Survive everything, win on mechanics. Shield blocks threats, Reflect punishes them, Purge cleanses stacked debuffs, Clone turns opponent's strategy against them. Fill Holes and Clear Rows handle board recovery."
+      },
+      "information_warfare": {
+        "abilities": ["mirage", "blind_spot", "fog_of_war", "preview_steal", "ink_splash", "shield"],
+        "avg_cost": 74,
+        "strategy": "Control what both players can see. Deny opponent information while gaining it yourself. Preview Steal reveals their strategy while Mirage and Blind Spot hide yours. Shield protects your information advantage."
+      }
+    }
+  },
+
+  "economy_reference_sheet": {
+    "star_earning_quick_reference": {
+      "passive": "1★/second (always running)",
+      "single": "+5★",
+      "double": "+12★",
+      "triple": "+22★",
+      "quad": "+35★",
+      "combo_bonus": "+3★ per combo level",
+      "b2b_bonus": "+5★ per B2B clear",
+      "t_spin_single": "+8★ (additive with line clear)",
+      "t_spin_double": "+20★ (additive with line clear)",
+      "t_spin_triple": "+30★ (additive with line clear)",
+      "perfect_clear": "+50★",
+      "examples": {
+        "single_line_clear": "5★",
+        "double_line_clear": "12★",
+        "quad_tetris": "35★",
+        "b2b_quad": "35 + 5 = 40★",
+        "t_spin_double": "12 + 20 = 32★",
+        "b2b_t_spin_double": "12 + 20 + 5 = 37★",
+        "perfect_clear_with_double": "12 + 50 = 62★",
+        "3_combo_triple": "22 + 9 = 31★"
+      }
+    },
+    "coin_earning_quick_reference": {
+      "per_match_base": "20 coins",
+      "win_bonus": "+15 coins",
+      "lines_cleared": "+1 coin per 10 lines",
+      "abilities_used": "+1 coin per ability used",
+      "daily_first_win": "+25 coins",
+      "example_winning_match": "20 base + 15 win + 8 lines(80 cleared) + 6 abilities + 25 daily = 74 coins (first win of day)",
+      "example_average_match": "20 base + 7.5 avg_win + 7 lines + 5 abilities = ~40 coins"
+    },
+    "unlock_costs_total": {
+      "tier_1": "FREE (6 abilities)",
+      "tier_2": "100 coins × 8 = 800 coins",
+      "tier_3": "300 coins × 10 = 3,000 coins",
+      "tier_4": "600 coins × 8 = 4,800 coins",
+      "tier_5": "1,200 coins × 7 = 8,400 coins",
+      "grand_total": "17,000 coins for full collection (32 abilities)"
+    }
+  }
+}

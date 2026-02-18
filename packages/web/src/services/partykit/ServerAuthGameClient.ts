@@ -9,6 +9,7 @@ export interface GameStateUpdate {
   yourState: {
     board: any[][];
     currentPiece: any;
+    nextPieces: string[];
     score: number;
     stars: number;
     linesCleared: number;
@@ -19,6 +20,7 @@ export interface GameStateUpdate {
   opponentState: {
     board: any[][];
     currentPiece: any;
+    nextPieces: string[];
     score: number;
     stars: number;
     linesCleared: number;
