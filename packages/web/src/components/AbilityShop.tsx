@@ -219,7 +219,6 @@ export function AbilityShop({ profile, onClose, onProfileUpdate }: AbilityShopPr
                               disabled={unlocking}
                               style={{
                                 background: 'rgba(0, 255, 136, 0.2)',
-                                backdropFilter: 'blur(10px)',
                                 color: '#00ff88',
                                 border: '1px solid rgba(0, 255, 136, 0.4)',
                                 padding: 'clamp(4px, 1vw, 6px) clamp(10px, 2.5vw, 12px)',
