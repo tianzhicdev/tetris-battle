@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { useAbilityStore } from '../stores/abilityStore';
 import type { Ability } from '@tetris-battle/game-core';
+import { isDebuffAbility } from '@tetris-battle/game-core';
 import type { Theme } from '../themes';
 
 interface AbilityCarouselProps {
@@ -66,9 +67,9 @@ export function AbilityCarousel({ currentStars, onActivate, theme }: AbilityCaro
               style={{
                 padding: '8px',
                 backgroundColor: canUse
-                  ? ability.category === 'buff'
-                    ? theme.colors.T  // Purple for buffs
-                    : theme.colors.Z  // Red for debuffs
+                  ? isDebuffAbility(ability)
+                    ? theme.colors.Z  // Red for debuffs
+                    : theme.colors.T  // Purple for self-targeted
                   : '#3a3a3a',
                 color: '#ffffff',
                 border: 'none',

@@ -6,27 +6,34 @@ import {
   lockPiece,
   clearLines,
   isValidPosition,
-  getHardDropPosition,
   calculateStars,
+  calculateLineClearBaseStars,
   STAR_VALUES,
   SeededRandom,
   getRandomTetrominoSeeded,
   applyEarthquake,
   applyClearRows,
   applyRandomSpawner,
-  applyRowRotate,
-  applyDeathCross,
   applyGoldDigger,
   applyCircleBomb,
   applyCrossBomb,
   applyFillHoles,
+  applyAddJunkRows,
   createMiniBlock,
   createWeirdShape,
   ABILITIES,
+  TETROMINO_SHAPES,
+  TETROMINO_TYPES,
+  type Board,
+  type CellValue,
   type GameState,
-  type Tetromino,
   type PlayerInputType,
+  type Tetromino,
+  type TetrominoType,
 } from '@tetris-battle/game-core';
+
+const INFINITE_EFFECT = Number.POSITIVE_INFINITY;
+const BASE_TICK_RATE_MS = 1000;
 
 /**
  * ServerGameState manages the authoritative game state for one player
@@ -37,14 +44,36 @@ export class ServerGameState {
   playerId: string;
   gameState: GameState;
   rng: SeededRandom;
-  tickRate: number = 1000; // Base tick rate in ms, modified by abilities
+  tickRate: number = BASE_TICK_RATE_MS;
   lastTickTime: number = Date.now();
   loadout: string[] = [];
   activeEffects: Map<string, number> = new Map(); // abilityType → endTime
 
-  // Buff ability state
+  // Piece/ability state
   private bombMode: { type: 'circle' | 'cross' } | null = null;
   private miniBlocksRemaining: number = 0;
+  private weirdShapesRemaining: number = 0;
+  private gluedPiecesRemaining: number = 0;
+  private shapeshifterPiecesRemaining: number = 0;
+  private magnetPiecesRemaining: number = 0;
+  private currentPieceIsGlued: boolean = false;
+  private currentPieceIsShapeshifter: boolean = false;
+  private currentPieceMorphLastMs: number = 0;
+  private currentPieceRowsMovedSinceSpawn: number = 0;
+
+  // Economy/combat state
+  private currentPieceRotatedSinceSpawn: boolean = false;
+  private backToBackChain: number = 0;
+  private lastPassiveRegenTickMs: number = Date.now();
+  private overchargeCharges: number = 0;
+
+  // Timed/periodic effect state
+  private quicksandRemainingSinks: number = 0;
+  private quicksandNextSinkAtMs: number = 0;
+  private tiltDirection: -1 | 1 = 1;
+
+  // Geometry effect state
+  private narrowEscapeStoredColumns: CellValue[][] | null = null;
 
   constructor(playerId: string, seed: number, loadout: string[]) {
     this.playerId = playerId;
@@ -76,124 +105,130 @@ export class ServerGameState {
       return false;
     }
 
-    // Check for rotation lock
-    if (this.activeEffects.has('rotation_lock')) {
-      const endTime = this.activeEffects.get('rotation_lock')!;
-      if (Date.now() < endTime) {
-        if (input === 'rotate_cw' || input === 'rotate_ccw') {
-          return false; // Block rotation
-        }
-      } else {
-        this.activeEffects.delete('rotation_lock');
-      }
-    }
+    const now = Date.now();
+    this.applyPassiveStarRegen(now);
+    this.refreshEffects(now);
+    this.maybeMorphCurrentPiece(now);
 
     // Check for reverse controls
     let effectiveInput = input;
-    if (this.activeEffects.has('reverse_controls')) {
-      const endTime = this.activeEffects.get('reverse_controls')!;
-      if (Date.now() < endTime) {
-        if (input === 'move_left') effectiveInput = 'move_right';
-        else if (input === 'move_right') effectiveInput = 'move_left';
-      } else {
-        this.activeEffects.delete('reverse_controls');
-      }
+    if (this.isEffectActive('reverse_controls', now)) {
+      if (input === 'move_left') effectiveInput = 'move_right';
+      else if (input === 'move_right') effectiveInput = 'move_left';
     }
 
-    let newPiece = this.gameState.currentPiece;
-    let stateChanged = false;
+    // Rotation lock prevents both clockwise/counter-clockwise rotation.
+    if (
+      this.isEffectActive('rotation_lock', now) &&
+      (effectiveInput === 'rotate_cw' || effectiveInput === 'rotate_ccw')
+    ) {
+      return false;
+    }
 
     switch (effectiveInput) {
-      case 'move_left':
-        newPiece = movePiece(newPiece, -1, 0);
-        if (isValidPosition(this.gameState.board, newPiece)) {
-          this.gameState.currentPiece = newPiece;
-          stateChanged = true;
-        }
-        break;
+      case 'move_left': {
+        const moved = movePiece(this.gameState.currentPiece, -1, 0);
+        if (!isValidPosition(this.gameState.board, moved)) return false;
+        this.gameState.currentPiece = moved;
+        return true;
+      }
 
-      case 'move_right':
-        newPiece = movePiece(newPiece, 1, 0);
-        if (isValidPosition(this.gameState.board, newPiece)) {
-          this.gameState.currentPiece = newPiece;
-          stateChanged = true;
-        }
-        break;
+      case 'move_right': {
+        const moved = movePiece(this.gameState.currentPiece, 1, 0);
+        if (!isValidPosition(this.gameState.board, moved)) return false;
+        this.gameState.currentPiece = moved;
+        return true;
+      }
 
-      case 'rotate_cw':
-        newPiece = rotatePiece(newPiece, true);
-        if (isValidPosition(this.gameState.board, newPiece)) {
-          this.gameState.currentPiece = newPiece;
-          stateChanged = true;
-        }
-        break;
+      case 'rotate_cw': {
+        const rotated = rotatePiece(this.gameState.currentPiece, true);
+        if (!isValidPosition(this.gameState.board, rotated)) return false;
+        this.gameState.currentPiece = rotated;
+        this.currentPieceRotatedSinceSpawn = true;
+        return true;
+      }
 
-      case 'rotate_ccw':
-        newPiece = rotatePiece(newPiece, false);
-        if (isValidPosition(this.gameState.board, newPiece)) {
-          this.gameState.currentPiece = newPiece;
-          stateChanged = true;
-        }
-        break;
+      case 'rotate_ccw': {
+        const rotated = rotatePiece(this.gameState.currentPiece, false);
+        if (!isValidPosition(this.gameState.board, rotated)) return false;
+        this.gameState.currentPiece = rotated;
+        this.currentPieceRotatedSinceSpawn = true;
+        return true;
+      }
 
       case 'soft_drop':
-        return this.movePieceDown(); // Might lock piece
+        return this.movePieceInGravityDirection(now);
 
       case 'hard_drop':
-        return this.hardDrop();
-    }
+        return this.hardDrop(now);
 
-    return stateChanged;
+      default:
+        return false;
+    }
   }
 
   /**
-   * Tick: move piece down or lock (called by game loop)
+   * Tick: move piece in gravity direction or lock (called by game loop)
    */
   tick(): boolean {
-    return this.movePieceDown();
+    this.lastTickTime = Date.now();
+    this.applyPassiveStarRegen(this.lastTickTime);
+    this.refreshEffects(this.lastTickTime);
+    return this.movePieceInGravityDirection(this.lastTickTime);
   }
 
-  private movePieceDown(): boolean {
+  private movePieceInGravityDirection(now: number): boolean {
     if (!this.gameState.currentPiece || this.gameState.isGameOver) {
       return false;
     }
 
-    const newPiece = movePiece(this.gameState.currentPiece, 0, 1);
+    this.maybeMorphCurrentPiece(now);
 
-    if (isValidPosition(this.gameState.board, newPiece)) {
-      // Move down
-      this.gameState.currentPiece = newPiece;
-      return true;
-    } else {
-      // Lock and spawn next
-      this.lockAndSpawn();
+    const gravityDirection = this.getGravityDirection(now);
+    const moved = movePiece(this.gameState.currentPiece, 0, gravityDirection);
+
+    if (isValidPosition(this.gameState.board, moved)) {
+      this.gameState.currentPiece = moved;
+      this.applyTiltDriftForRows(1, now);
       return true;
     }
-  }
 
-  private hardDrop(): boolean {
-    if (!this.gameState.currentPiece || this.gameState.isGameOver) {
-      return false;
-    }
-
-    // Move to hard drop position
-    this.gameState.currentPiece = {
-      ...this.gameState.currentPiece,
-      position: getHardDropPosition(this.gameState.board, this.gameState.currentPiece),
-    };
-
-    // Lock and spawn next
-    this.lockAndSpawn();
+    this.lockAndSpawn(now);
     return true;
   }
 
-  private lockAndSpawn(): void {
+  private hardDrop(now: number): boolean {
+    if (!this.gameState.currentPiece || this.gameState.isGameOver) {
+      return false;
+    }
+
+    this.maybeMorphCurrentPiece(now);
+
+    const gravityDirection = this.getGravityDirection(now);
+    let dropPiece = this.gameState.currentPiece;
+    let movedRows = 0;
+
+    while (true) {
+      const candidate = movePiece(dropPiece, 0, gravityDirection);
+      if (!isValidPosition(this.gameState.board, candidate)) break;
+      dropPiece = candidate;
+      movedRows++;
+    }
+
+    this.gameState.currentPiece = dropPiece;
+    this.applyTiltDriftForRows(movedRows, now);
+    this.lockAndSpawn(now);
+    return true;
+  }
+
+  private lockAndSpawn(now: number): void {
     if (!this.gameState.currentPiece) return;
+    const lockedPiece = this.gameState.currentPiece;
 
     // Lock piece to board
     this.gameState.board = lockPiece(this.gameState.board, this.gameState.currentPiece);
 
-    // Check for bomb mode - apply bomb effect
+    // Check for bomb mode - apply bomb effect immediately after lock.
     if (this.bombMode) {
       const centerX = this.gameState.currentPiece.position.x + 1;
       const centerY = this.gameState.currentPiece.position.y + 1;
@@ -207,6 +242,11 @@ export class ServerGameState {
       this.bombMode = null;
     }
 
+    const shrinkCeilingViolated =
+      this.isEffectActive('shrink_ceiling', now) && this.isPieceAboveRow(lockedPiece, 3);
+
+    const didTSpin = this.isTSpinLock(lockedPiece, this.gameState.board);
+
     // Clear lines and update score
     const { board, linesCleared } = clearLines(this.gameState.board);
     this.gameState.board = board;
@@ -216,7 +256,6 @@ export class ServerGameState {
     this.gameState.score += linesCleared * 100;
 
     // Award stars
-    const now = Date.now();
     if (linesCleared > 0) {
       const comboWindow = STAR_VALUES.comboWindow;
       if (now - this.gameState.lastClearTime < comboWindow) {
@@ -226,104 +265,404 @@ export class ServerGameState {
       }
       this.gameState.lastClearTime = now;
 
-      let starsEarned = calculateStars(linesCleared, this.gameState.comboCount);
+      const tSpinType =
+        didTSpin && linesCleared >= 1 && linesCleared <= 3
+          ? linesCleared === 1
+            ? 'single'
+            : linesCleared === 2
+              ? 'double'
+              : 'triple'
+          : null;
+      const difficultClear = linesCleared === 4 || tSpinType !== null;
+      const backToBackBonusApplies = difficultClear && this.backToBackChain > 0;
 
-      // Check for cascade multiplier
-      if (this.activeEffects.has('cascade_multiplier')) {
-        const endTime = this.activeEffects.get('cascade_multiplier')!;
-        if (Date.now() < endTime) {
-          starsEarned *= 2;
-        } else {
-          this.activeEffects.delete('cascade_multiplier');
-        }
+      if (difficultClear) {
+        this.backToBackChain++;
+      } else {
+        this.backToBackChain = 0;
       }
+
+      const comboStars = this.gameState.comboCount * STAR_VALUES.comboBonus;
+      const tSpinStars =
+        calculateStars(linesCleared, {
+          includeComboBonus: false,
+          tSpin: tSpinType ?? false,
+        }) - calculateLineClearBaseStars(linesCleared);
+      const backToBackStars = backToBackBonusApplies ? STAR_VALUES.backToBackBonus : 0;
+      const perfectClearStars = this.isBoardEmpty(this.gameState.board)
+        ? STAR_VALUES.perfectClearBonus
+        : 0;
+      let baseLineClearStars = calculateLineClearBaseStars(linesCleared);
+
+      // Cascade multiplier doubles base line-clear stars only.
+      if (this.isEffectActive('cascade_multiplier', now)) {
+        baseLineClearStars *= 2;
+      }
+
+      const starsEarned =
+        baseLineClearStars +
+        comboStars +
+        tSpinStars +
+        backToBackStars +
+        perfectClearStars;
 
       this.gameState.stars = Math.min(
         STAR_VALUES.maxCapacity,
         this.gameState.stars + starsEarned
       );
+
+      // Glue: if a glued piece cleared rows, settle neighboring stack downward.
+      if (this.currentPieceIsGlued) {
+        this.gameState.board = this.applyGravityToBoard(this.gameState.board);
+        this.gameState.board = this.clearLinesWithoutRewards(this.gameState.board, false);
+      }
+    } else {
+      this.gameState.comboCount = 0;
     }
 
-    // Spawn next piece - check for special piece modifiers
-    if (this.activeEffects.has('weird_shapes')) {
-      this.gameState.currentPiece = createWeirdShape(this.gameState.board.width, this.rng);
-      this.activeEffects.delete('weird_shapes');
-    } else if (this.miniBlocksRemaining > 0) {
-      this.gameState.currentPiece = createMiniBlock(this.gameState.board.width);
-      this.miniBlocksRemaining--;
-    } else {
-      const nextType = this.gameState.nextPieces[0];
-      this.gameState.currentPiece = createTetromino(nextType, this.gameState.board.width);
-      this.gameState.nextPieces.shift();
-      this.gameState.nextPieces.push(getRandomTetrominoSeeded(this.rng));
+    this.currentPieceIsGlued = false;
+
+    if (shrinkCeilingViolated) {
+      this.gameState.isGameOver = true;
+      this.gameState.currentPiece = null;
+      return;
     }
+
+    this.spawnNextPiece(now);
 
     // Check game over
-    if (!isValidPosition(this.gameState.board, this.gameState.currentPiece)) {
+    if (!this.gameState.currentPiece || !isValidPosition(this.gameState.board, this.gameState.currentPiece)) {
       this.gameState.isGameOver = true;
     }
   }
 
-  // ============================================================================
-  // Ability dispatch table — add a new entry here to register a new ability.
-  // Static so it is allocated once; private so only this class can mutate it.
-  // Each handler receives the instance (s) to access any field, including
-  // private ones (TypeScript allows static members to access private fields).
-  // ============================================================================
-  private static readonly ABILITY_HANDLERS: Record<string, (s: ServerGameState) => void> = {
-    // ── Debuff abilities (applied to opponent's state) ──────────────────────
-    earthquake:  (s) => { s.gameState.board = applyEarthquake(s.gameState.board, s.rng); },
-    row_rotate:  (s) => { s.gameState.board = applyRowRotate(s.gameState.board); },
-    death_cross: (s) => { s.gameState.board = applyDeathCross(s.gameState.board); },
-    fill_holes:  (s) => { s.gameState.board = s.clearAndReward(applyFillHoles(s.gameState.board)); },
+  private spawnNextPiece(now: number): void {
+    let nextPiece: Tetromino;
 
-    clear_rows: (s) => {
-      const { board } = applyClearRows(s.gameState.board, 5);
-      s.gameState.board = board;
-    },
+    if (this.weirdShapesRemaining > 0) {
+      nextPiece = createWeirdShape(this.gameState.board.width, this.rng);
+      this.weirdShapesRemaining--;
+      this.syncCounterEffect('weird_shapes', this.weirdShapesRemaining);
+    } else if (this.miniBlocksRemaining > 0) {
+      nextPiece = createMiniBlock(this.gameState.board.width);
+      this.miniBlocksRemaining--;
+      this.syncCounterEffect('mini_blocks', this.miniBlocksRemaining);
+    } else {
+      const nextType = this.gameState.nextPieces[0];
+      nextPiece = createTetromino(nextType, this.gameState.board.width);
+      this.gameState.nextPieces.shift();
+      this.gameState.nextPieces.push(getRandomTetrominoSeeded(this.rng));
+    }
 
-    random_spawner: (s) => { s.gameState.board = clearLines(applyRandomSpawner(s.gameState.board, 5, s.rng)).board; },
+    if (this.getGravityDirection(now) < 0) {
+      nextPiece = {
+        ...nextPiece,
+        position: {
+          ...nextPiece.position,
+          y: Math.max(0, this.gameState.board.height - nextPiece.shape.length),
+        },
+      };
+    }
 
-    gold_digger: (s) => { s.gameState.board = applyGoldDigger(s.gameState.board, 5, s.rng); },
+    this.gameState.currentPiece = nextPiece;
 
-    speed_up_opponent: (s) => {
-      const dur = s.getDurationMs('speed_up_opponent', 10000);
-      s.tickRate = 1000 / 3; // 3× faster
-      s.activeEffects.set('speed_up_opponent', Date.now() + dur);
-      setTimeout(() => {
-        s.tickRate = 1000;
-        s.activeEffects.delete('speed_up_opponent');
-      }, dur);
-    },
+    this.currentPieceIsShapeshifter = false;
+    if (this.shapeshifterPiecesRemaining > 0) {
+      this.currentPieceIsShapeshifter = true;
+      this.shapeshifterPiecesRemaining--;
+      this.currentPieceMorphLastMs = now;
+      this.syncCounterEffect('shapeshifter', this.shapeshifterPiecesRemaining);
+    }
 
-    // Timed active-effect debuffs
-    reverse_controls:   (s) => { s.activeEffects.set('reverse_controls',   Date.now() + s.getDurationMs('reverse_controls',   8000)); },
-    rotation_lock:      (s) => { s.activeEffects.set('rotation_lock',      Date.now() + s.getDurationMs('rotation_lock',      6000)); },
-    blind_spot:         (s) => { s.activeEffects.set('blind_spot',         Date.now() + s.getDurationMs('blind_spot',         10000)); },
-    screen_shake:       (s) => { s.activeEffects.set('screen_shake',       Date.now() + s.getDurationMs('screen_shake',       12000)); },
-    shrink_ceiling:     (s) => { s.activeEffects.set('shrink_ceiling',     Date.now() + s.getDurationMs('shrink_ceiling',     8000)); },
-    cascade_multiplier: (s) => { s.activeEffects.set('cascade_multiplier', Date.now() + s.getDurationMs('cascade_multiplier', 15000)); },
+    this.currentPieceIsGlued = false;
+    if (this.gluedPiecesRemaining > 0) {
+      this.currentPieceIsGlued = true;
+      this.gluedPiecesRemaining--;
+      this.syncCounterEffect('glue', this.gluedPiecesRemaining);
+    }
 
-    // Single-use pending effect — consumed at next piece spawn
-    weird_shapes: (s) => { s.activeEffects.set('weird_shapes', Number.POSITIVE_INFINITY); },
+    if (this.magnetPiecesRemaining > 0) {
+      this.magnetPiecesRemaining--;
+      this.syncCounterEffect('magnet', this.magnetPiecesRemaining);
+    }
 
-    // ── Buff abilities (applied to self) ────────────────────────────────────
-    circle_bomb:    (s) => { s.bombMode = { type: 'circle' }; },
-    cross_firebomb: (s) => { s.bombMode = { type: 'cross' }; },
-    mini_blocks:    (s) => { s.miniBlocksRemaining = s.getDurationMs('mini_blocks', 5); },
-  };
+    this.currentPieceRotatedSinceSpawn = false;
+    this.currentPieceRowsMovedSinceSpawn = 0;
+    this.ensureCurrentPieceWithinBoard();
+  }
+
+  private maybeMorphCurrentPiece(now: number): void {
+    if (!this.currentPieceIsShapeshifter || !this.gameState.currentPiece) return;
+    if (now - this.currentPieceMorphLastMs < 400) return;
+
+    const currentPiece = this.gameState.currentPiece;
+    const randomType = TETROMINO_TYPES[this.rng.nextInt(TETROMINO_TYPES.length)];
+    const rotations = TETROMINO_SHAPES[randomType];
+    const rotationIndex = currentPiece.rotation % rotations.length;
+
+    const morphed: Tetromino = {
+      ...currentPiece,
+      type: randomType,
+      rotation: rotationIndex,
+      shape: rotations[rotationIndex],
+    };
+
+    if (isValidPosition(this.gameState.board, morphed)) {
+      this.gameState.currentPiece = morphed;
+    } else {
+      const fallback: Tetromino = {
+        ...morphed,
+        rotation: 0,
+        shape: rotations[0],
+      };
+      if (isValidPosition(this.gameState.board, fallback)) {
+        this.gameState.currentPiece = fallback;
+      }
+    }
+
+    this.currentPieceMorphLastMs = now;
+  }
+
+  private applyTiltDriftForRows(rowsMoved: number, now: number): void {
+    if (rowsMoved <= 0 || !this.gameState.currentPiece) return;
+    if (!this.isEffectActive('tilt', now)) return;
+
+    this.currentPieceRowsMovedSinceSpawn += rowsMoved;
+
+    while (this.currentPieceRowsMovedSinceSpawn >= 2 && this.gameState.currentPiece) {
+      this.currentPieceRowsMovedSinceSpawn -= 2;
+      const drifted = movePiece(this.gameState.currentPiece, this.tiltDirection, 0);
+      if (!isValidPosition(this.gameState.board, drifted)) break;
+      this.gameState.currentPiece = drifted;
+    }
+  }
+
+  private getGravityDirection(now: number): 1 | -1 {
+    return this.isEffectActive('gravity_flip', now) ? -1 : 1;
+  }
+
+  private ensureCurrentPieceWithinBoard(): void {
+    const piece = this.gameState.currentPiece;
+    if (!piece) return;
+
+    const maxX = Math.max(0, this.gameState.board.width - piece.shape[0].length);
+    const maxY = Math.max(0, this.gameState.board.height - piece.shape.length);
+
+    let adjusted: Tetromino = {
+      ...piece,
+      position: {
+        x: Math.max(0, Math.min(piece.position.x, maxX)),
+        y: Math.max(0, Math.min(piece.position.y, maxY)),
+      },
+    };
+
+    if (!isValidPosition(this.gameState.board, adjusted)) {
+      // Try nudging upward to keep piece valid after geometry effects.
+      while (adjusted.position.y > 0 && !isValidPosition(this.gameState.board, adjusted)) {
+        adjusted = {
+          ...adjusted,
+          position: {
+            ...adjusted.position,
+            y: adjusted.position.y - 1,
+          },
+        };
+      }
+    }
+
+    this.gameState.currentPiece = adjusted;
+  }
+
+  getAbilityCostForCast(baseCost: number): number {
+    if (this.overchargeCharges <= 0) return baseCost;
+    return Math.max(0, Math.floor(baseCost * 0.6));
+  }
+
+  consumeAbilityCastModifiers(): void {
+    if (this.overchargeCharges <= 0) return;
+    this.overchargeCharges = Math.max(0, this.overchargeCharges - 1);
+    this.syncCounterEffect('overcharge', this.overchargeCharges);
+  }
+
+  clearTimedEffects(): string[] {
+    const cleared: string[] = [];
+
+    for (const [effect, endTime] of Array.from(this.activeEffects.entries())) {
+      const shouldClear = endTime !== INFINITE_EFFECT || effect === 'overcharge';
+      if (!shouldClear) continue;
+
+      this.activeEffects.delete(effect);
+      this.handleEffectExpired(effect);
+      cleared.push(effect);
+    }
+
+    this.refreshEffects(Date.now());
+    return cleared;
+  }
 
   /**
    * Apply ability effect (can be buff or debuff).
-   * To add a new ability: add one entry to ABILITY_HANDLERS above.
+   * To add a new ability: add one switch-case branch.
    */
   applyAbility(abilityType: string): void {
-    const handler = ServerGameState.ABILITY_HANDLERS[abilityType];
-    if (handler) {
-      handler(this);
-    } else {
-      console.warn(`[ServerGameState] Unknown ability type: ${abilityType}`);
+    const now = Date.now();
+
+    switch (abilityType) {
+      // Debuff board / control / visual
+      case 'earthquake':
+        this.gameState.board = applyEarthquake(this.gameState.board, this.rng);
+        break;
+      case 'screen_shake':
+        this.setTimedEffect('screen_shake', 5000, now);
+        break;
+      case 'ink_splash':
+        this.setTimedEffect('ink_splash', 4000, now);
+        break;
+      case 'random_spawner':
+        this.gameState.board = applyRandomSpawner(this.gameState.board, 4, this.rng);
+        break;
+      case 'garbage_rain':
+        this.gameState.board = applyAddJunkRows(this.gameState.board, 2);
+        break;
+      case 'speed_up_opponent':
+        this.setTimedEffect('speed_up_opponent', 8000, now);
+        break;
+      case 'reverse_controls':
+        this.setTimedEffect('reverse_controls', 6000, now);
+        break;
+      case 'mirage':
+        this.setTimedEffect('mirage', 5000, now);
+        break;
+      case 'gold_digger': {
+        let board = applyGoldDigger(this.gameState.board, 6, this.rng);
+        board = this.applyGravityToBoard(board);
+        this.gameState.board = this.clearLinesWithoutRewards(board, false);
+        break;
+      }
+      case 'glue':
+        this.gluedPiecesRemaining = this.getPieceCount('glue', 3);
+        this.syncCounterEffect('glue', this.gluedPiecesRemaining);
+        break;
+      case 'column_swap': {
+        let board = this.applyColumnSwap(this.gameState.board);
+        board = this.clearLinesWithoutRewards(board, false);
+        this.gameState.board = board;
+        break;
+      }
+      case 'fog_of_war':
+        this.setTimedEffect('fog_of_war', 8000, now);
+        break;
+      case 'rotation_lock':
+        this.setTimedEffect('rotation_lock', 4000, now);
+        break;
+      case 'blind_spot':
+        this.setTimedEffect('blind_spot', 5000, now);
+        break;
+      case 'weird_shapes':
+        this.weirdShapesRemaining = 1;
+        this.syncCounterEffect('weird_shapes', this.weirdShapesRemaining);
+        break;
+      case 'shapeshifter':
+        this.shapeshifterPiecesRemaining = this.getPieceCount('shapeshifter', 3);
+        this.syncCounterEffect('shapeshifter', this.shapeshifterPiecesRemaining);
+        break;
+      case 'shrink_ceiling':
+        this.setTimedEffect('shrink_ceiling', 12000, now);
+        break;
+      case 'wide_load':
+        this.activateWideLoad(now);
+        break;
+      case 'tilt':
+        this.tiltDirection = this.rng.nextInt(2) === 0 ? -1 : 1;
+        this.setTimedEffect('tilt', 10000, now);
+        break;
+      case 'flip_board': {
+        let board = this.applyFlipBoard(this.gameState.board);
+        board = this.clearLinesWithoutRewards(board, false);
+        this.gameState.board = board;
+        break;
+      }
+      case 'death_cross': {
+        let board = this.applyDeathCross(this.gameState.board);
+        board = this.clearLinesWithoutRewards(board, false);
+        this.gameState.board = board;
+        break;
+      }
+      case 'gravity_well': {
+        let board = this.applyGravityToBoard(this.gameState.board);
+        board = this.clearLinesWithoutRewards(board, false);
+        this.gameState.board = board;
+        break;
+      }
+      case 'quicksand':
+        this.quicksandRemainingSinks = 3;
+        this.quicksandNextSinkAtMs = now + 4000;
+        this.setTimedEffect('quicksand', 12000, now);
+        break;
+      case 'gravity_flip':
+        this.setTimedEffect('gravity_flip', 6000, now);
+        break;
+
+      // Buff board / pieces / economy
+      case 'mini_blocks':
+        this.miniBlocksRemaining = this.getPieceCount('mini_blocks', 5);
+        this.syncCounterEffect('mini_blocks', this.miniBlocksRemaining);
+        break;
+      case 'fill_holes': {
+        const board = applyFillHoles(this.gameState.board);
+        this.gameState.board = this.clearLinesWithoutRewards(board, false);
+        break;
+      }
+      case 'clear_rows': {
+        const { board } = applyClearRows(this.gameState.board, 4);
+        this.gameState.board = board;
+        break;
+      }
+      case 'circle_bomb':
+        this.bombMode = { type: 'circle' };
+        break;
+      case 'cross_firebomb':
+        this.bombMode = { type: 'cross' };
+        break;
+      case 'cascade_multiplier':
+        this.setTimedEffect('cascade_multiplier', 15000, now);
+        break;
+      case 'time_warp':
+        this.setTimedEffect('time_warp', 10000, now);
+        break;
+      case 'narrow_escape':
+        this.activateNarrowEscape(now);
+        break;
+      case 'preview_steal':
+        this.setTimedEffect('preview_steal', 10000, now);
+        break;
+      case 'overcharge':
+        this.overchargeCharges = this.getPieceCount('overcharge', 3);
+        this.syncCounterEffect('overcharge', this.overchargeCharges);
+        break;
+      case 'magnet':
+        this.magnetPiecesRemaining = this.getPieceCount('magnet', 3);
+        this.syncCounterEffect('magnet', this.magnetPiecesRemaining);
+        break;
+
+      // Defensive
+      case 'shield':
+        this.setTimedEffect('shield', 15000, now);
+        break;
+      case 'reflect':
+        this.setTimedEffect('reflect', 12000, now);
+        break;
+
+      // Multi-player-special abilities are resolved in GameRoomServer.
+      case 'purge':
+      case 'clone':
+        break;
+
+      default:
+        console.warn(`[ServerGameState] Unknown ability type: ${abilityType}`);
+        break;
     }
+
+    this.refreshEffects(now);
   }
 
   /**
@@ -331,35 +670,141 @@ export class ServerGameState {
    */
   getActiveEffects(): string[] {
     const now = Date.now();
-    const active: string[] = [];
+    this.refreshEffects(now);
 
+    const active: string[] = [];
     for (const [ability, endTime] of this.activeEffects) {
-      if (ability === 'weird_shapes') {
+      if (endTime === INFINITE_EFFECT || endTime > now) {
         active.push(ability);
-        continue;
-      }
-      if (endTime > now) {
-        active.push(ability);
-      } else {
-        this.activeEffects.delete(ability);
       }
     }
 
     return active;
   }
 
-  /**
-   * Clear any completed rows after a self-buff board mutation, and award stars.
-   * Do NOT call this for opponent-targeted abilities (opponent would get free stars).
-   */
-  private clearAndReward(board: Board): Board {
-    const { board: cleared, linesCleared } = clearLines(board);
-    if (linesCleared > 0) {
-      this.gameState.linesCleared += linesCleared;
-      const starsEarned = calculateStars(linesCleared, 0); // no combo credit for ability clears
-      this.gameState.stars = Math.min(STAR_VALUES.maxCapacity, this.gameState.stars + starsEarned);
+  consumeDefensiveInterception(now: number = Date.now()): 'shield' | 'reflect' | null {
+    // Reflect has priority over shield.
+    if (this.isEffectActive('reflect', now)) {
+      this.activeEffects.delete('reflect');
+      return 'reflect';
     }
-    return cleared;
+
+    if (this.isEffectActive('shield', now)) {
+      this.activeEffects.delete('shield');
+      return 'shield';
+    }
+
+    return null;
+  }
+
+  private setTimedEffect(abilityType: string, fallbackMs: number, now: number): void {
+    const duration = this.getDurationMs(abilityType, fallbackMs);
+    this.activeEffects.set(abilityType, now + duration);
+  }
+
+  private syncCounterEffect(abilityType: string, remaining: number): void {
+    if (remaining > 0) {
+      this.activeEffects.set(abilityType, INFINITE_EFFECT);
+    } else {
+      this.activeEffects.delete(abilityType);
+    }
+  }
+
+  private refreshEffects(now: number): void {
+    for (const [effect, endTime] of Array.from(this.activeEffects.entries())) {
+      if (endTime === INFINITE_EFFECT) continue;
+      if (endTime > now) continue;
+
+      this.activeEffects.delete(effect);
+      this.handleEffectExpired(effect);
+    }
+
+    this.processPeriodicEffects(now);
+    this.updateTickRate(now);
+  }
+
+  private isEffectActive(effect: string, now: number): boolean {
+    const endTime = this.activeEffects.get(effect);
+    if (typeof endTime !== 'number') return false;
+    if (endTime === INFINITE_EFFECT) return true;
+    if (endTime > now) return true;
+
+    this.activeEffects.delete(effect);
+    this.handleEffectExpired(effect);
+    return false;
+  }
+
+  private handleEffectExpired(effect: string): void {
+    switch (effect) {
+      case 'gravity_flip': {
+        let board = this.applyGravityToBoard(this.gameState.board);
+        board = this.clearLinesWithoutRewards(board, false);
+        this.gameState.board = board;
+        this.ensureCurrentPieceWithinBoard();
+        break;
+      }
+      case 'narrow_escape':
+        this.restoreNarrowEscape();
+        break;
+      case 'wide_load':
+        this.collapseWideLoad();
+        break;
+      case 'quicksand':
+        this.quicksandRemainingSinks = 0;
+        this.quicksandNextSinkAtMs = 0;
+        break;
+      case 'mini_blocks':
+        this.miniBlocksRemaining = 0;
+        break;
+      case 'weird_shapes':
+        this.weirdShapesRemaining = 0;
+        break;
+      case 'glue':
+        this.gluedPiecesRemaining = 0;
+        this.currentPieceIsGlued = false;
+        break;
+      case 'shapeshifter':
+        this.shapeshifterPiecesRemaining = 0;
+        this.currentPieceIsShapeshifter = false;
+        break;
+      case 'magnet':
+        this.magnetPiecesRemaining = 0;
+        break;
+      case 'overcharge':
+        this.overchargeCharges = 0;
+        break;
+      default:
+        break;
+    }
+  }
+
+  private processPeriodicEffects(now: number): void {
+    if (!this.isEffectActive('quicksand', now)) return;
+
+    while (this.quicksandRemainingSinks > 0 && now >= this.quicksandNextSinkAtMs) {
+      this.gameState.board = this.applyQuicksandSink(this.gameState.board, 2);
+      this.quicksandRemainingSinks--;
+      this.quicksandNextSinkAtMs += 4000;
+    }
+
+    if (this.quicksandRemainingSinks <= 0) {
+      this.activeEffects.delete('quicksand');
+    }
+  }
+
+  private updateTickRate(now: number): void {
+    let gravityMultiplier = 1;
+
+    if (this.isEffectActive('speed_up_opponent', now)) {
+      gravityMultiplier *= 2.5;
+    }
+
+    if (this.isEffectActive('time_warp', now)) {
+      gravityMultiplier *= 0.5;
+    }
+
+    const computedTickRate = BASE_TICK_RATE_MS / gravityMultiplier;
+    this.tickRate = Math.max(80, Math.round(computedTickRate));
   }
 
   private getDurationMs(abilityType: string, fallbackMs: number): number {
@@ -367,10 +812,253 @@ export class ServerGameState {
     return typeof ability?.duration === 'number' ? ability.duration : fallbackMs;
   }
 
+  private getPieceCount(abilityType: string, fallbackCount: number): number {
+    const ability = ABILITIES[abilityType as keyof typeof ABILITIES];
+    if (typeof ability?.duration !== 'number') return fallbackCount;
+    return Math.max(0, Math.floor(ability.duration));
+  }
+
+  private applyPassiveStarRegen(now: number): void {
+    if (this.gameState.isGameOver) return;
+    const elapsedMs = now - this.lastPassiveRegenTickMs;
+    if (elapsedMs < 1000) return;
+
+    const regenTicks = Math.floor(elapsedMs / 1000);
+    if (regenTicks <= 0) return;
+
+    const starsToAdd = regenTicks * STAR_VALUES.passiveRegenPerSecond;
+    this.gameState.stars = Math.min(STAR_VALUES.maxCapacity, this.gameState.stars + starsToAdd);
+    this.lastPassiveRegenTickMs += regenTicks * 1000;
+  }
+
+  private activateNarrowEscape(now: number): void {
+    // Remove opposing geometry mode first for deterministic restore behavior.
+    if (this.activeEffects.has('wide_load')) {
+      this.activeEffects.delete('wide_load');
+      this.handleEffectExpired('wide_load');
+    }
+
+    if (this.gameState.board.width > 7) {
+      this.narrowEscapeStoredColumns = this.gameState.board.grid.map((row) => row.slice(7, 10));
+      this.gameState.board = {
+        ...this.gameState.board,
+        width: 7,
+        grid: this.gameState.board.grid.map((row) => row.slice(0, 7)),
+      };
+      this.ensureCurrentPieceWithinBoard();
+    }
+
+    this.activeEffects.set('narrow_escape', now + this.getDurationMs('narrow_escape', 15000));
+  }
+
+  private restoreNarrowEscape(): void {
+    if (!this.narrowEscapeStoredColumns) return;
+
+    const restoredGrid = this.gameState.board.grid.map((row, y) => {
+      const hidden = this.narrowEscapeStoredColumns?.[y] ?? [null, null, null];
+      return [...row.slice(0, 7), ...hidden];
+    });
+
+    let board: Board = {
+      ...this.gameState.board,
+      width: 10,
+      grid: restoredGrid,
+    };
+
+    board = this.applyGravityToBoard(board);
+    board = this.clearLinesWithoutRewards(board, false);
+    this.gameState.board = board;
+    this.narrowEscapeStoredColumns = null;
+    this.ensureCurrentPieceWithinBoard();
+  }
+
+  private activateWideLoad(now: number): void {
+    // Remove opposing geometry mode first for deterministic restore behavior.
+    if (this.activeEffects.has('narrow_escape')) {
+      this.activeEffects.delete('narrow_escape');
+      this.handleEffectExpired('narrow_escape');
+    }
+
+    if (this.gameState.board.width < 13) {
+      this.gameState.board = {
+        ...this.gameState.board,
+        width: 13,
+        grid: this.gameState.board.grid.map((row) => [...row, null, null, null]),
+      };
+      this.ensureCurrentPieceWithinBoard();
+    }
+
+    this.activeEffects.set('wide_load', now + this.getDurationMs('wide_load', 15000));
+  }
+
+  private collapseWideLoad(): void {
+    if (this.gameState.board.width <= 10) return;
+
+    this.gameState.board = {
+      ...this.gameState.board,
+      width: 10,
+      grid: this.gameState.board.grid.map((row) => row.slice(0, 10)),
+    };
+    this.ensureCurrentPieceWithinBoard();
+  }
+
+  private applyColumnSwap(board: Board): Board {
+    if (board.width < 2) return board;
+
+    const colA = this.rng.nextInt(board.width);
+    let colB = this.rng.nextInt(board.width - 1);
+    if (colB >= colA) colB += 1;
+
+    const grid = board.grid.map((row) => {
+      const nextRow = [...row];
+      const temp = nextRow[colA];
+      nextRow[colA] = nextRow[colB];
+      nextRow[colB] = temp;
+      return nextRow;
+    });
+
+    return { ...board, grid };
+  }
+
+  private applyFlipBoard(board: Board): Board {
+    const grid: CellValue[][] = Array.from({ length: board.height }, () => Array(board.width).fill(null));
+
+    for (let y = 0; y < board.height; y++) {
+      for (let x = 0; x < board.width; x++) {
+        const flippedY = board.height - 1 - y;
+        const flippedX = board.width - 1 - x;
+        grid[flippedY][flippedX] = board.grid[y][x];
+      }
+    }
+
+    return this.applyGravityToBoard({ ...board, grid });
+  }
+
+  private applyDeathCross(board: Board): Board {
+    const grid: CellValue[][] = board.grid.map((row) =>
+      row.map((cell) => (cell === null ? this.randomCellType() : null))
+    );
+
+    return this.applyGravityToBoard({ ...board, grid });
+  }
+
+  private applyGravityToBoard(board: Board): Board {
+    const grid: CellValue[][] = Array.from({ length: board.height }, () => Array(board.width).fill(null));
+
+    for (let x = 0; x < board.width; x++) {
+      const column: CellValue[] = [];
+      for (let y = board.height - 1; y >= 0; y--) {
+        const cell = board.grid[y][x];
+        if (cell !== null) column.push(cell);
+      }
+
+      for (let y = board.height - 1, i = 0; i < column.length; y--, i++) {
+        grid[y][x] = column[i];
+      }
+    }
+
+    return { ...board, grid };
+  }
+
+  private applyQuicksandSink(board: Board, rows: number): Board {
+    const rowsToSink = Math.max(0, Math.min(rows, board.height));
+    if (rowsToSink === 0) return board;
+
+    const emptyRows: CellValue[][] = Array.from({ length: rowsToSink }, () =>
+      Array(board.width).fill(null)
+    );
+
+    const remainingRows = board.grid.slice(0, board.height - rowsToSink);
+    return {
+      ...board,
+      grid: [...emptyRows, ...remainingRows],
+    };
+  }
+
+  /**
+   * Clear completed rows after ability-driven board mutations without star rewards.
+   */
+  private clearLinesWithoutRewards(board: Board, countLines: boolean): Board {
+    let current = board;
+    let totalCleared = 0;
+
+    while (true) {
+      const { board: nextBoard, linesCleared } = clearLines(current);
+      if (linesCleared === 0) break;
+      totalCleared += linesCleared;
+      current = nextBoard;
+    }
+
+    if (countLines && totalCleared > 0) {
+      this.gameState.linesCleared += totalCleared;
+    }
+
+    return current;
+  }
+
+  private randomCellType(): TetrominoType {
+    return TETROMINO_TYPES[this.rng.nextInt(TETROMINO_TYPES.length)];
+  }
+
+  private isPieceAboveRow(piece: Tetromino, rowExclusive: number): boolean {
+    for (let y = 0; y < piece.shape.length; y++) {
+      for (let x = 0; x < piece.shape[y].length; x++) {
+        if (!piece.shape[y][x]) continue;
+        const boardY = piece.position.y + y;
+        if (boardY < rowExclusive) {
+          return true;
+        }
+      }
+    }
+
+    return false;
+  }
+
+  private isBoardEmpty(board: Board): boolean {
+    for (let y = 0; y < board.height; y++) {
+      for (let x = 0; x < board.width; x++) {
+        if (board.grid[y][x] !== null) return false;
+      }
+    }
+    return true;
+  }
+
+  private isTSpinLock(piece: Tetromino, board: Board): boolean {
+    if (!this.currentPieceRotatedSinceSpawn) return false;
+    if (piece.type !== 'T') return false;
+
+    const centerX = piece.position.x + 1;
+    const centerY = piece.position.y + 1;
+    const corners = [
+      { x: centerX - 1, y: centerY - 1 },
+      { x: centerX + 1, y: centerY - 1 },
+      { x: centerX - 1, y: centerY + 1 },
+      { x: centerX + 1, y: centerY + 1 },
+    ];
+
+    let blockedCorners = 0;
+    for (const corner of corners) {
+      if (
+        corner.x < 0 ||
+        corner.x >= board.width ||
+        corner.y < 0 ||
+        corner.y >= board.height ||
+        board.grid[corner.y][corner.x] !== null
+      ) {
+        blockedCorners++;
+      }
+    }
+
+    return blockedCorners >= 3;
+  }
+
   /**
    * Get state for broadcasting (sanitized for opponent view)
    */
   getPublicState() {
+    const now = Date.now();
+    this.refreshEffects(now);
+
     return {
       board: this.gameState.board.grid,
       currentPiece: this.gameState.currentPiece,
@@ -383,5 +1071,4 @@ export class ServerGameState {
       activeEffects: this.getActiveEffects(),
     };
   }
-
 }

@@ -21,6 +21,8 @@ import { useDebugStore } from '../stores/debugStore';
 import {
   AbilityEffectManager,
   ABILITIES,
+  getAbilityTargeting,
+  isDebuffAbility,
 } from '@tetris-battle/game-core';
 import type { Ability, UserProfile } from '@tetris-battle/game-core';
 import { awardMatchRewards, type MatchRewards } from '../lib/rewards';
@@ -46,9 +48,13 @@ const CELL_MANIPULATION_ABILITY_TYPES = new Set<string>([
   'random_spawner',
   'gold_digger',
   'fill_holes',
-  'row_rotate',
   'clear_rows',
   'earthquake',
+  'garbage_rain',
+  'column_swap',
+  'gravity_well',
+  'flip_board',
+  'quicksand',
 ]);
 const DEFERRED_BOARD_DIFF_ABILITY_TYPES = new Set<string>([
   'circle_bomb',
@@ -440,8 +446,8 @@ export function ServerAuthMultiplayerGame({
 
       const board = {
         grid: yourState.board,
-        width: 10,
-        height: 20,
+        width: yourState.board?.[0]?.length ?? 10,
+        height: yourState.board?.length ?? 20,
       };
 
       // Check active effects from server
@@ -488,8 +494,8 @@ export function ServerAuthMultiplayerGame({
 
       const opponentBoard = {
         grid: opponentState.board,
-        width: 10,
-        height: 20,
+        width: opponentState.board?.[0]?.length ?? 10,
+        height: opponentState.board?.length ?? 20,
       };
       opponentRendererRef.current.render(opponentBoard, opponentState.currentPiece, null, {
         showGrid: true,
@@ -614,7 +620,7 @@ export function ServerAuthMultiplayerGame({
     }
 
     console.log('[SERVER-AUTH] Activating ability:', ability.name);
-    const target: 'self' | 'opponent' = ability.category === 'buff' ? 'self' : 'opponent';
+    const target = getAbilityTargeting(ability);
     const targetPlayerId = target === 'self' ? playerId : opponentId;
     const requestId = gameClientRef.current.activateAbility(ability.type, targetPlayerId);
 
@@ -673,13 +679,13 @@ export function ServerAuthMultiplayerGame({
         setAbilityNotification({
           name: ability.name,
           description: ability.description,
-          category: ability.category as 'buff' | 'debuff',
+          category: isDebuffAbility(ability) ? 'debuff' : 'buff',
         });
         setTimeout(() => setAbilityNotification(null), 3000);
-        if (ability.category === 'buff') {
-          audioManager.playSfx('ability_buff_activate');
-        } else if (ability.category === 'debuff') {
+        if (isDebuffAbility(ability)) {
           audioManager.playSfx('ability_debuff_activate');
+        } else {
+          audioManager.playSfx('ability_buff_activate');
         }
         queueBoardAbilityFx(ability.type, target);
         if (BOMB_ABILITY_TYPES.has(ability.type) && target === 'self') {
@@ -736,7 +742,7 @@ export function ServerAuthMultiplayerGame({
     setAbilityNotification({
       name: ability.name,
       description: ability.description,
-      category: ability.category as 'buff' | 'debuff',
+      category: isDebuffAbility(ability) ? 'debuff' : 'buff',
     });
     // Auto-dismiss notification after 3 seconds (instant abilities)
     // Duration abilities will continue showing in AbilityEffects component
@@ -1194,6 +1200,7 @@ export function ServerAuthMultiplayerGame({
           }}>
             {yourState && availableAbilities.slice(0, 8).map((ability, index) => {
               const isAffordable = yourState.stars >= ability.cost;
+              const isDebuff = isDebuffAbility(ability);
 
               return (
                 <motion.button
@@ -1233,7 +1240,7 @@ export function ServerAuthMultiplayerGame({
                     letterSpacing: '0.5px',
                     color: isAffordable ? '#ffffff' : '#666',
                     textShadow: isAffordable
-                      ? (ability.category === 'buff' ? '0 0 8px rgba(0, 212, 255, 0.6)' : '0 0 8px rgba(255, 0, 110, 0.6)')
+                      ? (isDebuff ? '0 0 8px rgba(255, 0, 110, 0.6)' : '0 0 8px rgba(0, 212, 255, 0.6)')
                       : 'none',
                     textAlign: 'left',
                     flex: 1,
@@ -1245,14 +1252,14 @@ export function ServerAuthMultiplayerGame({
                     fontSize: 'clamp(7px, 1.8vw, 9px)',
                     fontWeight: '800',
                     background: isAffordable
-                      ? (ability.category === 'buff' ? 'rgba(0, 212, 255, 0.15)' : 'rgba(255, 0, 110, 0.15)')
+                      ? (isDebuff ? 'rgba(255, 0, 110, 0.15)' : 'rgba(0, 212, 255, 0.15)')
                       : 'rgba(100, 100, 100, 0.1)',
                     padding: 'clamp(1px, 0.3vw, 2px) clamp(4px, 1vw, 6px)',
                     borderRadius: 'clamp(3px, 0.8vw, 4px)',
                     border: `1px solid ${isAffordable
-                      ? (ability.category === 'buff' ? 'rgba(0, 212, 255, 0.3)' : 'rgba(255, 0, 110, 0.3)')
+                      ? (isDebuff ? 'rgba(255, 0, 110, 0.3)' : 'rgba(0, 212, 255, 0.3)')
                       : 'rgba(255,255,255,0.05)'}`,
-                    color: isAffordable ? (ability.category === 'buff' ? '#00d4ff' : '#ff006e') : '#666',
+                    color: isAffordable ? (isDebuff ? '#ff006e' : '#00d4ff') : '#666',
                     flexShrink: 0,
                     minWidth: 'clamp(20px, 5vw, 28px)',
                     textAlign: 'center',

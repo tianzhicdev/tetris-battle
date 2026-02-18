@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ABILITIES } from '@tetris-battle/game-core';
+import { ABILITIES, isDebuffAbility } from '@tetris-battle/game-core';
 import type { UserProfile } from '@tetris-battle/game-core';
 import { progressionService } from '../lib/supabase';
 import { AbilityCopy } from './AbilityCopy';
@@ -130,7 +130,7 @@ export function LoadoutManager({ profile, onClose, onProfileUpdate }: LoadoutMan
                     <>
                       <AbilityCopy
                         ability={ability}
-                        accentColor={ability.category === 'buff' ? '#00d4ff' : '#ff006e'}
+                        accentColor={isDebuffAbility(ability) ? '#ff006e' : '#00d4ff'}
                         compact
                         showDescription={false}
                       />
@@ -208,7 +208,7 @@ export function LoadoutManager({ profile, onClose, onProfileUpdate }: LoadoutMan
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <AbilityCopy
                         ability={ability}
-                        accentColor={ability.category === 'buff' ? '#00d4ff' : '#ff006e'}
+                        accentColor={isDebuffAbility(ability) ? '#ff006e' : '#00d4ff'}
                         compact
                       />
                     </div>

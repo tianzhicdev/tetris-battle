@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { TetrisRenderer } from '../renderer/TetrisRenderer';
-import { ABILITIES } from '@tetris-battle/game-core';
+import { ABILITIES, getAbilityTargeting, isDebuffAbility } from '@tetris-battle/game-core';
 import type { Board, Tetromino, CellValue } from '@tetris-battle/game-core';
 import { DEFAULT_THEME } from '../themes';
 import { audioManager } from '../services/audioManager';
@@ -134,10 +134,10 @@ export function AbilityEffectsDemo() {
     if (!ability || !rendererRef.current) return;
 
     // Play sound effect
-    if (ability.category === 'buff') {
-      audioManager.playSfx('ability_buff_activate');
-    } else {
+    if (isDebuffAbility(ability)) {
       audioManager.playSfx('ability_debuff_activate');
+    } else {
+      audioManager.playSfx('ability_buff_activate');
     }
 
     // Trigger visual effect based on ability type
@@ -248,15 +248,6 @@ export function AbilityEffectsDemo() {
         renderer.animationManager.animateBlocksDisappearing(bottomCells, '#ffd700');
         break;
 
-      case 'row_rotate':
-        // Flash a few rows
-        const rotateCells: { x: number; y: number }[] = [];
-        for (let x = 0; x < 10; x++) {
-          rotateCells.push({ x, y: 15 }, { x, y: 16 }, { x, y: 17 });
-        }
-        renderer.animationManager.animateBlocksFlashing(rotateCells, '#c942ff');
-        break;
-
       default:
         // Generic flash effect for other abilities
         const someCells: { x: number; y: number }[] = [];
@@ -288,8 +279,8 @@ export function AbilityEffectsDemo() {
     });
   };
 
-  const buffs = Object.values(ABILITIES).filter((a: any) => a.category === 'buff');
-  const debuffs = Object.values(ABILITIES).filter((a: any) => a.category === 'debuff');
+  const buffs = Object.values(ABILITIES).filter((a: any) => getAbilityTargeting(a) === 'self');
+  const debuffs = Object.values(ABILITIES).filter((a: any) => getAbilityTargeting(a) === 'opponent');
 
   return (
     <div style={{

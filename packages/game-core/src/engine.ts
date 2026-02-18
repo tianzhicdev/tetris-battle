@@ -175,28 +175,73 @@ export function clearLines(board: Board): { board: Board; linesCleared: number }
 }
 
 // Calculate stars earned from line clears
-export function calculateStars(linesCleared: number, comboCount: number): number {
-  let stars = 0;
+export interface StarCalculationOptions {
+  comboCount?: number;
+  includeComboBonus?: boolean;
+  backToBack?: boolean;
+  tSpin?: boolean | 'single' | 'double' | 'triple';
+  perfectClear?: boolean;
+}
 
+export function calculateLineClearBaseStars(linesCleared: number): number {
   switch (linesCleared) {
     case 1:
-      stars = STAR_VALUES.single;
-      break;
+      return STAR_VALUES.single;
     case 2:
-      stars = STAR_VALUES.double;
-      break;
+      return STAR_VALUES.double;
     case 3:
-      stars = STAR_VALUES.triple;
-      break;
+      return STAR_VALUES.triple;
     case 4:
-      stars = STAR_VALUES.tetris;
-      break;
+      return STAR_VALUES.tetris;
     default:
       return 0;
   }
+}
 
-  // Add combo bonus
-  stars += comboCount * STAR_VALUES.comboBonus;
+function resolveTSpinType(
+  tSpin: StarCalculationOptions['tSpin'],
+  linesCleared: number
+): 'single' | 'double' | 'triple' | null {
+  if (!tSpin) return null;
+  if (tSpin === 'single' || tSpin === 'double' || tSpin === 'triple') return tSpin;
+  if (linesCleared === 1) return 'single';
+  if (linesCleared === 2) return 'double';
+  if (linesCleared === 3) return 'triple';
+  return null;
+}
+
+export function calculateStars(
+  linesCleared: number,
+  comboCountOrOptions: number | StarCalculationOptions = 0,
+  maybeOptions: StarCalculationOptions = {}
+): number {
+  const options: StarCalculationOptions =
+    typeof comboCountOrOptions === 'number'
+      ? { ...maybeOptions, comboCount: comboCountOrOptions }
+      : comboCountOrOptions;
+
+  const comboCount = options.comboCount ?? 0;
+  const includeComboBonus = options.includeComboBonus ?? true;
+
+  let stars = calculateLineClearBaseStars(linesCleared);
+  if (stars <= 0) return 0;
+
+  if (includeComboBonus) {
+    stars += comboCount * STAR_VALUES.comboBonus;
+  }
+
+  const tSpinType = resolveTSpinType(options.tSpin, linesCleared);
+  if (tSpinType === 'single') stars += STAR_VALUES.tSpinSingleBonus;
+  if (tSpinType === 'double') stars += STAR_VALUES.tSpinDoubleBonus;
+  if (tSpinType === 'triple') stars += STAR_VALUES.tSpinTripleBonus;
+
+  if (options.backToBack) {
+    stars += STAR_VALUES.backToBackBonus;
+  }
+
+  if (options.perfectClear) {
+    stars += STAR_VALUES.perfectClearBonus;
+  }
 
   return stars;
 }

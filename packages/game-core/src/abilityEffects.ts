@@ -275,26 +275,6 @@ export function applyGoldDigger(board: Board, blockCount: number = 5, rng?: Seed
   return { ...board, grid: newGrid };
 }
 
-export function applyRowRotate(board: Board): Board {
-  // Each row rotates 1-8 positions randomly left or right
-  const newGrid = board.grid.map(row => [...row]);
-
-  for (let y = 0; y < board.height; y++) {
-    const positions = Math.floor(Math.random() * 8) + 1; // 1-8 positions
-    const direction = Math.random() > 0.5 ? 1 : -1; // 1 = right, -1 = left
-    const rotatedRow: CellValue[] = Array(board.width).fill(null);
-
-    for (let x = 0; x < board.width; x++) {
-      const newX = (x + direction * positions + board.width) % board.width;
-      rotatedRow[newX] = newGrid[y][x];
-    }
-
-    newGrid[y] = rotatedRow;
-  }
-
-  return { ...board, grid: newGrid };
-}
-
 export function applyFillHoles(board: Board): Board {
   // Fill all empty spaces that are surrounded by blocks
   const newGrid = board.grid.map(row => [...row]);
@@ -362,7 +342,7 @@ function isEnclosed(grid: CellValue[][], startX: number, startY: number, visited
 
 // ADDITIONAL ABILITY EFFECTS (for AI and spec 003)
 
-export function applyAddJunkRows(board: Board, numRows: number = 2): Board {
+export function applyAddJunkRows(board: Board, numRows: number = 2, rng?: SeededRandom): Board {
   // Add garbage rows to the bottom of the board, pushing existing content up
   const newGrid = board.grid.map(row => [...row]);
 
@@ -373,10 +353,10 @@ export function applyAddJunkRows(board: Board, numRows: number = 2): Board {
 
   // Add garbage rows at bottom with 1 random gap per row
   for (let i = 0; i < numRows; i++) {
-    const gapColumn = Math.floor(Math.random() * board.width);
+    const gapColumn = randomInt(board.width, rng);
     const junkRow: CellValue[] = [];
     for (let x = 0; x < board.width; x++) {
-      junkRow.push(x === gapColumn ? null : randomCellType());
+      junkRow.push(x === gapColumn ? null : randomCellType(rng));
     }
     newGrid.push(junkRow);
   }

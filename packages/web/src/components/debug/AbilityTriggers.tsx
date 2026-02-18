@@ -1,16 +1,16 @@
-import { ABILITIES } from '@tetris-battle/game-core';
+import { ABILITIES, getAbilityTargeting } from '@tetris-battle/game-core';
 
 interface AbilityTriggersProps {
   onTrigger: (abilityType: string, target: 'self' | 'opponent') => void;
 }
 
 export function AbilityTriggers({ onTrigger }: AbilityTriggersProps) {
-  const buffs = Object.values(ABILITIES).filter(a => a.category === 'buff');
-  const debuffs = Object.values(ABILITIES).filter(a => a.category === 'debuff');
+  const buffs = Object.values(ABILITIES).filter((a) => getAbilityTargeting(a) === 'self');
+  const debuffs = Object.values(ABILITIES).filter((a) => getAbilityTargeting(a) === 'opponent');
 
   const handleTrigger = (abilityType: string) => {
     const ability = ABILITIES[abilityType as keyof typeof ABILITIES];
-    const target = ability.category === 'buff' ? 'self' : 'opponent';
+    const target = getAbilityTargeting(ability);
     onTrigger(abilityType, target);
   };
 

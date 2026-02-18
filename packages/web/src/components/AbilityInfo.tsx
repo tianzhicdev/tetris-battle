@@ -1,4 +1,4 @@
-import { ABILITIES } from '@tetris-battle/game-core';
+import { ABILITIES, getAbilityTargeting, isDebuffAbility } from '@tetris-battle/game-core';
 import type { Ability } from '@tetris-battle/game-core';
 import { motion } from 'framer-motion';
 import { overlayVariants, modalVariants, springs } from '../utils/animations';
@@ -9,12 +9,12 @@ interface AbilityInfoProps {
 }
 
 export function AbilityInfo({ onClose }: AbilityInfoProps) {
-  const buffs = Object.values(ABILITIES).filter(a => a.category === 'buff');
-  const debuffs = Object.values(ABILITIES).filter(a => a.category === 'debuff');
+  const buffs = Object.values(ABILITIES).filter((a) => getAbilityTargeting(a) === 'self');
+  const debuffs = Object.values(ABILITIES).filter((a) => getAbilityTargeting(a) === 'opponent');
 
   const renderAbilityCard = (ability: Ability) => {
-    const isBuff = ability.category === 'buff';
-    const accentColor = isBuff ? '#00d4ff' : '#ff006e';
+    const isDebuff = isDebuffAbility(ability);
+    const accentColor = isDebuff ? '#ff006e' : '#00d4ff';
 
     return (
       <div

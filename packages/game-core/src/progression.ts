@@ -1,5 +1,5 @@
 // Progression system types and constants
-import abilitiesConfig from './abilities.json';
+import { ABILITY_LIST } from './abilities';
 
 export interface UserProfile {
   userId: string; // Clerk user ID
@@ -75,10 +75,16 @@ export const COIN_VALUES = {
   streak5: 25,
 } as const;
 
+function getUnlockLevel(ability: { unlockLevel?: number; unlockTier?: number }): number {
+  if (typeof ability.unlockLevel === 'number') return ability.unlockLevel;
+  if (typeof ability.unlockTier === 'number') return ability.unlockTier;
+  return 1;
+}
+
 // Starter abilities (free, no unlock cost) - loaded from JSON
-export const STARTER_ABILITIES = Object.entries(abilitiesConfig.abilities)
-  .filter(([_, ability]) => ability.unlockLevel === 1 && ability.unlockCost === 0)
-  .map(([id, _]) => id);
+export const STARTER_ABILITIES = ABILITY_LIST
+  .filter((ability) => getUnlockLevel(ability) === 1 && ability.unlockCost === 0)
+  .map((ability) => ability.id);
 
 // Ability unlock mapping
 export interface AbilityUnlock {
@@ -88,10 +94,10 @@ export interface AbilityUnlock {
 }
 
 // Config-driven ability unlocks - loaded from JSON
-export const ABILITY_UNLOCKS: AbilityUnlock[] = Object.entries(abilitiesConfig.abilities)
-  .map(([id, ability]) => ({
-    abilityId: id,
-    level: ability.unlockLevel,
+export const ABILITY_UNLOCKS: AbilityUnlock[] = ABILITY_LIST
+  .map((ability) => ({
+    abilityId: ability.id,
+    level: getUnlockLevel(ability),
     cost: ability.unlockCost,
   }))
   .sort((a, b) => a.level - b.level || a.cost - b.cost);

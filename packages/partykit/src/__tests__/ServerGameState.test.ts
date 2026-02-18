@@ -79,6 +79,24 @@ describe('ServerGameState', () => {
     expect(state.gameState.stars).toBe(100); // STAR_VALUES.startingPool
   });
 
+  it('should passively regenerate 1 star per second', () => {
+    state.gameState.stars = 100;
+    (state as any).lastPassiveRegenTickMs = Date.now() - 3200;
+
+    state.tick();
+
+    expect(state.gameState.stars).toBeGreaterThanOrEqual(103);
+  });
+
+  it('should clamp passive regen to star cap', () => {
+    state.gameState.stars = 299;
+    (state as any).lastPassiveRegenTickMs = Date.now() - 5000;
+
+    state.tick();
+
+    expect(state.gameState.stars).toBe(300);
+  });
+
   it('should detect game over on piece collision', () => {
     // Fill board to top by hard dropping many pieces
     for (let i = 0; i < 50; i++) {
@@ -122,7 +140,7 @@ describe('ServerGameState', () => {
     const originalTickRate = state.tickRate;
     state.applyAbility('speed_up_opponent');
 
-    expect(state.tickRate).toBe(originalTickRate / 3);
+    expect(state.tickRate).toBe(Math.round(originalTickRate / 2.5));
     expect(state.getActiveEffects()).toContain('speed_up_opponent');
   });
 
@@ -171,21 +189,23 @@ describe('ServerGameState', () => {
       });
 
       it('should apply random_spawner - adds random blocks', () => {
+        const blockCountBefore = countBlocks(state.gameState.board.grid);
         const boardBefore = JSON.stringify(state.gameState.board.grid);
         state.applyAbility('random_spawner');
+        const blockCountAfter = countBlocks(state.gameState.board.grid);
         const boardAfter = JSON.stringify(state.gameState.board.grid);
 
-        // Starts periodic effect (no immediate board mutation).
-        expect(state.getActiveEffects()).toContain('random_spawner');
-        expect(boardAfter).toBe(boardBefore);
+        // One-shot board mutation.
+        expect(boardAfter).not.toBe(boardBefore);
+        expect(blockCountAfter).toBeGreaterThanOrEqual(blockCountBefore);
       });
 
-      it('should apply row_rotate - rotates board rows', () => {
+      it('should apply garbage_rain - adds garbage rows', () => {
         const boardBefore = JSON.parse(JSON.stringify(state.gameState.board.grid));
-        state.applyAbility('row_rotate');
+        state.applyAbility('garbage_rain');
         const boardAfter = state.gameState.board.grid;
 
-        // Board should change due to rotation
+        // Board should change due to injected garbage rows
         expect(JSON.stringify(boardAfter)).not.toBe(JSON.stringify(boardBefore));
       });
 
@@ -199,13 +219,15 @@ describe('ServerGameState', () => {
       });
 
       it('should apply gold_digger - removes random blocks', () => {
+        const blockCountBefore = countBlocks(state.gameState.board.grid);
         const boardBefore = JSON.stringify(state.gameState.board.grid);
         state.applyAbility('gold_digger');
+        const blockCountAfter = countBlocks(state.gameState.board.grid);
         const boardAfter = JSON.stringify(state.gameState.board.grid);
 
-        // Starts periodic effect (no immediate board mutation).
-        expect(state.getActiveEffects()).toContain('gold_digger');
-        expect(boardAfter).toBe(boardBefore);
+        // One-shot board mutation.
+        expect(boardAfter).not.toBe(boardBefore);
+        expect(blockCountAfter).toBeLessThanOrEqual(blockCountBefore);
       });
     });
 
@@ -214,7 +236,7 @@ describe('ServerGameState', () => {
         const originalTickRate = state.tickRate;
         state.applyAbility('speed_up_opponent');
 
-        expect(state.tickRate).toBe(originalTickRate / 3);
+        expect(state.tickRate).toBe(Math.round(originalTickRate / 2.5));
         expect(state.getActiveEffects()).toContain('speed_up_opponent');
 
         // Effect should be in active effects
@@ -278,6 +300,49 @@ describe('ServerGameState', () => {
         const activeEffects = state.getActiveEffects();
         expect(activeEffects).toContain('weird_shapes');
       });
+
+      it('should apply narrow_escape and restore board width on expiry', () => {
+        state.applyAbility('narrow_escape');
+        expect(state.gameState.board.width).toBe(7);
+        expect(state.getActiveEffects()).toContain('narrow_escape');
+
+        state.activeEffects.set('narrow_escape', Date.now() - 1000);
+        state.getActiveEffects();
+
+        expect(state.gameState.board.width).toBe(10);
+        expect(state.getActiveEffects()).not.toContain('narrow_escape');
+      });
+
+      it('should apply wide_load and collapse board width on expiry', () => {
+        state.applyAbility('wide_load');
+        expect(state.gameState.board.width).toBe(13);
+        expect(state.getActiveEffects()).toContain('wide_load');
+
+        state.activeEffects.set('wide_load', Date.now() - 1000);
+        state.getActiveEffects();
+
+        expect(state.gameState.board.width).toBe(10);
+        expect(state.getActiveEffects()).not.toContain('wide_load');
+      });
+
+      it('should invert gravity while gravity_flip is active', () => {
+        state.gameState.currentPiece!.position.y = 10;
+        state.applyAbility('gravity_flip');
+
+        state.tick();
+
+        expect(state.gameState.currentPiece!.position.y).toBe(9);
+      });
+
+      it('should apply quicksand sinks periodically', () => {
+        state.gameState.board.grid[5][0] = 'I';
+        state.applyAbility('quicksand');
+
+        (state as any).quicksandNextSinkAtMs = Date.now() - 1000;
+        state.tick();
+
+        expect(state.gameState.board.grid[7][0]).toBe('I');
+      });
     });
 
     describe('Effect Duration and Cleanup', () => {
@@ -307,18 +372,19 @@ describe('ServerGameState', () => {
         expect(activeEffects.length).toBeGreaterThanOrEqual(3);
       });
 
-      it('should restore normal tick rate after speed_up expires', async () => {
+      it('should restore normal tick rate after speed_up expires', () => {
         const originalTickRate = state.tickRate;
         state.applyAbility('speed_up_opponent');
 
-        expect(state.tickRate).toBe(originalTickRate / 3);
+        expect(state.tickRate).toBe(Math.round(originalTickRate / 2.5));
 
-        // Wait for effect to expire (10 seconds + buffer)
-        // Note: This is a simplified test - in production you'd use fake timers
-        await new Promise(resolve => setTimeout(resolve, 10100));
+        // Manually expire speed-up and force cleanup.
+        state.activeEffects.set('speed_up_opponent', Date.now() - 1000);
+        state.getActiveEffects();
+
         expect(state.tickRate).toBe(originalTickRate);
         expect(state.getActiveEffects()).not.toContain('speed_up_opponent');
-      }, 11000); // 11 second timeout for test
+      });
 
       it('should restore normal controls after reverse_controls expires', () => {
         state.applyAbility('reverse_controls');

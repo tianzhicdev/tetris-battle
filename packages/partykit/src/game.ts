@@ -3,6 +3,9 @@ import {
   createInitialPlayerMetrics,
   AdaptiveAI,
   ABILITIES,
+  getAbilityTargeting,
+  isDebuffAbility,
+  STAR_VALUES,
   type AIPersona,
   type AIMove,
   type PlayerMetrics,
@@ -24,16 +27,23 @@ type AbilityRejectReason =
   | 'ability_not_in_loadout'
   | 'insufficient_stars'
   | 'target_player_missing'
-  | 'target_state_missing';
+  | 'target_state_missing'
+  | 'clone_no_ability'
+  | 'blocked_by_shield'
+  | 'reflected_by_opponent';
 
 interface AbilityActivationResult {
   type: 'ability_activation_result';
   requestId?: string;
   abilityType: string;
+  appliedAbilityType?: string;
   targetPlayerId: string;
+  finalTargetPlayerId?: string;
   accepted: boolean;
   reason?: AbilityRejectReason;
+  interceptedBy?: 'shield' | 'reflect';
   message: string;
+  chargedCost?: number;
   remainingStars?: number;
   serverTime: number;
 }
@@ -52,6 +62,7 @@ export default class GameRoomServer implements Party.Server {
   aiAbilityLoadout: string[] = [];
   aiLastAbilityUse: number = 0;
   aiIsExecuting: boolean = false; // Prevent overlapping AI executions
+  lastNonCloneAbilityByPlayer: Map<string, string> = new Map();
 
   // Server-authoritative mode
   serverGameStates: Map<string, ServerGameState> = new Map();
@@ -138,6 +149,7 @@ export default class GameRoomServer implements Party.Server {
     const playerLoadout: string[] = loadout || [];
     const serverState = new ServerGameState(playerId, this.roomSeed, playerLoadout);
     this.serverGameStates.set(playerId, serverState);
+    this.lastNonCloneAbilityByPlayer.delete(playerId);
 
     console.log(`[GAME] Player ${playerId} joined with server-side state`);
 
@@ -343,21 +355,10 @@ export default class GameRoomServer implements Party.Server {
     // Initialize adaptive AI with player metrics
     this.adaptiveAI = new AdaptiveAI(humanPlayer.metrics);
 
-    // Set AI ability loadout (debuff-focused)
-    this.aiAbilityLoadout = [
-      'earthquake',
-      'random_spawner',
-      'death_cross',
-      'row_rotate',
-      'gold_digger',
-      'speed_up_opponent',
-      'reverse_controls',
-      'rotation_lock',
-      'blind_spot',
-      'screen_shake',
-      'shrink_ceiling',
-      'weird_shapes',
-    ];
+    // Set AI ability loadout from current debuff catalog (v2 source of truth).
+    this.aiAbilityLoadout = Object.values(ABILITIES)
+      .filter((ability) => isDebuffAbility(ability))
+      .map((ability) => ability.type);
     aiState.loadout = [...this.aiAbilityLoadout];
     this.aiLastAbilityUse = Date.now();
 
@@ -484,12 +485,13 @@ export default class GameRoomServer implements Party.Server {
     }
 
     // Validate target category
-    if (ability.category === 'buff' && targetPlayerId !== playerId) {
-      this.rejectAbilityActivation(playerId, abilityType, targetPlayerId, requestId, 'invalid_target', `Buff ${abilityType} must target self`);
+    const targeting = getAbilityTargeting(ability);
+    if (targeting === 'self' && targetPlayerId !== playerId) {
+      this.rejectAbilityActivation(playerId, abilityType, targetPlayerId, requestId, 'invalid_target', `${abilityType} must target self`);
       return;
     }
-    if (ability.category === 'debuff' && targetPlayerId === playerId) {
-      this.rejectAbilityActivation(playerId, abilityType, targetPlayerId, requestId, 'invalid_target', `Debuff ${abilityType} must target opponent`);
+    if (targeting === 'opponent' && targetPlayerId === playerId) {
+      this.rejectAbilityActivation(playerId, abilityType, targetPlayerId, requestId, 'invalid_target', `${abilityType} must target opponent`);
       return;
     }
 
@@ -508,19 +510,6 @@ export default class GameRoomServer implements Party.Server {
       this.rejectAbilityActivation(playerId, abilityType, targetPlayerId, requestId, 'ability_not_in_loadout', `${abilityType} is not in ${playerId}'s loadout`);
       return;
     }
-    if (playerState.gameState.stars < ability.cost) {
-      this.rejectAbilityActivation(
-        playerId,
-        abilityType,
-        targetPlayerId,
-        requestId,
-        'insufficient_stars',
-        `Insufficient stars for ${abilityType}: ${playerState.gameState.stars}/${ability.cost}`
-      );
-      return;
-    }
-    playerState.gameState.stars -= ability.cost;
-    console.log(`[ABILITY] Accepted id=${requestId ?? 'n/a'} ${playerId} used ${abilityType}, stars: ${playerState.gameState.stars}`);
 
     const targetPlayer = this.players.get(targetPlayerId);
     if (!targetPlayer) {
@@ -528,32 +517,178 @@ export default class GameRoomServer implements Party.Server {
       return;
     }
 
-    // Apply ability to target player's server-side state
     const targetServerState = this.serverGameStates.get(targetPlayerId);
     if (!targetServerState) {
       this.rejectAbilityActivation(playerId, abilityType, targetPlayerId, requestId, 'target_state_missing', `Target server state not found for ${targetPlayerId}`);
       return;
     }
-    targetServerState.applyAbility(abilityType);
-    const targetConn = this.getConnection(targetPlayer.connectionId);
-    if (targetConn) {
-      targetConn.send(JSON.stringify({
-        type: 'ability_received',
+
+    const chargedCost = playerState.getAbilityCostForCast(ability.cost);
+    if (playerState.gameState.stars < chargedCost) {
+      this.rejectAbilityActivation(
+        playerId,
+        abilityType,
+        targetPlayerId,
+        requestId,
+        'insufficient_stars',
+        `Insufficient stars for ${abilityType}: ${playerState.gameState.stars}/${chargedCost}`
+      );
+      return;
+    }
+    playerState.gameState.stars -= chargedCost;
+    playerState.consumeAbilityCastModifiers();
+    console.log(`[ABILITY] Accepted id=${requestId ?? 'n/a'} ${playerId} used ${abilityType}, charged=${chargedCost}, stars=${playerState.gameState.stars}`);
+
+    let interceptedBy: 'shield' | 'reflect' | undefined;
+    let finalTargetPlayerId = targetPlayerId;
+    let fromPlayerId = playerId;
+
+    // Defensive interception (server-authoritative): Shield/Reflect is resolved
+    // before any debuff is applied.
+    if (isDebuffAbility(ability)) {
+      const interception = targetServerState.consumeDefensiveInterception();
+      if (interception === 'shield') {
+        interceptedBy = 'shield';
+        console.log(`[ABILITY] Blocked by shield id=${requestId ?? 'n/a'} ${playerId} -> ${targetPlayerId}: ${abilityType}`);
+      } else if (interception === 'reflect') {
+        interceptedBy = 'reflect';
+        finalTargetPlayerId = playerId;
+        fromPlayerId = targetPlayerId;
+        console.log(`[ABILITY] Reflected id=${requestId ?? 'n/a'} ${playerId} -> ${targetPlayerId} back to ${playerId}: ${abilityType}`);
+      }
+    }
+
+    if (interceptedBy === 'shield') {
+      if (abilityType !== 'clone') {
+        this.lastNonCloneAbilityByPlayer.set(playerId, abilityType);
+      }
+      this.sendAbilityActivationResult(playerId, {
+        type: 'ability_activation_result',
+        requestId,
+        abilityType,
+        appliedAbilityType: abilityType,
+        targetPlayerId,
+        finalTargetPlayerId: targetPlayerId,
+        accepted: false,
+        reason: 'blocked_by_shield',
+        interceptedBy: 'shield',
+        message: `${abilityType} blocked by shield`,
+        chargedCost,
+        remainingStars: playerState.gameState.stars,
+        serverTime: Date.now(),
+      });
+      this.sendToPlayer(targetPlayerId, {
+        type: 'ability_blocked',
         abilityType,
         fromPlayerId: playerId,
+        blockedBy: 'shield',
+        serverTime: Date.now(),
+      });
+      this.broadcastState();
+      return;
+    }
+
+    let appliedAbilityType = abilityType;
+
+    // Clone resolves to the opponent's latest non-clone cast ability.
+    if (abilityType === 'clone') {
+      const cloneSourcePlayerId = finalTargetPlayerId === playerId ? targetPlayerId : finalTargetPlayerId;
+      const copiedAbilityType = this.lastNonCloneAbilityByPlayer.get(cloneSourcePlayerId);
+      const copiedAbility = copiedAbilityType
+        ? ABILITIES[copiedAbilityType as keyof typeof ABILITIES]
+        : undefined;
+
+      if (!copiedAbility) {
+        // No valid copy target: refund and notify.
+        playerState.gameState.stars = Math.min(
+          STAR_VALUES.maxCapacity,
+          playerState.gameState.stars + chargedCost
+        );
+        this.sendAbilityActivationResult(playerId, {
+          type: 'ability_activation_result',
+          requestId,
+          abilityType,
+          appliedAbilityType: abilityType,
+          targetPlayerId,
+          finalTargetPlayerId,
+          accepted: false,
+          reason: 'clone_no_ability',
+          message: 'Clone failed: opponent has no cloneable ability yet',
+          chargedCost: 0,
+          remainingStars: playerState.gameState.stars,
+          serverTime: Date.now(),
+        });
+        this.broadcastState();
+        return;
+      }
+
+      appliedAbilityType = copiedAbility.type;
+
+      // Clone applies copied ability "as if caster used it":
+      // copied debuffs target opponent, copied buffs/defensive target caster.
+      if (getAbilityTargeting(copiedAbility) === 'self') {
+        finalTargetPlayerId = playerId;
+        fromPlayerId = playerId;
+      }
+    }
+
+    const finalTargetServerState = this.serverGameStates.get(finalTargetPlayerId);
+    const finalTargetPlayer = this.players.get(finalTargetPlayerId);
+    if (!finalTargetServerState || !finalTargetPlayer) {
+      this.rejectAbilityActivation(
+        playerId,
+        appliedAbilityType,
+        finalTargetPlayerId,
+        requestId,
+        'target_state_missing',
+        `Final target server state not found for ${finalTargetPlayerId}`
+      );
+      return;
+    }
+
+    if (appliedAbilityType === 'purge') {
+      // Purge clears active timed effects for both players.
+      playerState.clearTimedEffects();
+      const opponentId = this.getOpponentId(playerId);
+      if (opponentId) {
+        const opponentState = this.serverGameStates.get(opponentId);
+        opponentState?.clearTimedEffects();
+      }
+    } else {
+      // Apply ability to final target player's server-side state.
+      finalTargetServerState.applyAbility(appliedAbilityType);
+    }
+
+    const finalTargetConn = this.getConnection(finalTargetPlayer.connectionId);
+    if (finalTargetConn) {
+      finalTargetConn.send(JSON.stringify({
+        type: 'ability_received',
+        abilityType: appliedAbilityType,
+        fromPlayerId,
       }));
     }
-    if (targetPlayerId === this.aiPlayer?.id) {
+    if (finalTargetPlayerId === this.aiPlayer?.id) {
       this.aiMoveQueue = [];
+    }
+
+    if (abilityType !== 'clone') {
+      this.lastNonCloneAbilityByPlayer.set(playerId, abilityType);
     }
 
     this.sendAbilityActivationResult(playerId, {
       type: 'ability_activation_result',
       requestId,
       abilityType,
+      appliedAbilityType,
       targetPlayerId,
-      accepted: true,
-      message: `${abilityType} applied to ${targetPlayerId}`,
+      finalTargetPlayerId,
+      accepted: interceptedBy !== 'reflect',
+      reason: interceptedBy === 'reflect' ? 'reflected_by_opponent' : undefined,
+      interceptedBy,
+      message: interceptedBy === 'reflect'
+        ? `${abilityType} reflected back to ${playerId}`
+        : `${appliedAbilityType} applied to ${finalTargetPlayerId}`,
+      chargedCost,
       remainingStars: playerState.gameState.stars,
       serverTime: Date.now(),
     });
@@ -602,9 +737,9 @@ export default class GameRoomServer implements Party.Server {
 
     // Strategic ability selection
     let selectedAbility: string | null = null;
-    const offensiveOptions = this.aiAbilityLoadout.filter(ability => {
+    const offensiveOptions = this.aiAbilityLoadout.filter((ability) => {
       const metadata = ABILITIES[ability as keyof typeof ABILITIES];
-      return metadata?.category === 'debuff';
+      return !!metadata && isDebuffAbility(metadata);
     });
 
     // AI losing (board high) — pick an offensive debuff to disrupt player
@@ -784,5 +919,6 @@ export default class GameRoomServer implements Party.Server {
 
     this.serverGameStates.delete(disconnectedPlayerId);
     this.players.delete(disconnectedPlayerId);
+    this.lastNonCloneAbilityByPlayer.delete(disconnectedPlayerId);
   }
 }

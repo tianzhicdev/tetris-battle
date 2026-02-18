@@ -60,27 +60,20 @@ export function createInitialPlayerMetrics(): PlayerMetrics {
 }
 
 // Abilities
-export type AbilityType =
-  // Buffs
-  | 'cross_firebomb'
-  | 'circle_bomb'
-  | 'clear_rows'
-  | 'cascade_multiplier'
-  | 'mini_blocks'
-  | 'fill_holes'
-  // Debuffs
-  | 'speed_up_opponent'
-  | 'weird_shapes'
-  | 'random_spawner'
-  | 'rotation_lock'
-  | 'blind_spot'
-  | 'reverse_controls'
-  | 'earthquake'
-  | 'screen_shake'
-  | 'shrink_ceiling'
-  | 'death_cross'
-  | 'gold_digger'
-  | 'row_rotate';
+export type AbilityType = string;
+export type AbilityCategory =
+  // Legacy categories (kept for compatibility with older data/tests)
+  | 'buff'
+  | 'debuff'
+  // V2 categories
+  | 'buff_board'
+  | 'buff_pieces'
+  | 'buff_economy'
+  | 'debuff_visual'
+  | 'debuff_board'
+  | 'debuff_controls'
+  | 'debuff_geometry'
+  | 'defensive';
 
 export interface Ability {
   id: string;
@@ -89,10 +82,13 @@ export interface Ability {
   shortName: string; // Short text for UI display (max 8 chars)
   description: string;
   technical_description?: string;
+  implementation?: string;
+  balance_notes?: string;
   cost: number;
-  duration?: number; // in milliseconds, undefined for instant
-  category: 'buff' | 'debuff';
-  unlockLevel: number;
+  duration?: number; // in milliseconds; 0 means instant
+  category: AbilityCategory;
+  unlockLevel?: number;
+  unlockTier?: number;
   unlockCost: number; // Coins needed to purchase
 }
 
@@ -130,10 +126,16 @@ export interface GameAction {
 export const STAR_VALUES = {
   single: 5,
   double: 12,
-  triple: 25,
-  tetris: 50,
-  comboBonus: 1,
+  triple: 22,
+  tetris: 35,
+  comboBonus: 3,
+  backToBackBonus: 5,
+  perfectClearBonus: 50,
+  tSpinSingleBonus: 8,
+  tSpinDoubleBonus: 20,
+  tSpinTripleBonus: 30,
   startingPool: 100,
-  maxCapacity: 500,
+  maxCapacity: 300,
+  passiveRegenPerSecond: 1,
   comboWindow: 3000, // 3 seconds
 } as const;
