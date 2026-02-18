@@ -315,7 +315,7 @@ describe('ServerGameState', () => {
 
       it('should apply wide_load and collapse board width on expiry', () => {
         state.applyAbility('wide_load');
-        expect(state.gameState.board.width).toBe(13);
+        expect(state.gameState.board.width).toBe(12);
         expect(state.getActiveEffects()).toContain('wide_load');
 
         state.activeEffects.set('wide_load', Date.now() - 1000);
@@ -325,13 +325,17 @@ describe('ServerGameState', () => {
         expect(state.getActiveEffects()).not.toContain('wide_load');
       });
 
-      it('should invert gravity while gravity_flip is active', () => {
-        state.gameState.currentPiece!.position.y = 10;
-        state.applyAbility('gravity_flip');
+      it('should apply tilt drift every 2 rows', () => {
+        state.gameState.currentPiece!.position.x = 4;
+        state.gameState.currentPiece!.position.y = 0;
+        state.applyAbility('tilt');
+        (state as any).tiltDirection = 1;
 
-        state.tick();
+        const originalX = state.gameState.currentPiece!.position.x;
+        state.processInput('soft_drop');
+        state.processInput('soft_drop');
 
-        expect(state.gameState.currentPiece!.position.y).toBe(9);
+        expect(state.gameState.currentPiece!.position.x).toBe(originalX + 1);
       });
 
       it('should apply quicksand sinks periodically', () => {

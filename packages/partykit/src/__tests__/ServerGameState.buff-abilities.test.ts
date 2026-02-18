@@ -73,33 +73,67 @@ describe('ServerGameState - Buff Abilities', () => {
   });
 
   describe('Fill Holes', () => {
-    it('should fill surrounded empty cells', () => {
-      // Create a board with holes
-      const grid = state.gameState.board.grid;
-      // Create an enclosed region in the middle of the board
-      // Build walls
+    it('fills only enclosed cavities smaller than 4 cells', () => {
+      const board = state.gameState.board;
+      board.grid = Array.from({ length: board.height }, () =>
+        Array.from({ length: board.width }, () => null)
+      );
+
+      const grid = board.grid;
+      for (let x = 2; x <= 6; x++) {
+        grid[14][x] = 'I';
+        grid[18][x] = 'I';
+      }
+      for (let y = 15; y <= 17; y++) {
+        grid[y][2] = 'I';
+        grid[y][6] = 'I';
+      }
+      for (let y = 15; y <= 17; y++) {
+        for (let x = 3; x <= 5; x++) {
+          grid[y][x] = 'I';
+        }
+      }
+
+      // Three-cell enclosed cavity.
+      grid[15][3] = null;
+      grid[15][4] = null;
+      grid[16][3] = null;
+
+      state.applyAbility('fill_holes');
+      const nextGrid = state.gameState.board.grid;
+      expect(nextGrid[15][3]).not.toBeNull();
+      expect(nextGrid[15][4]).not.toBeNull();
+      expect(nextGrid[16][3]).not.toBeNull();
+    });
+
+    it('does not fill enclosed cavities with size 4 or greater', () => {
+      const board = state.gameState.board;
+      board.grid = Array.from({ length: board.height }, () =>
+        Array.from({ length: board.width }, () => null)
+      );
+
+      const grid = board.grid;
       for (let x = 3; x <= 6; x++) {
-        grid[18][x] = 'I'; // Bottom wall
-        grid[15][x] = 'I'; // Top wall
+        grid[15][x] = 'I';
+        grid[18][x] = 'I';
       }
       for (let y = 16; y <= 17; y++) {
-        grid[y][3] = 'I'; // Left wall
-        grid[y][6] = 'I'; // Right wall
+        grid[y][3] = 'I';
+        grid[y][6] = 'I';
       }
-      // Create holes in the middle
+
+      // Four-cell enclosed cavity (2x2).
       grid[16][4] = null;
       grid[16][5] = null;
       grid[17][4] = null;
       grid[17][5] = null;
 
       state.applyAbility('fill_holes');
-
-      // Enclosed holes should now be filled
-      const newGrid = state.gameState.board.grid;
-      expect(newGrid[16][4]).not.toBeNull();
-      expect(newGrid[16][5]).not.toBeNull();
-      expect(newGrid[17][4]).not.toBeNull();
-      expect(newGrid[17][5]).not.toBeNull();
+      const nextGrid = state.gameState.board.grid;
+      expect(nextGrid[16][4]).toBeNull();
+      expect(nextGrid[16][5]).toBeNull();
+      expect(nextGrid[17][4]).toBeNull();
+      expect(nextGrid[17][5]).toBeNull();
     });
   });
 

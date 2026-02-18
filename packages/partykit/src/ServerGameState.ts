@@ -34,6 +34,8 @@ import {
 
 const INFINITE_EFFECT = Number.POSITIVE_INFINITY;
 const BASE_TICK_RATE_MS = 1000;
+const STANDARD_BOARD_WIDTH = 10;
+const WIDE_LOAD_BOARD_WIDTH = 12;
 
 /**
  * ServerGameState manages the authoritative game state for one player
@@ -53,11 +55,13 @@ export class ServerGameState {
   private bombMode: { type: 'circle' | 'cross' } | null = null;
   private miniBlocksRemaining: number = 0;
   private weirdShapesRemaining: number = 0;
-  private gluedPiecesRemaining: number = 0;
   private shapeshifterPiecesRemaining: number = 0;
   private magnetPiecesRemaining: number = 0;
-  private currentPieceIsGlued: boolean = false;
   private currentPieceIsShapeshifter: boolean = false;
+  private currentPieceIsMagnetized: boolean = false;
+  private currentPieceMagnetTarget: { x: number; y: number; rotation: number } | null = null;
+  private currentPieceSpawnedAtMs: number = 0;
+  private currentPieceLastManualInputAtMs: number = 0;
   private currentPieceMorphLastMs: number = 0;
   private currentPieceRowsMovedSinceSpawn: number = 0;
 
@@ -106,6 +110,7 @@ export class ServerGameState {
     }
 
     const now = Date.now();
+    this.currentPieceLastManualInputAtMs = now;
     this.applyPassiveStarRegen(now);
     this.refreshEffects(now);
     this.maybeMorphCurrentPiece(now);
@@ -183,9 +188,13 @@ export class ServerGameState {
     }
 
     this.maybeMorphCurrentPiece(now);
+    if (this.shouldAutoPlaceMagnetPiece(now)) {
+      this.snapToMagnetTarget();
+      this.lockAndSpawn(now);
+      return true;
+    }
 
-    const gravityDirection = this.getGravityDirection(now);
-    const moved = movePiece(this.gameState.currentPiece, 0, gravityDirection);
+    const moved = movePiece(this.gameState.currentPiece, 0, 1);
 
     if (isValidPosition(this.gameState.board, moved)) {
       this.gameState.currentPiece = moved;
@@ -204,12 +213,11 @@ export class ServerGameState {
 
     this.maybeMorphCurrentPiece(now);
 
-    const gravityDirection = this.getGravityDirection(now);
     let dropPiece = this.gameState.currentPiece;
     let movedRows = 0;
 
     while (true) {
-      const candidate = movePiece(dropPiece, 0, gravityDirection);
+      const candidate = movePiece(dropPiece, 0, 1);
       if (!isValidPosition(this.gameState.board, candidate)) break;
       dropPiece = candidate;
       movedRows++;
@@ -311,16 +319,9 @@ export class ServerGameState {
         this.gameState.stars + starsEarned
       );
 
-      // Glue: if a glued piece cleared rows, settle neighboring stack downward.
-      if (this.currentPieceIsGlued) {
-        this.gameState.board = this.applyGravityToBoard(this.gameState.board);
-        this.gameState.board = this.clearLinesWithoutRewards(this.gameState.board, false);
-      }
     } else {
       this.gameState.comboCount = 0;
     }
-
-    this.currentPieceIsGlued = false;
 
     if (shrinkCeilingViolated) {
       this.gameState.isGameOver = true;
@@ -354,16 +355,6 @@ export class ServerGameState {
       this.gameState.nextPieces.push(getRandomTetrominoSeeded(this.rng));
     }
 
-    if (this.getGravityDirection(now) < 0) {
-      nextPiece = {
-        ...nextPiece,
-        position: {
-          ...nextPiece.position,
-          y: Math.max(0, this.gameState.board.height - nextPiece.shape.length),
-        },
-      };
-    }
-
     this.gameState.currentPiece = nextPiece;
 
     this.currentPieceIsShapeshifter = false;
@@ -374,20 +365,19 @@ export class ServerGameState {
       this.syncCounterEffect('shapeshifter', this.shapeshifterPiecesRemaining);
     }
 
-    this.currentPieceIsGlued = false;
-    if (this.gluedPiecesRemaining > 0) {
-      this.currentPieceIsGlued = true;
-      this.gluedPiecesRemaining--;
-      this.syncCounterEffect('glue', this.gluedPiecesRemaining);
-    }
-
+    this.currentPieceIsMagnetized = false;
+    this.currentPieceMagnetTarget = null;
     if (this.magnetPiecesRemaining > 0) {
+      this.currentPieceIsMagnetized = true;
       this.magnetPiecesRemaining--;
-      this.syncCounterEffect('magnet', this.magnetPiecesRemaining);
+      this.currentPieceMagnetTarget = this.findBestMagnetPlacement(this.gameState.currentPiece, this.gameState.board);
     }
+    this.syncMagnetCounterEffect();
 
     this.currentPieceRotatedSinceSpawn = false;
     this.currentPieceRowsMovedSinceSpawn = 0;
+    this.currentPieceSpawnedAtMs = now;
+    this.currentPieceLastManualInputAtMs = now;
     this.ensureCurrentPieceWithinBoard();
   }
 
@@ -435,10 +425,6 @@ export class ServerGameState {
       if (!isValidPosition(this.gameState.board, drifted)) break;
       this.gameState.currentPiece = drifted;
     }
-  }
-
-  private getGravityDirection(now: number): 1 | -1 {
-    return this.isEffectActive('gravity_flip', now) ? -1 : 1;
   }
 
   private ensureCurrentPieceWithinBoard(): void {
@@ -538,10 +524,6 @@ export class ServerGameState {
         this.gameState.board = this.clearLinesWithoutRewards(board, false);
         break;
       }
-      case 'glue':
-        this.gluedPiecesRemaining = this.getPieceCount('glue', 3);
-        this.syncCounterEffect('glue', this.gluedPiecesRemaining);
-        break;
       case 'column_swap': {
         let board = this.applyColumnSwap(this.gameState.board);
         board = this.clearLinesWithoutRewards(board, false);
@@ -598,9 +580,6 @@ export class ServerGameState {
         this.quicksandNextSinkAtMs = now + 4000;
         this.setTimedEffect('quicksand', 12000, now);
         break;
-      case 'gravity_flip':
-        this.setTimedEffect('gravity_flip', 6000, now);
-        break;
 
       // Buff board / pieces / economy
       case 'mini_blocks':
@@ -632,16 +611,23 @@ export class ServerGameState {
       case 'narrow_escape':
         this.activateNarrowEscape(now);
         break;
-      case 'preview_steal':
-        this.setTimedEffect('preview_steal', 10000, now);
-        break;
       case 'overcharge':
         this.overchargeCharges = this.getPieceCount('overcharge', 3);
         this.syncCounterEffect('overcharge', this.overchargeCharges);
         break;
       case 'magnet':
         this.magnetPiecesRemaining = this.getPieceCount('magnet', 3);
-        this.syncCounterEffect('magnet', this.magnetPiecesRemaining);
+        if (this.gameState.currentPiece && !this.gameState.isGameOver) {
+          const immediateTarget = this.findBestMagnetPlacement(this.gameState.currentPiece, this.gameState.board);
+          if (immediateTarget) {
+            this.currentPieceIsMagnetized = true;
+            this.currentPieceMagnetTarget = immediateTarget;
+            this.currentPieceSpawnedAtMs = now;
+            this.currentPieceLastManualInputAtMs = now;
+            this.magnetPiecesRemaining = Math.max(0, this.magnetPiecesRemaining - 1);
+          }
+        }
+        this.syncMagnetCounterEffect();
         break;
 
       // Defensive
@@ -680,6 +666,26 @@ export class ServerGameState {
     }
 
     return active;
+  }
+
+  getTimedEffectSnapshots(now: number = Date.now()): Array<{ abilityType: string; remainingMs: number; durationMs: number }> {
+    this.refreshEffects(now);
+    const snapshots: Array<{ abilityType: string; remainingMs: number; durationMs: number }> = [];
+
+    for (const [abilityType, endTime] of this.activeEffects) {
+      if (endTime === INFINITE_EFFECT) continue;
+      const remainingMs = Math.max(0, endTime - now);
+      if (remainingMs <= 0) continue;
+
+      const ability = ABILITIES[abilityType as keyof typeof ABILITIES];
+      const configuredDuration = typeof ability?.duration === 'number' ? ability.duration : undefined;
+      const durationMs = configuredDuration && configuredDuration > 0 ? configuredDuration : remainingMs;
+
+      snapshots.push({ abilityType, remainingMs, durationMs });
+    }
+
+    snapshots.sort((a, b) => a.remainingMs - b.remainingMs);
+    return snapshots;
   }
 
   consumeDefensiveInterception(now: number = Date.now()): 'shield' | 'reflect' | null {
@@ -736,13 +742,6 @@ export class ServerGameState {
 
   private handleEffectExpired(effect: string): void {
     switch (effect) {
-      case 'gravity_flip': {
-        let board = this.applyGravityToBoard(this.gameState.board);
-        board = this.clearLinesWithoutRewards(board, false);
-        this.gameState.board = board;
-        this.ensureCurrentPieceWithinBoard();
-        break;
-      }
       case 'narrow_escape':
         this.restoreNarrowEscape();
         break;
@@ -759,16 +758,14 @@ export class ServerGameState {
       case 'weird_shapes':
         this.weirdShapesRemaining = 0;
         break;
-      case 'glue':
-        this.gluedPiecesRemaining = 0;
-        this.currentPieceIsGlued = false;
-        break;
       case 'shapeshifter':
         this.shapeshifterPiecesRemaining = 0;
         this.currentPieceIsShapeshifter = false;
         break;
       case 'magnet':
         this.magnetPiecesRemaining = 0;
+        this.currentPieceIsMagnetized = false;
+        this.currentPieceMagnetTarget = null;
         break;
       case 'overcharge':
         this.overchargeCharges = 0;
@@ -839,7 +836,7 @@ export class ServerGameState {
     }
 
     if (this.gameState.board.width > 7) {
-      this.narrowEscapeStoredColumns = this.gameState.board.grid.map((row) => row.slice(7, 10));
+      this.narrowEscapeStoredColumns = this.gameState.board.grid.map((row) => row.slice(7, STANDARD_BOARD_WIDTH));
       this.gameState.board = {
         ...this.gameState.board,
         width: 7,
@@ -861,7 +858,7 @@ export class ServerGameState {
 
     let board: Board = {
       ...this.gameState.board,
-      width: 10,
+      width: STANDARD_BOARD_WIDTH,
       grid: restoredGrid,
     };
 
@@ -879,11 +876,15 @@ export class ServerGameState {
       this.handleEffectExpired('narrow_escape');
     }
 
-    if (this.gameState.board.width < 13) {
+    if (this.gameState.board.width < WIDE_LOAD_BOARD_WIDTH) {
+      const extraColumns = WIDE_LOAD_BOARD_WIDTH - this.gameState.board.width;
       this.gameState.board = {
         ...this.gameState.board,
-        width: 13,
-        grid: this.gameState.board.grid.map((row) => [...row, null, null, null]),
+        width: WIDE_LOAD_BOARD_WIDTH,
+        grid: this.gameState.board.grid.map((row) => [
+          ...row,
+          ...Array.from({ length: extraColumns }, () => null),
+        ]),
       };
       this.ensureCurrentPieceWithinBoard();
     }
@@ -892,14 +893,20 @@ export class ServerGameState {
   }
 
   private collapseWideLoad(): void {
-    if (this.gameState.board.width <= 10) return;
+    if (this.gameState.board.width <= STANDARD_BOARD_WIDTH) return;
 
     this.gameState.board = {
       ...this.gameState.board,
-      width: 10,
-      grid: this.gameState.board.grid.map((row) => row.slice(0, 10)),
+      width: STANDARD_BOARD_WIDTH,
+      grid: this.gameState.board.grid.map((row) => row.slice(0, STANDARD_BOARD_WIDTH)),
     };
     this.ensureCurrentPieceWithinBoard();
+  }
+
+  private syncMagnetCounterEffect(): void {
+    const remainingAffectedPieces =
+      this.magnetPiecesRemaining + (this.currentPieceIsMagnetized ? 1 : 0);
+    this.syncCounterEffect('magnet', remainingAffectedPieces);
   }
 
   private applyColumnSwap(board: Board): Board {
@@ -931,7 +938,7 @@ export class ServerGameState {
       }
     }
 
-    return this.applyGravityToBoard({ ...board, grid });
+    return this.dropBoardAsWhole({ ...board, grid });
   }
 
   private applyDeathCross(board: Board): Board {
@@ -940,6 +947,130 @@ export class ServerGameState {
     );
 
     return this.applyGravityToBoard({ ...board, grid });
+  }
+
+  private dropBoardAsWhole(board: Board): Board {
+    let maxFilledY = -1;
+    for (let y = 0; y < board.height; y++) {
+      for (let x = 0; x < board.width; x++) {
+        if (board.grid[y][x] !== null) {
+          maxFilledY = Math.max(maxFilledY, y);
+        }
+      }
+    }
+
+    if (maxFilledY < 0) return board;
+
+    const shiftDown = board.height - 1 - maxFilledY;
+    if (shiftDown <= 0) return board;
+
+    const grid: CellValue[][] = Array.from({ length: board.height }, () => Array(board.width).fill(null));
+    for (let y = 0; y < board.height; y++) {
+      for (let x = 0; x < board.width; x++) {
+        const cell = board.grid[y][x];
+        if (cell === null) continue;
+        const targetY = y + shiftDown;
+        if (targetY >= 0 && targetY < board.height) {
+          grid[targetY][x] = cell;
+        }
+      }
+    }
+
+    return { ...board, grid };
+  }
+
+  private shouldAutoPlaceMagnetPiece(now: number): boolean {
+    if (!this.currentPieceIsMagnetized) return false;
+    if (!this.currentPieceMagnetTarget || !this.gameState.currentPiece) return false;
+    if (now - this.currentPieceSpawnedAtMs < 900) return false;
+    if (now - this.currentPieceLastManualInputAtMs < 900) return false;
+    return true;
+  }
+
+  private snapToMagnetTarget(): void {
+    if (!this.gameState.currentPiece || !this.currentPieceMagnetTarget) return;
+
+    this.gameState.currentPiece = {
+      ...this.gameState.currentPiece,
+      rotation: this.currentPieceMagnetTarget.rotation,
+      shape: this.getShapeForRotation(this.gameState.currentPiece, this.currentPieceMagnetTarget.rotation),
+      position: {
+        x: this.currentPieceMagnetTarget.x,
+        y: this.currentPieceMagnetTarget.y,
+      },
+    };
+    this.currentPieceIsMagnetized = false;
+    this.currentPieceMagnetTarget = null;
+  }
+
+  private getShapeForRotation(piece: Tetromino, rotation: number): number[][] {
+    const variants = TETROMINO_SHAPES[piece.type];
+    if (!Array.isArray(variants) || variants.length === 0) {
+      return piece.shape;
+    }
+    const normalized = ((rotation % variants.length) + variants.length) % variants.length;
+    return variants[normalized];
+  }
+
+  private countBoardHoles(board: Board): number {
+    let holes = 0;
+    for (let x = 0; x < board.width; x++) {
+      let seenFilled = false;
+      for (let y = 0; y < board.height; y++) {
+        if (board.grid[y][x] !== null) {
+          seenFilled = true;
+        } else if (seenFilled) {
+          holes++;
+        }
+      }
+    }
+    return holes;
+  }
+
+  private findBestMagnetPlacement(
+    piece: Tetromino | null,
+    board: Board
+  ): { x: number; y: number; rotation: number } | null {
+    if (!piece) return null;
+
+    const rotationVariants = TETROMINO_SHAPES[piece.type] ?? [piece.shape];
+    const holesBefore = this.countBoardHoles(board);
+
+    let best: { x: number; y: number; rotation: number; score: number } | null = null;
+
+    for (let rotation = 0; rotation < rotationVariants.length; rotation++) {
+      const shape = rotationVariants[rotation];
+      const maxX = board.width - shape[0].length;
+      for (let x = 0; x <= maxX; x++) {
+        let candidate: Tetromino = {
+          ...piece,
+          rotation,
+          shape,
+          position: { x, y: 0 },
+        };
+        if (!isValidPosition(board, candidate)) continue;
+
+        while (true) {
+          const down = movePiece(candidate, 0, 1);
+          if (!isValidPosition(board, down)) break;
+          candidate = down;
+        }
+
+        const locked = lockPiece(board, candidate);
+        const { board: cleared, linesCleared } = clearLines(locked);
+        const holesAfter = this.countBoardHoles(cleared);
+        const holesFilled = Math.max(0, holesBefore - holesAfter);
+        const newHoles = Math.max(0, holesAfter - holesBefore);
+        const score = linesCleared * 10 + holesFilled * 5 - newHoles * 8;
+
+        if (!best || score > best.score) {
+          best = { x, y: candidate.position.y, rotation, score };
+        }
+      }
+    }
+
+    if (!best) return null;
+    return { x: best.x, y: best.y, rotation: best.rotation };
   }
 
   private applyGravityToBoard(board: Board): Board {
@@ -1058,10 +1189,23 @@ export class ServerGameState {
   getPublicState() {
     const now = Date.now();
     this.refreshEffects(now);
+    const magnetGhost =
+      this.currentPieceIsMagnetized && this.currentPieceMagnetTarget && this.gameState.currentPiece
+        ? {
+            ...this.gameState.currentPiece,
+            rotation: this.currentPieceMagnetTarget.rotation,
+            shape: this.getShapeForRotation(this.gameState.currentPiece, this.currentPieceMagnetTarget.rotation),
+            position: {
+              x: this.currentPieceMagnetTarget.x,
+              y: this.currentPieceMagnetTarget.y,
+            },
+          }
+        : null;
 
     return {
       board: this.gameState.board.grid,
       currentPiece: this.gameState.currentPiece,
+      magnetGhost,
       nextPieces: this.gameState.nextPieces.slice(0, 5),
       score: this.gameState.score,
       stars: this.gameState.stars,
@@ -1069,6 +1213,8 @@ export class ServerGameState {
       comboCount: this.gameState.comboCount,
       isGameOver: this.gameState.isGameOver,
       activeEffects: this.getActiveEffects(),
+      timedEffects: this.getTimedEffectSnapshots(now),
+      tiltDirection: this.isEffectActive('tilt', now) ? this.tiltDirection : 0,
     };
   }
 }

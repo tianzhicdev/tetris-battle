@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, useCallback } from 'react';
+import { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAbilityStore } from '../stores/abilityStore';
 import { TetrisRenderer } from '../renderer/TetrisRenderer';
@@ -8,7 +8,6 @@ import {
   type GameStateUpdate,
 } from '../services/partykit/ServerAuthGameClient';
 import type { ConnectionStats } from '../services/ConnectionMonitor';
-import { AbilityEffects } from './AbilityEffects';
 import { NextPiecePanel } from './NextPiecePanel';
 import { AbilityInfo } from './AbilityInfo';
 import { ParticleEffect } from './ParticleEffect';
@@ -19,7 +18,6 @@ import { DebugLogger } from '../services/debug/DebugLogger';
 import { DebugPanel } from './debug/DebugPanel';
 import { useDebugStore } from '../stores/debugStore';
 import {
-  AbilityEffectManager,
   ABILITIES,
   getAbilityTargeting,
   isDebuffAbility,
@@ -88,6 +86,12 @@ type PendingBoardAbilityFx = {
   expiresAt: number;
 };
 
+type TimedEffectEntry = {
+  abilityType: string;
+  remainingMs: number;
+  durationMs: number;
+};
+
 function cloneBoardGrid(grid: any[][]): any[][] {
   return grid.map((row) => [...row]);
 }
@@ -137,6 +141,50 @@ function centerOfPositions(positions: BoardCellPosition[]): BoardCellPosition {
   };
 }
 
+function stateHasEffect(state: any | null, effect: string): boolean {
+  return !!state?.activeEffects?.includes(effect);
+}
+
+function getAdaptiveCellSize(
+  boardWidth: number,
+  boardHeight: number,
+  canvasWidth: number,
+  canvasHeight: number,
+  scaleFactor: number = 1
+): number {
+  const fitted = Math.floor(Math.min(canvasWidth / boardWidth, canvasHeight / boardHeight));
+  return Math.max(4, Math.floor(fitted * scaleFactor));
+}
+
+function buildMirageNextPieces(nextPieces: string[] | undefined): string[] {
+  if (!Array.isArray(nextPieces)) return [];
+  const cycle = ['I', 'O', 'T', 'S', 'Z', 'L', 'J'];
+  return nextPieces.map((piece, index) => {
+    const current = cycle.indexOf(piece);
+    if (current < 0) return cycle[index % cycle.length];
+    return cycle[(current + 1 + index) % cycle.length];
+  });
+}
+
+function isTimedEffect(abilityType: string): boolean {
+  const ability = ABILITIES[abilityType as keyof typeof ABILITIES];
+  return typeof ability?.duration === 'number' && ability.duration > 1;
+}
+
+function getTiltAngle(state: any | null): number {
+  if (!stateHasEffect(state, 'tilt')) return 0;
+  const direction = typeof state?.tiltDirection === 'number' ? state.tiltDirection : 1;
+  return direction < 0 ? -5 : 5;
+}
+
+const INK_SPLASH_BLOBS = [
+  { top: '10%', left: '8%', w: '22%', h: '18%', r: '58% 42% 55% 45%' },
+  { top: '24%', left: '55%', w: '30%', h: '22%', r: '43% 57% 38% 62%' },
+  { top: '44%', left: '18%', w: '26%', h: '20%', r: '61% 39% 47% 53%' },
+  { top: '58%', left: '50%', w: '34%', h: '24%', r: '52% 48% 61% 39%' },
+  { top: '76%', left: '28%', w: '28%', h: '19%', r: '46% 54% 49% 51%' },
+];
+
 /**
  * ServerAuthMultiplayerGame - Server-Authoritative Version
  *
@@ -167,8 +215,6 @@ export function ServerAuthMultiplayerGame({
   const [isConnected, setIsConnected] = useState(false);
   const [gameFinished, setGameFinished] = useState(false);
   const [winnerId, setWinnerId] = useState<string | null>(null);
-  const [effectManager] = useState(() => new AbilityEffectManager());
-  const [activeEffects, setActiveEffects] = useState<any[]>([]);
   const [showAbilityInfo, setShowAbilityInfo] = useState(false);
   const [screenShake, setScreenShake] = useState(0);
   const [flashEffect, setFlashEffect] = useState<{ color: string } | null>(null);
@@ -193,14 +239,50 @@ export function ServerAuthMultiplayerGame({
   const debugLoggerRef = useRef<DebugLogger | null>(null);
   const [isDebugMode, setIsDebugMode] = useState(false);
   const [connectionStats, setConnectionStats] = useState<ConnectionStats | null>(null);
+  const [effectClockMs, setEffectClockMs] = useState(() => Date.now());
 
   const { availableAbilities, setLoadout } = useAbilityStore();
+
+  const yourTimedEffects = useMemo(() => {
+    const raw = Array.isArray(yourState?.timedEffects) ? yourState.timedEffects : [];
+    return raw
+      .filter((entry: any) => entry?.remainingMs > 0 && entry?.durationMs > 0 && isTimedEffect(entry.abilityType))
+      .map((entry: any) => ({
+        abilityType: entry.abilityType as string,
+        remainingMs: entry.remainingMs as number,
+        durationMs: entry.durationMs as number,
+      }));
+  }, [yourState?.timedEffects, effectClockMs]);
+
+  const opponentTimedEffects = useMemo(() => {
+    const raw = Array.isArray(opponentState?.timedEffects) ? opponentState.timedEffects : [];
+    return raw
+      .filter((entry: any) => entry?.remainingMs > 0 && entry?.durationMs > 0 && isTimedEffect(entry.abilityType))
+      .map((entry: any) => ({
+        abilityType: entry.abilityType as string,
+        remainingMs: entry.remainingMs as number,
+        durationMs: entry.durationMs as number,
+      }));
+  }, [opponentState?.timedEffects, effectClockMs]);
+
+  const displayNextPieces = useMemo(() => {
+    if (!yourState?.nextPieces) return [];
+    if (stateHasEffect(yourState, 'mirage')) {
+      return buildMirageNextPieces(yourState.nextPieces);
+    }
+    return yourState.nextPieces;
+  }, [yourState?.nextPieces, yourState?.activeEffects]);
 
   // Set player's loadout
   useEffect(() => {
     console.log('[SERVER-AUTH] Setting player loadout:', profile.loadout);
     setLoadout(profile.loadout);
   }, [profile.loadout, setLoadout]);
+
+  useEffect(() => {
+    const interval = setInterval(() => setEffectClockMs(Date.now()), 100);
+    return () => clearInterval(interval);
+  }, []);
 
   // Initialize debug mode
   useEffect(() => {
@@ -449,14 +531,17 @@ export function ServerAuthMultiplayerGame({
         width: yourState.board?.[0]?.length ?? 10,
         height: yourState.board?.length ?? 20,
       };
+      const tiltActive = stateHasEffect(yourState, 'tilt');
+      const blockSize = getAdaptiveCellSize(board.width, board.height, 250, 500, tiltActive ? 0.92 : 1);
+      rendererRef.current.setBlockSize(blockSize);
 
       // Check active effects from server
       const blindSpotActive = yourState.activeEffects?.includes('blind_spot');
       const shrinkCeilingActive = yourState.activeEffects?.includes('shrink_ceiling');
 
-      rendererRef.current.render(board, yourState.currentPiece, null, {
+      rendererRef.current.render(board, yourState.currentPiece, yourState.magnetGhost ?? null, {
         showGrid: true,
-        showGhost: false, // Server doesn't send ghost piece
+        showGhost: !!yourState.magnetGhost,
         isBomb: pendingBombVisualRef.current !== null,
         bombType: pendingBombVisualRef.current as 'circle_bomb' | 'cross_firebomb' | undefined,
         blindSpotRows: blindSpotActive ? 4 : 0,
@@ -497,9 +582,12 @@ export function ServerAuthMultiplayerGame({
         width: opponentState.board?.[0]?.length ?? 10,
         height: opponentState.board?.length ?? 20,
       };
-      opponentRendererRef.current.render(opponentBoard, opponentState.currentPiece, null, {
+      const tiltActive = stateHasEffect(opponentState, 'tilt');
+      const blockSize = getAdaptiveCellSize(opponentBoard.width, opponentBoard.height, 80, 160, tiltActive ? 0.92 : 1);
+      opponentRendererRef.current.setBlockSize(blockSize);
+      opponentRendererRef.current.render(opponentBoard, opponentState.currentPiece, opponentState.magnetGhost ?? null, {
         showGrid: true,
-        showGhost: false,
+        showGhost: !!opponentState.magnetGhost,
       });
     }
   }, [opponentState, applyBoardDiffAnimations]);
@@ -763,24 +851,13 @@ export function ServerAuthMultiplayerGame({
       category: isDebuffAbility(ability) ? 'debuff' : 'buff',
     });
     // Auto-dismiss notification after 3 seconds (instant abilities)
-    // Duration abilities will continue showing in AbilityEffects component
+    // Duration abilities are surfaced by server-timed countdown bars at the top.
     setTimeout(() => setAbilityNotification(null), 3000);
 
     audioManager.playSfx('ability_debuff_activate');
 
-    // Track the effect locally for UI feedback
-    if (ability.duration) {
-      effectManager.activateEffect(abilityType, ability.duration);
-      updateActiveEffects();
-    }
-
     queueBoardAbilityFx(abilityType, 'self');
     triggerBoardAbilityVisual(abilityType, 'self');
-  };
-
-  // Update active effects display
-  const updateActiveEffects = () => {
-    setActiveEffects(effectManager.getActiveEffects());
   };
 
   // Calculate and save match rewards
@@ -814,11 +891,6 @@ export function ServerAuthMultiplayerGame({
     }
   }, [profile, opponentId, aiOpponent]);
 
-  // Update active effects periodically
-  useEffect(() => {
-    const interval = setInterval(updateActiveEffects, 100);
-    return () => clearInterval(interval);
-  }, []);
 
   // Keyboard controls - send inputs to server
   useEffect(() => {
@@ -979,6 +1051,93 @@ export function ServerAuthMultiplayerGame({
           </span>
         </div>
       )}
+      {(yourTimedEffects.length > 0 || opponentTimedEffects.length > 0) && (
+        <div
+          style={{
+            position: 'absolute',
+            top: '6px',
+            left: '50%',
+            transform: 'translateX(-50%)',
+            zIndex: 8,
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '3px',
+            width: 'min(92vw, 520px)',
+            pointerEvents: 'none',
+          }}
+        >
+          {yourTimedEffects.length > 0 && (
+            <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap', justifyContent: 'center' }}>
+              {yourTimedEffects.map((effect: TimedEffectEntry) => {
+                const progress = Math.max(0, Math.min(1, effect.remainingMs / effect.durationMs));
+                const ability = ABILITIES[effect.abilityType as keyof typeof ABILITIES];
+                return (
+                  <div
+                    key={`you-${effect.abilityType}`}
+                    style={{
+                      width: 'min(22vw, 110px)',
+                      minWidth: '88px',
+                      background: 'rgba(6, 10, 22, 0.85)',
+                      border: '1px solid rgba(0, 212, 255, 0.28)',
+                      borderRadius: '5px',
+                      overflow: 'hidden',
+                    }}
+                  >
+                    <div style={{ fontSize: '9px', color: '#7de3ff', padding: '2px 5px', fontWeight: 700 }}>
+                      {ability?.shortName || effect.abilityType}
+                    </div>
+                    <div style={{ height: '3px', background: 'rgba(255,255,255,0.14)' }}>
+                      <div
+                        style={{
+                          height: '100%',
+                          width: `${progress * 100}%`,
+                          background: 'linear-gradient(90deg, #00d4ff 0%, #66f6ff 100%)',
+                          transition: 'width 100ms linear',
+                        }}
+                      />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+          {opponentTimedEffects.length > 0 && (
+            <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap', justifyContent: 'center' }}>
+              {opponentTimedEffects.map((effect: TimedEffectEntry) => {
+                const progress = Math.max(0, Math.min(1, effect.remainingMs / effect.durationMs));
+                const ability = ABILITIES[effect.abilityType as keyof typeof ABILITIES];
+                return (
+                  <div
+                    key={`opp-${effect.abilityType}`}
+                    style={{
+                      width: 'min(22vw, 110px)',
+                      minWidth: '88px',
+                      background: 'rgba(24, 5, 16, 0.86)',
+                      border: '1px solid rgba(255, 0, 110, 0.28)',
+                      borderRadius: '5px',
+                      overflow: 'hidden',
+                    }}
+                  >
+                    <div style={{ fontSize: '9px', color: '#ff7aa9', padding: '2px 5px', fontWeight: 700 }}>
+                      {ability?.shortName || effect.abilityType}
+                    </div>
+                    <div style={{ height: '3px', background: 'rgba(255,255,255,0.14)' }}>
+                      <div
+                        style={{
+                          height: '100%',
+                          width: `${progress * 100}%`,
+                          background: 'linear-gradient(90deg, #ff2f7c 0%, #ff8e73 100%)',
+                          transition: 'width 100ms linear',
+                        }}
+                      />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
       {/* Main Game Area */}
       <div style={{ display: 'flex', flex: 1, overflow: 'hidden', padding: 'clamp(2px, 0.5vw, 4px)', gap: 'clamp(2px, 0.5vw, 4px)' }}>
         {/* Left: Your Board */}
@@ -991,7 +1150,7 @@ export function ServerAuthMultiplayerGame({
                     y: [0, -5 * screenShake, 5 * screenShake, -5 * screenShake, 5 * screenShake, 0],
                     rotate: [0, -2 * screenShake, 2 * screenShake, -2 * screenShake, 2 * screenShake, 0],
                   }
-                : effectManager.isEffectActive('screen_shake')
+                : stateHasEffect(yourState, 'screen_shake')
                 ? {
                     x: [0, -5, 5, -5, 5, 0],
                     y: [0, -3, 3, -3, 3, 0],
@@ -1001,7 +1160,7 @@ export function ServerAuthMultiplayerGame({
             }
             transition={{
               duration: 0.4,
-              repeat: effectManager.isEffectActive('screen_shake') ? Infinity : 0,
+              repeat: stateHasEffect(yourState, 'screen_shake') ? Infinity : 0,
               ease: 'easeOut',
             }}
             style={{
@@ -1014,24 +1173,73 @@ export function ServerAuthMultiplayerGame({
             }}
           >
             <div style={{ display: 'flex', alignItems: 'flex-start', gap: '4px' }}>
-              <canvas
-                ref={canvasRef}
-                width={250}
-                height={500}
+              <div
                 style={{
-                  border: `2px solid ${selfBoardFx?.borderColor || '#00d4ff'}`,
-                  backgroundColor: 'rgba(5,5,15,0.8)',
+                  position: 'relative',
                   maxHeight: 'calc(100dvh - 110px)',
                   maxWidth: '100%',
-                  height: 'auto',
-                  width: 'auto',
-                  objectFit: 'contain',
-                  borderRadius: 'clamp(6px, 1.5vw, 10px)',
-                  boxShadow: selfBoardFx?.glow || '0 0 20px rgba(0, 212, 255, 0.5), 0 0 40px rgba(0, 212, 255, 0.2), inset 0 0 20px rgba(0, 212, 255, 0.05)',
+                  width: 'fit-content',
+                  transform: getTiltAngle(yourState)
+                    ? `rotate(${getTiltAngle(yourState)}deg) scale(0.96)`
+                    : 'none',
+                  transition: 'transform 200ms ease-out',
                 }}
-              />
-              {yourState?.nextPieces?.length > 0 && (
-                <NextPiecePanel nextPieces={yourState.nextPieces} />
+              >
+                <canvas
+                  ref={canvasRef}
+                  width={250}
+                  height={500}
+                  style={{
+                    display: 'block',
+                    border: `2px solid ${selfBoardFx?.borderColor || '#00d4ff'}`,
+                    backgroundColor: 'rgba(5,5,15,0.8)',
+                    maxHeight: 'calc(100dvh - 110px)',
+                    maxWidth: '100%',
+                    height: 'auto',
+                    width: 'auto',
+                    objectFit: 'contain',
+                    borderRadius: 'clamp(6px, 1.5vw, 10px)',
+                    boxShadow: selfBoardFx?.glow || '0 0 20px rgba(0, 212, 255, 0.5), 0 0 40px rgba(0, 212, 255, 0.2), inset 0 0 20px rgba(0, 212, 255, 0.05)',
+                  }}
+                />
+                {stateHasEffect(yourState, 'ink_splash') && (
+                  <div
+                    style={{
+                      position: 'absolute',
+                      inset: 0,
+                      borderRadius: 'clamp(6px, 1.5vw, 10px)',
+                      overflow: 'hidden',
+                      pointerEvents: 'none',
+                      zIndex: 6,
+                      mixBlendMode: 'multiply',
+                    }}
+                  >
+                    <div
+                      style={{
+                        position: 'absolute',
+                        inset: 0,
+                        background: 'radial-gradient(circle at 50% 50%, rgba(0,0,0,0.12) 0%, rgba(0,0,0,0.45) 100%)',
+                      }}
+                    />
+                    {INK_SPLASH_BLOBS.map((blob, index) => (
+                      <div
+                        key={`self-ink-${index}`}
+                        style={{
+                          position: 'absolute',
+                          top: blob.top,
+                          left: blob.left,
+                          width: blob.w,
+                          height: blob.h,
+                          borderRadius: blob.r,
+                          background: 'radial-gradient(circle at 35% 35%, rgba(18,18,18,0.98) 0%, rgba(0,0,0,0.88) 70%, rgba(0,0,0,0.75) 100%)',
+                        }}
+                      />
+                    ))}
+                  </div>
+                )}
+              </div>
+              {displayNextPieces.length > 0 && (
+                <NextPiecePanel nextPieces={displayNextPieces} />
               )}
             </div>
             {/* Stars earned popups */}
@@ -1069,7 +1277,6 @@ export function ServerAuthMultiplayerGame({
               ))}
             </AnimatePresence>
           </motion.div>
-          <AbilityEffects activeEffects={activeEffects} theme={theme} />
           {yourState && (
             <div
               style={{
@@ -1202,29 +1409,70 @@ export function ServerAuthMultiplayerGame({
             </motion.button>
           </div>
 
-          {/* Opponent's Board */}
-          <div style={{
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            background: 'transparent',
-            padding: 'clamp(4px, 1vw, 6px)',
-            borderRadius: 'clamp(6px, 1.5vw, 10px)',
-          }}>
-            <canvas
-              ref={opponentCanvasRef}
-              width={80}
-              height={160}
-              style={{
-                border: `1px solid ${opponentBoardFx?.borderColor || 'rgba(255, 0, 110, 0.5)'}`,
-                backgroundColor: 'rgba(5,5,15,0.8)',
-                width: 'clamp(65px, 17vw, 80px)',
-                height: 'clamp(130px, 34vw, 160px)',
-                borderRadius: 'clamp(4px, 1vw, 6px)',
-                boxShadow: opponentBoardFx?.glow || '0 0 10px rgba(255, 0, 110, 0.3), inset 0 0 10px rgba(255, 0, 110, 0.05)',
-              }}
-            />
-            {opponentState && (
+	          {/* Opponent's Board */}
+	          <div style={{
+	            display: 'flex',
+	            flexDirection: 'column',
+	            alignItems: 'center',
+	            background: 'transparent',
+	            padding: 'clamp(4px, 1vw, 6px)',
+	            borderRadius: 'clamp(6px, 1.5vw, 10px)',
+	          }}>
+	            <div
+	              style={{
+	                position: 'relative',
+	                width: 'clamp(65px, 17vw, 80px)',
+	                height: 'clamp(130px, 34vw, 160px)',
+	                transform: getTiltAngle(opponentState)
+	                  ? `rotate(${getTiltAngle(opponentState)}deg) scale(0.95)`
+	                  : 'none',
+	                transition: 'transform 200ms ease-out',
+	              }}
+	            >
+	              <canvas
+	                ref={opponentCanvasRef}
+	                width={80}
+	                height={160}
+	                style={{
+	                  display: 'block',
+	                  border: `1px solid ${opponentBoardFx?.borderColor || 'rgba(255, 0, 110, 0.5)'}`,
+	                  backgroundColor: 'rgba(5,5,15,0.8)',
+	                  width: '100%',
+	                  height: '100%',
+	                  borderRadius: 'clamp(4px, 1vw, 6px)',
+	                  boxShadow: opponentBoardFx?.glow || '0 0 10px rgba(255, 0, 110, 0.3), inset 0 0 10px rgba(255, 0, 110, 0.05)',
+	                }}
+	              />
+                {stateHasEffect(opponentState, 'ink_splash') && (
+                  <div
+                    style={{
+                      position: 'absolute',
+                      inset: 0,
+                      borderRadius: 'clamp(4px, 1vw, 6px)',
+                      overflow: 'hidden',
+                      pointerEvents: 'none',
+                      zIndex: 6,
+                      mixBlendMode: 'multiply',
+                    }}
+                  >
+                    {INK_SPLASH_BLOBS.map((blob, index) => (
+                      <div
+                        key={`opponent-ink-${index}`}
+                        style={{
+                          position: 'absolute',
+                          top: blob.top,
+                          left: blob.left,
+                          width: blob.w,
+                          height: blob.h,
+                          borderRadius: blob.r,
+                          background: 'rgba(0,0,0,0.9)',
+                        }}
+                      />
+                    ))}
+                  </div>
+                )}
+	            </div>
+	            {opponentState && (
               <div style={{
                 marginTop: '3px',
                 padding: '3px 6px',

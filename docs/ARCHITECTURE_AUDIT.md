@@ -236,3 +236,38 @@ Expected effect:
 1. Remove PartyKit presence from critical path entirely and gate it behind explicit opt-in if online friend indicators are non-essential during active gameplay windows.
 2. Gate verbose websocket debug logging behind debug mode on both client and server to avoid log-induced runtime overhead.
 3. Add lightweight server telemetry counters (connect/close rate, close codes, avg state_update cadence) to make reconnect storms explicit without tailing raw logs.
+
+## Ability UX/Behavior Fix Plan (2026-02-18)
+
+Requested issues:
+1. `ink_splash` appears to have no visible effect.
+2. `fill_holes` fills large cavities (should only fill small holes).
+3. Remove `preview_steal`.
+4. `mirage` and `magnet` feel non-functional.
+5. `wide_load` does not show extra columns correctly (mobile-safe sizing required).
+6. `tilt` should visually tilt the board while keeping board footprint stable.
+7. `flip_board` should preserve relative filled-cell layout as a flipped whole before falling.
+8. Remove `gravity_flip` and `glue`.
+9. All duration effects should have top countdown bars.
+
+Implementation status (completed):
+- Catalog cleanup:
+  - Removed `preview_steal`, `gravity_flip`, and `glue` from runtime catalogs (`abilities.json` and `game_abilities_economy_v2.json`) and dependent lists.
+- Game-core update:
+  - Reworked `fill_holes` to scan enclosed regions on immutable source grid and only fill cavities with size `< 4`, capped to 4 cells per cast.
+- Server-authoritative update:
+  - Removed runtime logic for deleted abilities.
+  - `flip_board` now flips board then drops as one rigid cluster.
+  - `magnet` now applies immediately to current piece when possible and keeps server-side counter state coherent.
+  - `wide_load` now expands from 10 to 12 columns (+2) and collapses cleanly on expiry.
+- Web rendering update:
+  - Added visible `ink_splash` overlays on affected board.
+  - Added top countdown bars from server-timed effects.
+  - Added board tilt transform for `tilt` while preserving board footprint.
+  - Kept geometry effects phone-safe by adaptive block sizing instead of enlarging board area.
+- Validation completed:
+  - `pnpm --filter @tetris-battle/game-core type-check`
+  - `pnpm --filter @tetris-battle/game-core exec vitest run`
+  - `pnpm --filter @tetris-battle/partykit exec tsc --noEmit`
+  - `pnpm --filter @tetris-battle/partykit exec vitest run`
+  - `pnpm --filter web build`

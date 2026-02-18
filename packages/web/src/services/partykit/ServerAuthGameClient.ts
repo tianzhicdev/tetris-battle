@@ -9,6 +9,7 @@ export interface GameStateUpdate {
   yourState: {
     board: any[][];
     currentPiece: any;
+    magnetGhost?: any | null;
     nextPieces: string[];
     score: number;
     stars: number;
@@ -16,10 +17,13 @@ export interface GameStateUpdate {
     comboCount: number;
     isGameOver: boolean;
     activeEffects: string[];
+    timedEffects?: Array<{ abilityType: string; remainingMs: number; durationMs: number }>;
+    tiltDirection?: number;
   };
   opponentState: {
     board: any[][];
     currentPiece: any;
+    magnetGhost?: any | null;
     nextPieces: string[];
     score: number;
     stars: number;
@@ -27,16 +31,20 @@ export interface GameStateUpdate {
     comboCount: number;
     isGameOver: boolean;
     activeEffects: string[];
+    timedEffects?: Array<{ abilityType: string; remainingMs: number; durationMs: number }>;
+    tiltDirection?: number;
   };
 }
 
 export interface AbilityActivationResult {
   requestId?: string;
   abilityType: string;
+  appliedAbilityType?: string;
   targetPlayerId: string;
   accepted: boolean;
   reason?: string;
   message: string;
+  chargedCost?: number;
   remainingStars?: number;
   serverTime: number;
 }

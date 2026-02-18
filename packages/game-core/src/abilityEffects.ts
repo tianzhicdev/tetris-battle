@@ -276,26 +276,32 @@ export function applyGoldDigger(board: Board, blockCount: number = 5, rng?: Seed
 }
 
 export function applyFillHoles(board: Board): Board {
-  // Fill all empty spaces that are surrounded by blocks
-  const newGrid = board.grid.map(row => [...row]);
-
-  // Use flood fill to find enclosed spaces
+  // Fill only enclosed regions smaller than 4 cells, up to 4 filled cells total.
+  const sourceGrid = board.grid;
+  const newGrid = sourceGrid.map(row => [...row]);
   const visited = Array(board.height).fill(null).map(() => Array(board.width).fill(false));
+  const candidateRegions: Array<Array<{ x: number; y: number }>> = [];
 
-  // Check each empty cell to see if it's surrounded
   for (let y = 0; y < board.height; y++) {
     for (let x = 0; x < board.width; x++) {
-      if (!newGrid[y][x] && !visited[y][x]) {
-        // Found an empty cell, check if it's enclosed
-        const enclosed = isEnclosed(newGrid, x, y, visited);
-        if (enclosed.isEnclosed) {
-          // Fill all cells in this enclosed region
-          enclosed.cells.forEach(({ x: cx, y: cy }) => {
-            newGrid[cy][cx] = randomCellType();
-          });
-        }
+      if (sourceGrid[y][x] || visited[y][x]) continue;
+      const region = isEnclosed(sourceGrid, x, y, visited);
+      if (region.isEnclosed && region.cells.length > 0 && region.cells.length < 4) {
+        candidateRegions.push(region.cells);
       }
     }
+  }
+
+  // Fill smallest cavities first for deterministic behavior with the 4-cell cap.
+  candidateRegions.sort((a, b) => a.length - b.length);
+  let remainingFillBudget = 4;
+  for (const region of candidateRegions) {
+    for (const { x, y } of region) {
+      if (remainingFillBudget <= 0) break;
+      newGrid[y][x] = randomCellType();
+      remainingFillBudget--;
+    }
+    if (remainingFillBudget <= 0) break;
   }
 
   return { ...board, grid: newGrid };
