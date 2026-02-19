@@ -691,22 +691,51 @@ export class ServerGameState {
   getPieceCountEffects(): Array<{ abilityType: string; remaining: number; total: number }> {
     const effects: Array<{ abilityType: string; remaining: number; total: number }> = [];
 
+    if (this.bombMode) {
+      const abilityType = this.bombMode.type === 'circle' ? 'circle_bomb' : 'cross_firebomb';
+      effects.push({
+        abilityType,
+        remaining: 1,
+        total: this.getCounterTotal(abilityType, 1),
+      });
+    }
+
     if (this.miniBlocksRemaining > 0) {
-      effects.push({ abilityType: 'mini_blocks', remaining: this.miniBlocksRemaining, total: 5 });
+      effects.push({
+        abilityType: 'mini_blocks',
+        remaining: this.miniBlocksRemaining,
+        total: this.getCounterTotal('mini_blocks', 5),
+      });
     }
     if (this.weirdShapesRemaining > 0) {
-      effects.push({ abilityType: 'weird_shapes', remaining: this.weirdShapesRemaining, total: 1 });
+      effects.push({
+        abilityType: 'weird_shapes',
+        remaining: this.weirdShapesRemaining,
+        total: this.getCounterTotal('weird_shapes', 1),
+      });
     }
     if (this.shapeshifterPiecesRemaining > 0 || this.currentPieceIsShapeshifter) {
       const remaining = this.shapeshifterPiecesRemaining + (this.currentPieceIsShapeshifter ? 1 : 0);
-      effects.push({ abilityType: 'shapeshifter', remaining, total: 3 });
+      effects.push({
+        abilityType: 'shapeshifter',
+        remaining,
+        total: this.getCounterTotal('shapeshifter', 3),
+      });
     }
     if (this.magnetPiecesRemaining > 0 || this.currentPieceIsMagnetized) {
       const remaining = this.magnetPiecesRemaining + (this.currentPieceIsMagnetized ? 1 : 0);
-      effects.push({ abilityType: 'magnet', remaining, total: 3 });
+      effects.push({
+        abilityType: 'magnet',
+        remaining,
+        total: this.getCounterTotal('magnet', 3),
+      });
     }
     if (this.overchargeCharges > 0) {
-      effects.push({ abilityType: 'overcharge', remaining: this.overchargeCharges, total: 3 });
+      effects.push({
+        abilityType: 'overcharge',
+        remaining: this.overchargeCharges,
+        total: this.getCounterTotal('overcharge', 3),
+      });
     }
 
     return effects;
@@ -837,6 +866,11 @@ export class ServerGameState {
     const ability = ABILITIES[abilityType as keyof typeof ABILITIES];
     if (typeof ability?.duration !== 'number') return fallbackCount;
     return Math.max(0, Math.floor(ability.duration));
+  }
+
+  private getCounterTotal(abilityType: string, fallbackCount: number): number {
+    const configured = this.getPieceCount(abilityType, fallbackCount);
+    return configured > 0 ? configured : fallbackCount;
   }
 
   private applyPassiveStarRegen(now: number): void {
