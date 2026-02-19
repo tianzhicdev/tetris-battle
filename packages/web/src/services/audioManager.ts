@@ -5,6 +5,8 @@ import { Howl } from 'howler';
 
 export type SoundEffect =
   | 'piece_move'
+  | 'piece_move_left'
+  | 'piece_move_right'
   | 'piece_rotate'
   | 'soft_drop'
   | 'hard_drop'
@@ -58,6 +60,8 @@ class AudioManager {
     // Preload sound effects
     const sfxList: SoundEffect[] = [
       'piece_move',
+      'piece_move_left',
+      'piece_move_right',
       'piece_rotate',
       'soft_drop',
       'hard_drop',

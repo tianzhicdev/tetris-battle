@@ -35,11 +35,15 @@ export function MainMenu({ onSelectMode, theme, profile, onProfileUpdate, onChal
   return (
     <div
       style={{
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-        justifyContent: 'center',
         minHeight: '100vh',
+        height: '100dvh',
+        display: 'grid',
+        gridTemplateRows: 'auto minmax(0, 1fr) auto',
+        overflow: 'hidden',
+        paddingTop: 'max(10px, env(safe-area-inset-top))',
+        paddingBottom: 'max(10px, env(safe-area-inset-bottom))',
+        paddingLeft: 'clamp(10px, 3vw, 24px)',
+        paddingRight: 'clamp(10px, 3vw, 24px)',
         backgroundColor: theme.backgroundColor,
         color: theme.textColor,
         fontFamily: 'monospace',
@@ -48,11 +52,12 @@ export function MainMenu({ onSelectMode, theme, profile, onProfileUpdate, onChal
     >
       <FloatingBackground />
 
-      {/* User Button - Top Right */}
+      {/* User Button Row */}
       <div style={{
-        position: 'absolute',
-        top: '10px',
-        right: '10px',
+        position: 'relative',
+        zIndex: 2,
+        display: 'flex',
+        justifyContent: 'flex-end',
       }}>
         <div style={mergeGlass(glassBlue(), {
           padding: '4px',
@@ -71,51 +76,71 @@ export function MainMenu({ onSelectMode, theme, profile, onProfileUpdate, onChal
         </div>
       </div>
 
-      <h1
+      <div
         style={{
-          fontSize: 'clamp(2rem, 10vw, 4rem)',
-          marginBottom: '2rem',
-          textShadow: `3px 3px 0 ${theme.colors.I}`,
-          padding: '0 20px',
-          textAlign: 'center',
+          position: 'relative',
+          zIndex: 2,
+          minHeight: 0,
+          overflowY: 'auto',
+          display: 'grid',
+          justifyItems: 'center',
+          alignContent: 'center',
+          gap: 'clamp(14px, 3vh, 24px)',
+          padding: 'clamp(8px, 2vh, 18px) 0',
         }}
       >
-        TETRIS BATTLE
-      </h1>
-
-      {/* Main Actions */}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '15px', marginBottom: '30px', padding: '0 20px', width: '100%', maxWidth: '400px' }}>
-        <button
-          onClick={() => {
-            audioManager.playSfx('button_click');
-            onSelectMode('multiplayer');
+        <h1
+          style={{
+            fontSize: 'clamp(2rem, 10vw, 4rem)',
+            margin: 0,
+            textShadow: `3px 3px 0 ${theme.colors.I}`,
+            textAlign: 'center',
           }}
-          className="glass-button"
-          style={mergeGlass(glassPurple(), {
-            padding: '20px 50px',
-            fontSize: 'clamp(20px, 6vw, 28px)',
-            color: '#ffffff',
-            cursor: 'pointer',
-            fontFamily: 'monospace',
-            fontWeight: 'bold',
-            transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-            width: '100%',
-            minHeight: '80px',
-            borderRadius: '16px',
-            textShadow: '0 0 20px rgba(201, 66, 255, 0.8)',
-          })}
-          onMouseDown={(e) => e.currentTarget.style.transform = 'scale(0.95)'}
-          onMouseUp={(e) => e.currentTarget.style.transform = 'scale(1)'}
-          onMouseLeave={(e) => e.currentTarget.style.transform = 'scale(1)'}
-          onTouchStart={(e) => e.currentTarget.style.transform = 'scale(0.95)'}
-          onTouchEnd={(e) => e.currentTarget.style.transform = 'scale(1)'}
         >
-          PLAY NOW
-        </button>
+          TETRIS BATTLE
+        </h1>
+
+        {/* Main Actions */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '15px', width: '100%', maxWidth: '400px' }}>
+          <button
+            onClick={() => {
+              audioManager.playSfx('button_click');
+              onSelectMode('multiplayer');
+            }}
+            className="glass-button"
+            style={mergeGlass(glassPurple(), {
+              padding: '20px 50px',
+              fontSize: 'clamp(20px, 6vw, 28px)',
+              color: '#ffffff',
+              cursor: 'pointer',
+              fontFamily: 'monospace',
+              fontWeight: 'bold',
+              transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+              width: '100%',
+              minHeight: '80px',
+              borderRadius: '16px',
+              textShadow: '0 0 20px rgba(201, 66, 255, 0.8)',
+            })}
+            onMouseDown={(e) => e.currentTarget.style.transform = 'scale(0.95)'}
+            onMouseUp={(e) => e.currentTarget.style.transform = 'scale(1)'}
+            onMouseLeave={(e) => e.currentTarget.style.transform = 'scale(1)'}
+            onTouchStart={(e) => e.currentTarget.style.transform = 'scale(0.95)'}
+            onTouchEnd={(e) => e.currentTarget.style.transform = 'scale(1)'}
+          >
+            PLAY NOW
+          </button>
+        </div>
       </div>
 
       {/* Progression Buttons */}
-      <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', justifyContent: 'center', padding: '0 20px' }}>
+      <div style={{
+        position: 'relative',
+        zIndex: 2,
+        display: 'flex',
+        justifyContent: 'center',
+        paddingTop: 'clamp(8px, 1.8vh, 14px)',
+      }}>
+        <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', justifyContent: 'center', width: '100%', maxWidth: '560px' }}>
         <button
           onClick={() => {
             audioManager.playSfx('button_click');
@@ -199,6 +224,7 @@ export function MainMenu({ onSelectMode, theme, profile, onProfileUpdate, onChal
         >
           Abilities
         </button>
+        </div>
       </div>
 
       {/* Modals */}

@@ -133,7 +133,10 @@ export function FriendList({ profile, onClose, onChallenge }: FriendListProps) {
       alignItems: 'center',
       justifyContent: 'center',
       zIndex: 1000,
-      padding: 'clamp(10px, 3vw, 20px)',
+      paddingTop: 'max(12px, env(safe-area-inset-top))',
+      paddingBottom: 'max(12px, env(safe-area-inset-bottom))',
+      paddingLeft: 'clamp(10px, 3vw, 20px)',
+      paddingRight: 'clamp(10px, 3vw, 20px)',
     }}>
       <div style={{
         background: 'rgba(10, 10, 30, 0.95)',
@@ -143,9 +146,9 @@ export function FriendList({ profile, onClose, onChallenge }: FriendListProps) {
         boxShadow: '0 8px 32px rgba(0, 0, 0, 0.6), inset 0 1px 0 rgba(255, 255, 255, 0.1)',
         width: '100%',
         maxWidth: '500px',
-        maxHeight: '80vh',
-        display: 'flex',
-        flexDirection: 'column',
+        maxHeight: 'min(84vh, 760px)',
+        display: 'grid',
+        gridTemplateRows: 'auto auto minmax(0, 1fr)',
         overflow: 'hidden',
       }}>
         {/* Header */}
@@ -233,7 +236,7 @@ export function FriendList({ profile, onClose, onChallenge }: FriendListProps) {
 
         {/* Content */}
         <div style={{
-          flex: 1,
+          minHeight: 0,
           overflowY: 'auto',
           padding: 'clamp(10px, 3vw, 15px)',
         }}>

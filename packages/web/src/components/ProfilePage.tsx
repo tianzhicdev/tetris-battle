@@ -61,7 +61,10 @@ export function ProfilePage({ profile, onClose }: ProfilePageProps) {
       justifyContent: 'center',
       zIndex: 1000,
       fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
-      padding: 'clamp(10px, 2vw, 20px)',
+      paddingTop: 'max(12px, env(safe-area-inset-top))',
+      paddingBottom: 'max(12px, env(safe-area-inset-bottom))',
+      paddingLeft: 'clamp(10px, 2vw, 20px)',
+      paddingRight: 'clamp(10px, 2vw, 20px)',
     }}>
       <div style={{
         background: 'rgba(10, 10, 30, 0.95)',
@@ -72,8 +75,8 @@ export function ProfilePage({ profile, onClose }: ProfilePageProps) {
         maxWidth: 'min(800px, 100%)',
         width: '100%',
         maxHeight: '95vh',
-        display: 'flex',
-        flexDirection: 'column',
+        display: 'grid',
+        gridTemplateRows: 'auto minmax(0, 1fr)',
         overflow: 'hidden',
       }}>
         {/* Header */}
@@ -113,7 +116,7 @@ export function ProfilePage({ profile, onClose }: ProfilePageProps) {
 
         {/* Content */}
         <div style={{
-          flex: 1,
+          minHeight: 0,
           overflowY: 'auto',
           padding: 'clamp(15px, 4vw, 20px)',
         }}>
