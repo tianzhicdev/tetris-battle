@@ -419,24 +419,15 @@ export function ServerAuthMultiplayerGame({
   const opponentMiniBoardWidth = 'clamp(65px, 17vw, 80px)';
   const topUiInset = 'max(12px, calc(env(safe-area-inset-top) + 8px))';
   const bottomUiInset = 'max(2px, env(safe-area-inset-bottom))';
-  const statsCardsTop = topUiInset;
-  const statsRowHeight = 'clamp(56px, 9vh, 76px)';
-  const statsToBoardGap = '0px';
+  const statsRowMinHeight = 'clamp(56px, 9vh, 76px)';
+  const statsToBoardGap = 'clamp(4px, 0.8vh, 8px)';
   const abilitiesBarHeight = 'clamp(52px, 9vh, 64px)';
-  const controlsGapHeight = '0px';
   const controlsBarHeight = 'clamp(60px, 12vh, 80px)';
-  const boardBottomPadding = 'clamp(4px, 0.9vh, 8px)';
-  const playerZoneTopFallback = `calc(${statsCardsTop} + ${statsRowHeight} + ${statsToBoardGap})`;
-  const playerZoneHeightFallback = `calc(100dvh - ${playerZoneTopFallback} - ${abilitiesBarHeight} - ${controlsGapHeight} - ${controlsBarHeight} - ${boardBottomPadding} - ${bottomUiInset})`;
-  const contentTopOffset = `calc(${statsCardsTop} + ${statsRowHeight} + clamp(2px, 0.4vh, 6px))`;
+  const statsCardsTop = topUiInset;
+  const controlsGapHeight = '0px';
   const statsOverlaySidePaddingPx = 8;
   const statsOverlayGapPx = 6;
-  const statsFourthWidthExpr = `(100vw - ${statsOverlaySidePaddingPx * 2}px - ${statsOverlayGapPx * 3}px) / 4`;
-  const statsCardWidth = `calc(${statsFourthWidthExpr})`;
-  const statsStarsLeft = `calc(${statsOverlaySidePaddingPx}px + (${statsFourthWidthExpr}) + ${statsOverlayGapPx}px)`;
-  const statsLinesLeft = `calc(${statsOverlaySidePaddingPx}px + (${statsFourthWidthExpr} * 2) + ${statsOverlayGapPx * 2}px)`;
-  const statsExitLeft = `calc(${statsOverlaySidePaddingPx}px + (${statsFourthWidthExpr} * 3) + ${statsOverlayGapPx * 3}px)`;
-  const statsCardAnchorRef = useRef<HTMLDivElement>(null);
+  const statsCardsWidth = `calc(100vw - ${statsOverlaySidePaddingPx * 2}px)`;
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const opponentCanvasRef = useRef<HTMLCanvasElement>(null);
   const rendererRef = useRef<TetrisRenderer | null>(null);
@@ -475,16 +466,10 @@ export function ServerAuthMultiplayerGame({
   const [isDebugMode, setIsDebugMode] = useState(false);
   const [connectionStats, setConnectionStats] = useState<ConnectionStats | null>(null);
   const [effectClockMs, setEffectClockMs] = useState(() => Date.now());
-  const [statsCardBottomPx, setStatsCardBottomPx] = useState<number | null>(null);
-  const [statsCardHeightPx, setStatsCardHeightPx] = useState<number | null>(null);
   const [isMobilePortrait, setIsMobilePortrait] = useState(() => {
     if (typeof window === 'undefined') return false;
     return window.matchMedia('(max-width: 900px) and (orientation: portrait)').matches;
   });
-  const playerZoneTop = statsCardBottomPx !== null ? `${statsCardBottomPx + 1}px` : playerZoneTopFallback;
-  const playerZoneHeight = statsCardBottomPx !== null
-    ? `calc(100dvh - ${statsCardBottomPx + 1}px - ${abilitiesBarHeight} - ${controlsGapHeight} - ${controlsBarHeight} - ${boardBottomPadding} - ${bottomUiInset})`
-    : playerZoneHeightFallback;
 
   const { availableAbilities, setLoadout } = useAbilityStore();
 
@@ -583,44 +568,6 @@ export function ServerAuthMultiplayerGame({
       window.removeEventListener('resize', updateLayout);
     };
   }, []);
-
-  useEffect(() => {
-    let rafId = 0;
-
-    const measureStatsBottom = () => {
-      cancelAnimationFrame(rafId);
-      rafId = requestAnimationFrame(() => {
-        const anchor = statsCardAnchorRef.current;
-        if (!anchor) return;
-        const anchorRect = anchor.getBoundingClientRect();
-        const nextBottom = Math.round(anchorRect.bottom);
-        const nextHeight = Math.round(anchorRect.height);
-        setStatsCardBottomPx((prev) => {
-          if (prev === null) return nextBottom;
-          return Math.abs(prev - nextBottom) > 1 ? nextBottom : prev;
-        });
-        setStatsCardHeightPx((prev) => {
-          if (prev === null) return nextHeight;
-          return Math.abs(prev - nextHeight) > 1 ? nextHeight : prev;
-        });
-      });
-    };
-
-    measureStatsBottom();
-    window.addEventListener('resize', measureStatsBottom);
-
-    let resizeObserver: ResizeObserver | null = null;
-    if (typeof ResizeObserver !== 'undefined' && statsCardAnchorRef.current) {
-      resizeObserver = new ResizeObserver(() => measureStatsBottom());
-      resizeObserver.observe(statsCardAnchorRef.current);
-    }
-
-    return () => {
-      cancelAnimationFrame(rafId);
-      window.removeEventListener('resize', measureStatsBottom);
-      resizeObserver?.disconnect();
-    };
-  }, [yourState?.score, yourState?.stars, yourState?.linesCleared]);
 
   // Initialize debug mode
   useEffect(() => {
@@ -1520,7 +1467,7 @@ export function ServerAuthMultiplayerGame({
                 top: statsCardsTop,
                 left: `${statsOverlaySidePaddingPx}px`,
                 width: `calc(100% - ${statsOverlaySidePaddingPx * 2}px)`,
-                height: statsRowHeight,
+                height: statsRowMinHeight,
               },
             },
             {
@@ -1528,10 +1475,10 @@ export function ServerAuthMultiplayerGame({
               label: 'Player Zone (Next + Main Board)',
               color: 'rgba(0, 212, 255, 0.9)',
               box: {
-                top: playerZoneTop,
+                top: `calc(${topUiInset} + ${statsRowMinHeight} + ${statsToBoardGap})`,
                 left: '6px',
                 width: 'calc(100% - clamp(98px, 24vw, 126px) - 14px)',
-                bottom: `calc(${abilitiesBarHeight} + ${controlsGapHeight} + ${controlsBarHeight} + ${boardBottomPadding} + ${bottomUiInset})`,
+                bottom: `calc(${abilitiesBarHeight} + ${controlsBarHeight} + ${bottomUiInset})`,
               },
             },
             {
@@ -1539,10 +1486,10 @@ export function ServerAuthMultiplayerGame({
               label: 'Opponent Panel',
               color: 'rgba(255, 0, 110, 0.92)',
               box: {
-                top: playerZoneTop,
+                top: `calc(${topUiInset} + ${statsRowMinHeight} + ${statsToBoardGap})`,
                 right: '4px',
                 width: 'clamp(85px, 22vw, 110px)',
-                bottom: `calc(${abilitiesBarHeight} + ${controlsGapHeight} + ${controlsBarHeight} + ${boardBottomPadding} + ${bottomUiInset})`,
+                bottom: `calc(${abilitiesBarHeight} + ${controlsBarHeight} + ${bottomUiInset})`,
               },
             },
             {
@@ -1550,7 +1497,7 @@ export function ServerAuthMultiplayerGame({
               label: 'Opponent Board',
               color: 'rgba(255, 120, 168, 0.95)',
               box: {
-                top: playerZoneTop,
+                top: `calc(${topUiInset} + ${statsRowMinHeight} + ${statsToBoardGap})`,
                 right: 'clamp(8px, 2vw, 16px)',
                 width: opponentMiniBoardWidth,
                 height: 'clamp(162px, 42vw, 210px)',
@@ -1561,7 +1508,7 @@ export function ServerAuthMultiplayerGame({
               label: 'Effect Countdowns',
               color: 'rgba(255, 170, 88, 0.95)',
               box: {
-                top: `calc(${playerZoneTop} + clamp(172px, 36vw, 214px))`,
+                top: `calc(${topUiInset} + ${statsRowMinHeight} + ${statsToBoardGap} + clamp(172px, 36vw, 214px))`,
                 right: 'clamp(8px, 2vw, 16px)',
                 width: opponentMiniBoardWidth,
                 height: 'clamp(84px, 20vh, 180px)',
@@ -1574,7 +1521,7 @@ export function ServerAuthMultiplayerGame({
               box: {
                 left: '4px',
                 right: '4px',
-                bottom: `calc(${controlsGapHeight} + ${controlsBarHeight} + ${bottomUiInset})`,
+                bottom: `calc(${controlsBarHeight} + ${bottomUiInset})`,
                 height: abilitiesBarHeight,
               },
             },
@@ -1794,283 +1741,352 @@ export function ServerAuthMultiplayerGame({
         />
       ) : (
         <>
-      {/* Connection Quality Indicator - Top Left */}
-      {connectionStats && (
-        <div
-          style={{
-            position: 'absolute',
-            top: contentTopOffset,
-            left: '6px',
-            padding: '2px 5px',
-            background: 'rgba(0, 0, 0, 0.42)',
-            borderRadius: '4px',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '4px',
-            fontSize: '10px',
-            fontWeight: '600',
-            lineHeight: 1,
-            zIndex: 5,
-            border: '1px solid rgba(255, 255, 255, 0.12)',
-            pointerEvents: 'none',
-            userSelect: 'none',
-          }}
-        >
-          <span style={{
-            width: '6px',
-            height: '6px',
-            borderRadius: '50%',
-            display: 'inline-block',
-            background:
-              connectionStats.quality === 'excellent'
-                ? '#4ade80'
-                : connectionStats.quality === 'good'
-                ? '#fbbf24'
-                : connectionStats.quality === 'poor'
-                ? '#fb923c'
-                : '#ef4444',
-          }}>
-          </span>
-          <span style={{ color: '#ffffff' }}>
-            {Math.round(connectionStats.avgLatency)}ms
-          </span>
-          <span
+          <div
             style={{
-              color:
-                connectionStats.quality === 'excellent'
-                  ? '#4ade80'
-                  : connectionStats.quality === 'good'
-                  ? '#fbbf24'
-                  : connectionStats.quality === 'poor'
-                  ? '#fb923c'
-                  : '#ef4444',
-              textTransform: 'capitalize',
-              fontSize: '9px',
+              display: 'grid',
+              gridTemplateRows: `auto minmax(0, 1fr) ${abilitiesBarHeight} ${controlsBarHeight}`,
+              height: '100%',
+              minHeight: 0,
+              paddingTop: topUiInset,
+              paddingBottom: bottomUiInset,
+              overflow: 'hidden',
             }}
           >
-            {connectionStats.quality}
-          </span>
-        </div>
-      )}
-      {/* Top Scoreboard split into independent overlay containers */}
-      <div
-        ref={statsCardAnchorRef}
-        style={{
-          position: 'absolute',
-          top: statsCardsTop,
-          left: `${statsOverlaySidePaddingPx}px`,
-          zIndex: 7,
-          pointerEvents: 'none',
-          width: statsCardWidth,
-          minWidth: 0,
-          padding: '2px clamp(8px, 1.2vw, 12px) 3px',
-          borderRadius: '10px',
-          background: 'linear-gradient(180deg, rgba(0, 28, 42, 0.82) 0%, rgba(0, 14, 24, 0.72) 100%)',
-          border: '1px solid rgba(0, 212, 255, 0.42)',
-          boxShadow: '0 0 18px rgba(0, 212, 255, 0.22), inset 0 0 14px rgba(0, 212, 255, 0.14)',
-          textAlign: 'center',
-          fontVariantNumeric: 'tabular-nums',
-        }}
-      >
-        <div style={{ fontSize: 'clamp(7px, 0.95vw, 10px)', fontWeight: 700, letterSpacing: '0.7px', textTransform: 'uppercase', color: 'rgba(125, 227, 255, 0.95)', marginBottom: '4px' }}>
-          Score
-        </div>
-        <AnimatePresence mode="popLayout">
-          <motion.div
-            key={`top-score-${yourState?.score ?? 0}`}
-            variants={scoreVariants}
-            initial="initial"
-            animate="animate"
-            exit="exit"
-            transition={springs.gentle}
-            style={{
-              fontSize: 'clamp(30px, 8vw, 96px)',
-              lineHeight: 0.72,
-              fontWeight: 900,
-              letterSpacing: '-1.2px',
-              color: '#67eaff',
-              textShadow: '0 0 12px rgba(0, 212, 255, 0.95), 0 0 26px rgba(0, 212, 255, 0.45)',
-              whiteSpace: 'nowrap',
-              display: 'inline-block',
-            }}
-          >
-            <span
+            <div
               style={{
-                display: 'inline-block',
-                transform: 'scaleY(1.3)',
-                transformOrigin: 'center top',
-                marginTop: '2px',
+                position: 'relative',
+                width: statsCardsWidth,
+                maxWidth: '100%',
+                alignSelf: 'center',
+                minHeight: statsRowMinHeight,
+                display: 'grid',
+                gridTemplateColumns: 'repeat(4, minmax(0, 1fr))',
+                gap: `${statsOverlayGapPx}px`,
+                zIndex: 7,
               }}
             >
-              {yourState?.score ?? 0}
-            </span>
-          </motion.div>
-        </AnimatePresence>
-      </div>
-      <div
-        style={{
-          position: 'absolute',
-          top: statsCardsTop,
-          left: statsStarsLeft,
-          zIndex: 7,
-          pointerEvents: 'none',
-          width: statsCardWidth,
-          minWidth: 0,
-          padding: '2px clamp(8px, 1.2vw, 12px) 3px',
-          borderRadius: '10px',
-          background: 'linear-gradient(180deg, rgba(38, 12, 60, 0.82) 0%, rgba(22, 8, 38, 0.72) 100%)',
-          border: '1px solid rgba(201, 66, 255, 0.45)',
-          boxShadow: '0 0 18px rgba(201, 66, 255, 0.25), inset 0 0 14px rgba(201, 66, 255, 0.16)',
-          textAlign: 'center',
-          fontVariantNumeric: 'tabular-nums',
-        }}
-      >
-        <div style={{ fontSize: 'clamp(7px, 0.95vw, 10px)', fontWeight: 700, letterSpacing: '0.7px', textTransform: 'uppercase', color: 'rgba(227, 160, 255, 0.95)', marginBottom: '4px' }}>
-          Stars
-        </div>
-        <AnimatePresence mode="popLayout">
-          <motion.div
-            key={`top-stars-${yourState?.stars ?? 0}`}
-            variants={scoreVariants}
-            initial="initial"
-            animate="animate"
-            exit="exit"
-            transition={springs.gentle}
-            style={{
-              fontSize: 'clamp(30px, 8vw, 96px)',
-              lineHeight: 0.72,
-              fontWeight: 900,
-              letterSpacing: '-1.2px',
-              color: '#df82ff',
-              textShadow: '0 0 12px rgba(201, 66, 255, 0.95), 0 0 26px rgba(201, 66, 255, 0.45)',
-              whiteSpace: 'nowrap',
-              display: 'inline-block',
-            }}
-          >
-            <span
+              {connectionStats && (
+                <div
+                  style={{
+                    position: 'absolute',
+                    top: '2px',
+                    left: '2px',
+                    padding: '2px 5px',
+                    background: 'rgba(0, 0, 0, 0.42)',
+                    borderRadius: '4px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '4px',
+                    fontSize: '10px',
+                    fontWeight: '600',
+                    lineHeight: 1,
+                    zIndex: 12,
+                    border: '1px solid rgba(255, 255, 255, 0.12)',
+                    pointerEvents: 'none',
+                    userSelect: 'none',
+                  }}
+                >
+                  <span
+                    style={{
+                      width: '6px',
+                      height: '6px',
+                      borderRadius: '50%',
+                      display: 'inline-block',
+                      background:
+                        connectionStats.quality === 'excellent'
+                          ? '#4ade80'
+                          : connectionStats.quality === 'good'
+                          ? '#fbbf24'
+                          : connectionStats.quality === 'poor'
+                          ? '#fb923c'
+                          : '#ef4444',
+                    }}
+                  />
+                  <span style={{ color: '#ffffff' }}>
+                    {Math.round(connectionStats.avgLatency)}ms
+                  </span>
+                  <span
+                    style={{
+                      color:
+                        connectionStats.quality === 'excellent'
+                          ? '#4ade80'
+                          : connectionStats.quality === 'good'
+                          ? '#fbbf24'
+                          : connectionStats.quality === 'poor'
+                          ? '#fb923c'
+                          : '#ef4444',
+                      textTransform: 'capitalize',
+                      fontSize: '9px',
+                    }}
+                  >
+                    {connectionStats.quality}
+                  </span>
+                </div>
+              )}
+              <div
+                style={{
+                  pointerEvents: 'none',
+                  minWidth: 0,
+                  height: '100%',
+                  padding: '2px clamp(8px, 1.2vw, 12px) 3px',
+                  borderRadius: '10px',
+                  background: 'linear-gradient(180deg, rgba(0, 28, 42, 0.82) 0%, rgba(0, 14, 24, 0.72) 100%)',
+                  border: '1px solid rgba(0, 212, 255, 0.42)',
+                  boxShadow: '0 0 18px rgba(0, 212, 255, 0.22), inset 0 0 14px rgba(0, 212, 255, 0.14)',
+                  textAlign: 'center',
+                  fontVariantNumeric: 'tabular-nums',
+                }}
+              >
+                <div style={{ fontSize: 'clamp(7px, 0.95vw, 10px)', fontWeight: 700, letterSpacing: '0.7px', textTransform: 'uppercase', color: 'rgba(125, 227, 255, 0.95)', marginBottom: '4px' }}>
+                  Score
+                </div>
+                <AnimatePresence mode="popLayout">
+                  <motion.div
+                    key={`top-score-${yourState?.score ?? 0}`}
+                    variants={scoreVariants}
+                    initial="initial"
+                    animate="animate"
+                    exit="exit"
+                    transition={springs.gentle}
+                    style={{
+                      fontSize: 'clamp(30px, 8vw, 96px)',
+                      lineHeight: 0.72,
+                      fontWeight: 900,
+                      letterSpacing: '-1.2px',
+                      color: '#67eaff',
+                      textShadow: '0 0 12px rgba(0, 212, 255, 0.95), 0 0 26px rgba(0, 212, 255, 0.45)',
+                      whiteSpace: 'nowrap',
+                      display: 'inline-block',
+                    }}
+                  >
+                    <span
+                      style={{
+                        display: 'inline-block',
+                        transform: 'scaleY(1.3)',
+                        transformOrigin: 'center top',
+                        marginTop: '2px',
+                      }}
+                    >
+                      {yourState?.score ?? 0}
+                    </span>
+                  </motion.div>
+                </AnimatePresence>
+              </div>
+              <div
+                style={{
+                  pointerEvents: 'none',
+                  minWidth: 0,
+                  height: '100%',
+                  padding: '2px clamp(8px, 1.2vw, 12px) 3px',
+                  borderRadius: '10px',
+                  background: 'linear-gradient(180deg, rgba(38, 12, 60, 0.82) 0%, rgba(22, 8, 38, 0.72) 100%)',
+                  border: '1px solid rgba(201, 66, 255, 0.45)',
+                  boxShadow: '0 0 18px rgba(201, 66, 255, 0.25), inset 0 0 14px rgba(201, 66, 255, 0.16)',
+                  textAlign: 'center',
+                  fontVariantNumeric: 'tabular-nums',
+                }}
+              >
+                <div style={{ fontSize: 'clamp(7px, 0.95vw, 10px)', fontWeight: 700, letterSpacing: '0.7px', textTransform: 'uppercase', color: 'rgba(227, 160, 255, 0.95)', marginBottom: '4px' }}>
+                  Stars
+                </div>
+                <AnimatePresence mode="popLayout">
+                  <motion.div
+                    key={`top-stars-${yourState?.stars ?? 0}`}
+                    variants={scoreVariants}
+                    initial="initial"
+                    animate="animate"
+                    exit="exit"
+                    transition={springs.gentle}
+                    style={{
+                      fontSize: 'clamp(30px, 8vw, 96px)',
+                      lineHeight: 0.72,
+                      fontWeight: 900,
+                      letterSpacing: '-1.2px',
+                      color: '#df82ff',
+                      textShadow: '0 0 12px rgba(201, 66, 255, 0.95), 0 0 26px rgba(201, 66, 255, 0.45)',
+                      whiteSpace: 'nowrap',
+                      display: 'inline-block',
+                    }}
+                  >
+                    <span
+                      style={{
+                        display: 'inline-block',
+                        transform: 'scaleY(1.3)',
+                        transformOrigin: 'center top',
+                        marginTop: '2px',
+                      }}
+                    >
+                      {yourState?.stars ?? 0}
+                    </span>
+                  </motion.div>
+                </AnimatePresence>
+              </div>
+              <div
+                style={{
+                  pointerEvents: 'none',
+                  minWidth: 0,
+                  height: '100%',
+                  padding: '2px clamp(8px, 1.2vw, 12px) 3px',
+                  borderRadius: '10px',
+                  background: 'linear-gradient(180deg, rgba(4, 44, 26, 0.82) 0%, rgba(3, 22, 13, 0.72) 100%)',
+                  border: '1px solid rgba(0, 255, 136, 0.42)',
+                  boxShadow: '0 0 18px rgba(0, 255, 136, 0.22), inset 0 0 14px rgba(0, 255, 136, 0.14)',
+                  textAlign: 'center',
+                  fontVariantNumeric: 'tabular-nums',
+                }}
+              >
+                <div style={{ fontSize: 'clamp(7px, 0.95vw, 10px)', fontWeight: 700, letterSpacing: '0.7px', textTransform: 'uppercase', color: 'rgba(153, 255, 204, 0.95)', marginBottom: '4px' }}>
+                  Lines
+                </div>
+                <AnimatePresence mode="popLayout">
+                  <motion.div
+                    key={`top-lines-${yourState?.linesCleared ?? 0}`}
+                    variants={scoreVariants}
+                    initial="initial"
+                    animate="animate"
+                    exit="exit"
+                    transition={springs.gentle}
+                    style={{
+                      fontSize: 'clamp(30px, 8vw, 96px)',
+                      lineHeight: 0.72,
+                      fontWeight: 900,
+                      letterSpacing: '-1.2px',
+                      color: '#7dffb0',
+                      textShadow: '0 0 12px rgba(0, 255, 136, 0.95), 0 0 26px rgba(0, 255, 136, 0.45)',
+                      whiteSpace: 'nowrap',
+                      display: 'inline-block',
+                    }}
+                  >
+                    <span
+                      style={{
+                        display: 'inline-block',
+                        transform: 'scaleY(1.3)',
+                        transformOrigin: 'center top',
+                        marginTop: '2px',
+                      }}
+                    >
+                      {yourState?.linesCleared ?? 0}
+                    </span>
+                  </motion.div>
+                </AnimatePresence>
+              </div>
+              <motion.button
+                whileTap="tap"
+                variants={buttonVariants}
+                transition={springs.snappy}
+                onClick={onExit}
+                style={{
+                  minWidth: 0,
+                  height: '100%',
+                  padding: '2px clamp(8px, 1.2vw, 12px) 3px',
+                  borderRadius: '10px',
+                  background: 'linear-gradient(180deg, rgba(46, 18, 18, 0.82) 0%, rgba(24, 10, 10, 0.72) 100%)',
+                  border: '1px solid rgba(255, 122, 122, 0.45)',
+                  boxShadow: '0 0 18px rgba(255, 122, 122, 0.22), inset 0 0 14px rgba(255, 122, 122, 0.14)',
+                  textAlign: 'center',
+                  color: '#ffd9d9',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  lineHeight: 1,
+                }}
+              >
+                <span
+                  style={{
+                    fontSize: 'clamp(18px, 4.2vw, 40px)',
+                    fontWeight: 900,
+                    lineHeight: 0.88,
+                    letterSpacing: '-0.4px',
+                    color: '#ff9a9a',
+                    textShadow: '0 0 10px rgba(255, 122, 122, 0.9), 0 0 22px rgba(255, 122, 122, 0.45)',
+                    whiteSpace: 'nowrap',
+                  }}
+                >
+                  Exit
+                </span>
+              </motion.button>
+
+              {abilityNotifications.length > 0 && (
+                <div
+                  style={{
+                    position: 'absolute',
+                    top: 0,
+                    left: 0,
+                    width: mockMode ? `${demoGridCellSize * 6 - 12}px` : '320px',
+                    maxHeight: mockMode ? `${demoGridCellSize * 2 - 12}px` : '120px',
+                    zIndex: 20,
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '4px',
+                    pointerEvents: 'none',
+                    overflow: 'hidden',
+                  }}
+                >
+                  {abilityNotifications.map((notif) => (
+                    <motion.div
+                      key={notif.id}
+                      initial={{ opacity: 0, y: -6, scale: 0.98 }}
+                      animate={{ opacity: 1, y: 0, scale: 1 }}
+                      exit={{ opacity: 0, y: -6, scale: 0.98 }}
+                      transition={{ duration: 0.14, ease: 'easeOut' }}
+                      style={{
+                        borderRadius: '6px',
+                        border: `1px solid ${notif.category === 'debuff' ? 'rgba(255, 0, 110, 0.5)' : 'rgba(0, 212, 255, 0.5)'}`,
+                        background: notif.category === 'debuff' ? 'rgba(36, 6, 20, 0.85)' : 'rgba(6, 20, 36, 0.85)',
+                        boxShadow: notif.category === 'debuff'
+                          ? '0 0 10px rgba(255, 0, 110, 0.22)'
+                          : '0 0 10px rgba(0, 212, 255, 0.22)',
+                        padding: '4px 6px',
+                      }}
+                    >
+                      <div
+                        style={{
+                          fontSize: '12px',
+                          fontWeight: 800,
+                          lineHeight: 1.15,
+                          color: notif.category === 'debuff' ? '#ff76a7' : '#7de3ff',
+                          marginBottom: '2px',
+                          whiteSpace: 'nowrap',
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                        }}
+                      >
+                        {notif.name}
+                      </div>
+                      <div
+                        style={{
+                          fontSize: '10px',
+                          lineHeight: 1.25,
+                          color: 'rgba(255,255,255,0.88)',
+                          display: '-webkit-box',
+                          WebkitLineClamp: 2,
+                          WebkitBoxOrient: 'vertical',
+                          overflow: 'hidden',
+                        }}
+                      >
+                        {notif.description}
+                      </div>
+                    </motion.div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Main Game Area */}
+	          <div
               style={{
-                display: 'inline-block',
-                transform: 'scaleY(1.3)',
-                transformOrigin: 'center top',
-                marginTop: '2px',
+                display: 'flex',
+                minHeight: 0,
+                overflow: 'hidden',
+                paddingLeft: 'clamp(2px, 0.5vw, 4px)',
+                paddingRight: 'clamp(2px, 0.5vw, 4px)',
+                paddingTop: statsToBoardGap,
+                gap: 'clamp(2px, 0.5vw, 4px)',
               }}
             >
-              {yourState?.stars ?? 0}
-            </span>
-          </motion.div>
-        </AnimatePresence>
-      </div>
-      <div
-        style={{
-          position: 'absolute',
-          top: statsCardsTop,
-          left: statsLinesLeft,
-          zIndex: 7,
-          pointerEvents: 'none',
-          width: statsCardWidth,
-          minWidth: 0,
-          padding: '2px clamp(8px, 1.2vw, 12px) 3px',
-          borderRadius: '10px',
-          background: 'linear-gradient(180deg, rgba(4, 44, 26, 0.82) 0%, rgba(3, 22, 13, 0.72) 100%)',
-          border: '1px solid rgba(0, 255, 136, 0.42)',
-          boxShadow: '0 0 18px rgba(0, 255, 136, 0.22), inset 0 0 14px rgba(0, 255, 136, 0.14)',
-          textAlign: 'center',
-          fontVariantNumeric: 'tabular-nums',
-        }}
-      >
-        <div style={{ fontSize: 'clamp(7px, 0.95vw, 10px)', fontWeight: 700, letterSpacing: '0.7px', textTransform: 'uppercase', color: 'rgba(153, 255, 204, 0.95)', marginBottom: '4px' }}>
-          Lines
-        </div>
-        <AnimatePresence mode="popLayout">
-          <motion.div
-            key={`top-lines-${yourState?.linesCleared ?? 0}`}
-            variants={scoreVariants}
-            initial="initial"
-            animate="animate"
-            exit="exit"
-            transition={springs.gentle}
-            style={{
-              fontSize: 'clamp(30px, 8vw, 96px)',
-              lineHeight: 0.72,
-              fontWeight: 900,
-              letterSpacing: '-1.2px',
-              color: '#7dffb0',
-              textShadow: '0 0 12px rgba(0, 255, 136, 0.95), 0 0 26px rgba(0, 255, 136, 0.45)',
-              whiteSpace: 'nowrap',
-              display: 'inline-block',
-            }}
-          >
-            <span
-              style={{
-                display: 'inline-block',
-                transform: 'scaleY(1.3)',
-                transformOrigin: 'center top',
-                marginTop: '2px',
-              }}
-            >
-              {yourState?.linesCleared ?? 0}
-            </span>
-          </motion.div>
-        </AnimatePresence>
-      </div>
-      <motion.button
-        whileTap="tap"
-        variants={buttonVariants}
-        transition={springs.snappy}
-        onClick={onExit}
-        style={{
-          position: 'absolute',
-          top: statsCardsTop,
-          left: statsExitLeft,
-          zIndex: 8,
-          width: statsCardWidth,
-          minWidth: 0,
-          height: statsCardHeightPx !== null ? `${statsCardHeightPx}px` : undefined,
-          boxSizing: 'border-box',
-          padding: '2px clamp(8px, 1.2vw, 12px) 3px',
-          borderRadius: '10px',
-          background: 'linear-gradient(180deg, rgba(46, 18, 18, 0.82) 0%, rgba(24, 10, 10, 0.72) 100%)',
-          border: '1px solid rgba(255, 122, 122, 0.45)',
-          boxShadow: '0 0 18px rgba(255, 122, 122, 0.22), inset 0 0 14px rgba(255, 122, 122, 0.14)',
-          textAlign: 'center',
-          color: '#ffd9d9',
-          cursor: 'pointer',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          lineHeight: 1,
-        }}
-      >
-        <span
-          style={{
-            fontSize: 'clamp(18px, 4.2vw, 40px)',
-            fontWeight: 900,
-            lineHeight: 0.88,
-            letterSpacing: '-0.4px',
-            color: '#ff9a9a',
-            textShadow: '0 0 10px rgba(255, 122, 122, 0.9), 0 0 22px rgba(255, 122, 122, 0.45)',
-            whiteSpace: 'nowrap',
-          }}
-        >
-          Exit
-        </span>
-      </motion.button>
-      {/* Main Game Area */}
-	      <div
-          style={{
-            display: 'flex',
-            flex: 1,
-            minHeight: 0,
-            overflow: 'hidden',
-            paddingLeft: 'clamp(2px, 0.5vw, 4px)',
-            paddingRight: 'clamp(2px, 0.5vw, 4px)',
-            paddingBottom: boardBottomPadding,
-            paddingTop: playerZoneTop,
-            gap: 'clamp(2px, 0.5vw, 4px)',
-          }}
-        >
-	        {/* Left: Your Board */}
-	        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, minHeight: 0, position: 'relative' }}>
+	          {/* Left: Your Board */}
+	          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, minHeight: 0, position: 'relative' }}>
           {/* Defensive Ability Indicator - Your Board */}
           {yourDefensiveAbility && (
             <div
@@ -2145,7 +2161,7 @@ export function ServerAuthMultiplayerGame({
               <div
                 style={{
                   position: 'relative',
-                  maxHeight: playerZoneHeight,
+                  maxHeight: '100%',
                   maxWidth: '100%',
                   width: 'fit-content',
                   transform: getTiltAngle(yourState)
@@ -2162,7 +2178,7 @@ export function ServerAuthMultiplayerGame({
                     display: 'block',
                     border: `2px solid ${selfBoardFx?.borderColor || '#00d4ff'}`,
                     backgroundColor: 'rgba(5,5,15,0.8)',
-                    maxHeight: playerZoneHeight,
+                    maxHeight: '100%',
                     maxWidth: '100%',
                     height: 'auto',
                     width: 'auto',
@@ -2322,7 +2338,7 @@ export function ServerAuthMultiplayerGame({
 	                  width: opponentMiniBoardWidth,
 	                  maxWidth: opponentMiniBoardWidth,
 	                  alignSelf: 'center',
-	                  maxHeight: `calc(${playerZoneHeight} - clamp(150px, 32vw, 198px))`,
+	                  maxHeight: 'calc(100% - clamp(150px, 32vw, 198px))',
 	                  overflowY: 'auto',
 	                  paddingRight: 0,
 	                }}
@@ -2547,7 +2563,6 @@ export function ServerAuthMultiplayerGame({
         display: 'flex',
         gap: 'clamp(4px, 1vw, 8px)',
         padding: 'clamp(6px, 1.5vw, 10px)',
-        paddingBottom: `calc(clamp(6px, 1.5vw, 10px) + ${bottomUiInset})`,
         background: 'linear-gradient(180deg, rgba(10,10,25,0.4) 0%, rgba(5,5,15,0.8) 100%)',
         backdropFilter: 'blur(20px)',
         borderTop: '1px solid rgba(0, 212, 255, 0.2)',
@@ -2715,6 +2730,7 @@ export function ServerAuthMultiplayerGame({
           </svg>
         </motion.button>
       </div>
+          </div>
         </>
       )}
 
@@ -2920,72 +2936,6 @@ export function ServerAuthMultiplayerGame({
           colors={particles.colors}
           onComplete={() => setParticles(null)}
         />
-      )}
-
-      {/* Compact notifications (overlays top stats row) */}
-      {abilityNotifications.length > 0 && (
-        <div
-          style={{
-            position: 'fixed',
-            top: statsCardsTop,
-            left: '8px',
-            width: mockMode ? `${demoGridCellSize * 6 - 12}px` : '320px',
-            maxHeight: mockMode ? `${demoGridCellSize * 2 - 12}px` : '120px',
-            zIndex: 10000,
-            display: 'flex',
-            flexDirection: 'column',
-            gap: '4px',
-            pointerEvents: 'none',
-            overflow: 'hidden',
-          }}
-        >
-          {abilityNotifications.map((notif) => (
-            <motion.div
-              key={notif.id}
-              initial={{ opacity: 0, y: -6, scale: 0.98 }}
-              animate={{ opacity: 1, y: 0, scale: 1 }}
-              exit={{ opacity: 0, y: -6, scale: 0.98 }}
-              transition={{ duration: 0.14, ease: 'easeOut' }}
-              style={{
-                borderRadius: '6px',
-                border: `1px solid ${notif.category === 'debuff' ? 'rgba(255, 0, 110, 0.5)' : 'rgba(0, 212, 255, 0.5)'}`,
-                background: notif.category === 'debuff' ? 'rgba(36, 6, 20, 0.85)' : 'rgba(6, 20, 36, 0.85)',
-                boxShadow: notif.category === 'debuff'
-                  ? '0 0 10px rgba(255, 0, 110, 0.22)'
-                  : '0 0 10px rgba(0, 212, 255, 0.22)',
-                padding: '4px 6px',
-              }}
-            >
-              <div
-                style={{
-                  fontSize: '12px',
-                  fontWeight: 800,
-                  lineHeight: 1.15,
-                  color: notif.category === 'debuff' ? '#ff76a7' : '#7de3ff',
-                  marginBottom: '2px',
-                  whiteSpace: 'nowrap',
-                  overflow: 'hidden',
-                  textOverflow: 'ellipsis',
-                }}
-              >
-                {notif.name}
-              </div>
-              <div
-                style={{
-                  fontSize: '10px',
-                  lineHeight: 1.25,
-                  color: 'rgba(255,255,255,0.88)',
-                  display: '-webkit-box',
-                  WebkitLineClamp: 2,
-                  WebkitBoxOrient: 'vertical',
-                  overflow: 'hidden',
-                }}
-              >
-                {notif.description}
-              </div>
-            </motion.div>
-          ))}
-        </div>
       )}
 
       {/* Debug Panel */}
