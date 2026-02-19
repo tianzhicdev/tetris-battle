@@ -43,7 +43,6 @@ export function NextPieceQueue({ nextPieces, maxItems = 5 }: NextPieceQueueProps
         backdropFilter: 'blur(14px)',
       }}
     >
-      <div style={{ fontSize: '10px', fontWeight: 700, color: '#8ec9ff', textAlign: 'center' }}>NEXT</div>
       <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', overflow: 'hidden' }}>
         {visiblePieces.map((type, idx) => {
           const piece = type as TetrominoType;

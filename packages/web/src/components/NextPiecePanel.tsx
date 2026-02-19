@@ -9,7 +9,6 @@ const CELL = 10;        // px per mini-cell
 const SLOT = 48;        // px height per piece slot
 const PANEL_W = 46;     // canvas width
 const GAP = 4;          // px gap between slots
-const LABEL_H = 18;     // px for "NEXT" label
 
 interface Props {
   nextPieces: string[];  // up to 5 TetrominoType strings
@@ -19,7 +18,7 @@ export function NextPiecePanel({ nextPieces }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const { theme } = useTheme();
 
-  const canvasH = LABEL_H + nextPieces.length * (SLOT + GAP);
+  const canvasH = nextPieces.length * SLOT + Math.max(0, nextPieces.length - 1) * GAP;
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -28,12 +27,6 @@ export function NextPiecePanel({ nextPieces }: Props) {
     if (!ctx) return;
 
     ctx.clearRect(0, 0, PANEL_W, canvasH);
-
-    // "NEXT" label
-    ctx.fillStyle = 'rgba(255,255,255,0.45)';
-    ctx.font = `bold ${LABEL_H - 4}px monospace`;
-    ctx.textAlign = 'center';
-    ctx.fillText('NEXT', PANEL_W / 2, LABEL_H - 5);
 
     nextPieces.forEach((typeStr, slotIndex) => {
       const type = typeStr as TetrominoType;
@@ -47,7 +40,7 @@ export function NextPiecePanel({ nextPieces }: Props) {
       const pieceW = cols * CELL;
       const pieceH = rows * CELL;
       const offsetX = Math.floor((PANEL_W - pieceW) / 2);
-      const slotY = LABEL_H + slotIndex * (SLOT + GAP);
+      const slotY = slotIndex * (SLOT + GAP);
       const offsetY = slotY + Math.floor((SLOT - pieceH) / 2);
 
       // Slot background

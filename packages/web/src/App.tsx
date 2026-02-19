@@ -19,7 +19,7 @@ import { progressionService } from './lib/supabase';
 import { PartykitPresence } from './services/partykit/presence';
 import { normalizePartykitHost } from './services/partykit/host';
 import { useFriendStore } from './stores/friendStore';
-import type { UserProfile } from '@tetris-battle/game-core';
+import { ABILITY_IDS, type UserProfile } from '@tetris-battle/game-core';
 
 type GameMode = 'menu' | 'solo' | 'matchmaking' | 'multiplayer';
 
@@ -275,6 +275,39 @@ function GameApp({ profile: initialProfile }: { profile: UserProfile }) {
   );
 }
 
+function MockGameDemo() {
+  const { theme } = useTheme();
+  const currentTheme = toLegacyTheme(theme);
+  const now = Date.now();
+  const mockProfile: UserProfile = {
+    userId: 'mock_player_001',
+    username: 'LayoutTester',
+    coins: 99999,
+    matchmakingRating: 1420,
+    gamesPlayed: 240,
+    gamesWon: 133,
+    lastActiveAt: now,
+    unlockedAbilities: ABILITY_IDS,
+    loadout: ['earthquake', 'ink_splash', 'wide_load', 'tilt', 'magnet', 'screen_shake'],
+    createdAt: now - 1000 * 60 * 60 * 24 * 30,
+    updatedAt: now,
+  };
+
+  return (
+    <ServerAuthMultiplayerGame
+      roomId="mock_room_layout"
+      playerId={mockProfile.userId}
+      opponentId="mock_opponent_001"
+      theme={currentTheme}
+      profile={mockProfile}
+      onExit={() => {
+        window.location.href = window.location.pathname;
+      }}
+      mockMode
+    />
+  );
+}
+
 function App() {
   // Check if demo mode is enabled via URL parameter
   const params = new URLSearchParams(window.location.search);
@@ -292,6 +325,14 @@ function App() {
     return (
       <ThemeProvider userId="preview">
         <TetriminoBgPreviewAll />
+      </ThemeProvider>
+    );
+  }
+
+  if (demoMode === 'game') {
+    return (
+      <ThemeProvider userId="preview-game-layout">
+        <MockGameDemo />
       </ThemeProvider>
     );
   }

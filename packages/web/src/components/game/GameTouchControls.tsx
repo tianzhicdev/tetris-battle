@@ -34,10 +34,15 @@ export function GameTouchControls({ onMoveLeft, onMoveRight, onHardDrop, onSoftD
         borderTop: '1px solid rgba(0, 212, 255, 0.25)',
       }}
     >
-      <div style={{ flex: 1, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
-        <motion.button whileTap="tap" variants={buttonVariants} transition={springs.snappy} onPointerDown={(e) => { e.preventDefault(); onMoveLeft(); }} style={baseButton}>◀</motion.button>
-        <motion.button whileTap="tap" variants={buttonVariants} transition={springs.snappy} onPointerDown={(e) => { e.preventDefault(); onMoveRight(); }} style={baseButton}>▶</motion.button>
-      </div>
+      <motion.button
+        whileTap="tap"
+        variants={buttonVariants}
+        transition={springs.snappy}
+        onPointerDown={(e) => { e.preventDefault(); onMoveLeft(); }}
+        style={{ ...baseButton, flex: 1 }}
+      >
+        ◀
+      </motion.button>
 
       <motion.button
         whileTap="tap"
@@ -49,7 +54,7 @@ export function GameTouchControls({ onMoveLeft, onMoveRight, onHardDrop, onSoftD
         }}
         style={{
           ...baseButton,
-          flex: 1.1,
+          flex: 1.2,
           border: '2px solid rgba(255, 0, 110, 0.45)',
           boxShadow: '0 0 18px rgba(255, 0, 110, 0.22)',
           fontSize: '12px',
@@ -60,10 +65,35 @@ export function GameTouchControls({ onMoveLeft, onMoveRight, onHardDrop, onSoftD
         DROP
       </motion.button>
 
-      <div style={{ flex: 1, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
-        <motion.button whileTap="tap" variants={buttonVariants} transition={springs.snappy} onPointerDown={(e) => { e.preventDefault(); onRotateCw(); }} style={baseButton}>⟳</motion.button>
-        <motion.button whileTap="tap" variants={buttonVariants} transition={springs.snappy} onPointerDown={(e) => { e.preventDefault(); onSoftDrop(); }} style={baseButton}>▼</motion.button>
-      </div>
+      <motion.button
+        whileTap="tap"
+        variants={buttonVariants}
+        transition={springs.snappy}
+        onPointerDown={(e) => { e.preventDefault(); onSoftDrop(); }}
+        style={{ ...baseButton, flex: 1 }}
+      >
+        ▼
+      </motion.button>
+
+      <motion.button
+        whileTap="tap"
+        variants={buttonVariants}
+        transition={springs.snappy}
+        onPointerDown={(e) => { e.preventDefault(); onRotateCw(); }}
+        style={{ ...baseButton, flex: 1 }}
+      >
+        ⟳
+      </motion.button>
+
+      <motion.button
+        whileTap="tap"
+        variants={buttonVariants}
+        transition={springs.snappy}
+        onPointerDown={(e) => { e.preventDefault(); onMoveRight(); }}
+        style={{ ...baseButton, flex: 1 }}
+      >
+        ▶
+      </motion.button>
     </div>
   );
 }

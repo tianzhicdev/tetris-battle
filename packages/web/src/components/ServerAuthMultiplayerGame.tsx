@@ -9,10 +9,10 @@ import {
 } from '../services/partykit/ServerAuthGameClient';
 import type { ConnectionStats } from '../services/ConnectionMonitor';
 import { NextPiecePanel } from './NextPiecePanel';
+import { FloatingBackground } from './FloatingBackground';
 
 import { ParticleEffect } from './ParticleEffect';
 import { FlashOverlay } from './FlashOverlay';
-import { Notification } from './Notification';
 import { UserButton } from '@clerk/clerk-react';
 import { DebugLogger } from '../services/debug/DebugLogger';
 import { DebugPanel } from './debug/DebugPanel';
@@ -44,6 +44,7 @@ interface ServerAuthMultiplayerGameProps {
   profile: UserProfile;
   onExit: () => void;
   aiOpponent?: any;
+  mockMode?: boolean;
 }
 
 const BOMB_ABILITY_TYPES = new Set<string>(['circle_bomb', 'cross_firebomb']);
@@ -183,13 +184,219 @@ function getTiltAngle(state: any | null): number {
   return direction < 0 ? -5 : 5;
 }
 
-const INK_SPLASH_BLOBS = [
-  { top: '10%', left: '8%', w: '22%', h: '18%', r: '58% 42% 55% 45%' },
-  { top: '24%', left: '55%', w: '30%', h: '22%', r: '43% 57% 38% 62%' },
-  { top: '44%', left: '18%', w: '26%', h: '20%', r: '61% 39% 47% 53%' },
-  { top: '58%', left: '50%', w: '34%', h: '24%', r: '52% 48% 61% 39%' },
-  { top: '76%', left: '28%', w: '28%', h: '19%', r: '46% 54% 49% 51%' },
+const INK_SPLASH_PATCHES = [
+  {
+    top: '3%',
+    left: '4%',
+    width: '34%',
+    height: '28%',
+    rotate: -8,
+    clipPath:
+      'polygon(4% 24%, 26% 8%, 58% 3%, 87% 15%, 97% 37%, 90% 74%, 66% 93%, 32% 97%, 9% 74%)',
+  },
+  {
+    top: '18%',
+    left: '52%',
+    width: '39%',
+    height: '30%',
+    rotate: 7,
+    clipPath:
+      'polygon(8% 14%, 42% 2%, 76% 12%, 94% 38%, 88% 72%, 61% 95%, 24% 92%, 6% 60%)',
+  },
+  {
+    top: '40%',
+    left: '10%',
+    width: '35%',
+    height: '28%',
+    rotate: -11,
+    clipPath:
+      'polygon(6% 24%, 23% 4%, 55% 1%, 84% 11%, 97% 38%, 88% 74%, 62% 95%, 28% 96%, 10% 70%)',
+  },
+  {
+    top: '56%',
+    left: '44%',
+    width: '43%',
+    height: '33%',
+    rotate: 5,
+    clipPath:
+      'polygon(7% 16%, 32% 3%, 64% 4%, 88% 20%, 98% 48%, 90% 79%, 64% 97%, 27% 94%, 8% 66%)',
+  },
+  {
+    top: '78%',
+    left: '22%',
+    width: '34%',
+    height: '22%',
+    rotate: -4,
+    clipPath:
+      'polygon(5% 24%, 28% 7%, 62% 8%, 88% 20%, 97% 46%, 90% 76%, 61% 94%, 24% 91%, 8% 67%)',
+  },
 ];
+
+const INK_SPLASH_DRIPS = [
+  { left: '8%', width: '5%', height: '20%' },
+  { left: '22%', width: '4%', height: '14%' },
+  { left: '36%', width: '6%', height: '18%' },
+  { left: '58%', width: '4%', height: '16%' },
+  { left: '72%', width: '5%', height: '13%' },
+  { left: '86%', width: '4%', height: '17%' },
+];
+
+function InkSplashMask({ idPrefix, borderRadius }: { idPrefix: string; borderRadius: string }) {
+  return (
+    <div
+      style={{
+        position: 'absolute',
+        inset: 0,
+        borderRadius,
+        overflow: 'hidden',
+        pointerEvents: 'none',
+        zIndex: 6,
+      }}
+    >
+      {INK_SPLASH_PATCHES.map((patch, index) => (
+        <div
+          key={`${idPrefix}-ink-patch-${index}`}
+          style={{
+            position: 'absolute',
+            top: patch.top,
+            left: patch.left,
+            width: patch.width,
+            height: patch.height,
+            transform: `rotate(${patch.rotate}deg)`,
+            clipPath: patch.clipPath,
+            background: 'linear-gradient(145deg, #000000 0%, #060606 52%, #000000 100%)',
+            opacity: 1,
+            boxShadow: '0 0 0 1px #000000, 0 0 10px rgba(0,0,0,0.35)',
+          }}
+        />
+      ))}
+      {INK_SPLASH_DRIPS.map((drip, index) => (
+        <div
+          key={`${idPrefix}-ink-drip-${index}`}
+          style={{
+            position: 'absolute',
+            top: '-2%',
+            left: drip.left,
+            width: drip.width,
+            height: drip.height,
+            background: '#000000',
+            borderRadius: '0 0 999px 999px',
+          }}
+        >
+          <div
+            style={{
+              position: 'absolute',
+              bottom: '-14%',
+              left: '50%',
+              width: '72%',
+              height: '34%',
+              transform: 'translateX(-50%)',
+              borderRadius: '50%',
+              background: '#000000',
+            }}
+          />
+        </div>
+      ))}
+    </div>
+  );
+}
+
+const MOCK_TETROMINO_TYPES = ['I', 'O', 'T', 'S', 'Z', 'L', 'J'] as const;
+const MOCK_TETROMINO_SHAPES: Record<string, number[][]> = {
+  I: [
+    [1, 1, 1, 1],
+  ],
+  O: [
+    [1, 1],
+    [1, 1],
+  ],
+  T: [
+    [0, 1, 0],
+    [1, 1, 1],
+  ],
+  S: [
+    [0, 1, 1],
+    [1, 1, 0],
+  ],
+  Z: [
+    [1, 1, 0],
+    [0, 1, 1],
+  ],
+  L: [
+    [1, 0],
+    [1, 0],
+    [1, 1],
+  ],
+  J: [
+    [0, 1],
+    [0, 1],
+    [1, 1],
+  ],
+};
+
+type MockStatePayload = {
+  board: (string | null)[][];
+  currentPiece: any;
+  magnetGhost: any | null;
+  nextPieces: string[];
+  score: number;
+  stars: number;
+  linesCleared: number;
+  comboCount: number;
+  isGameOver: boolean;
+  activeEffects: string[];
+  timedEffects: Array<{ abilityType: string; remainingMs: number; durationMs: number }>;
+  pieceCountEffects: Array<{ abilityType: string; remaining: number; total: number }>;
+  tiltDirection: number;
+};
+
+function createMockPiece(type: string, x: number, y: number): any {
+  const shape = MOCK_TETROMINO_SHAPES[type] || MOCK_TETROMINO_SHAPES.T;
+  return {
+    type,
+    shape,
+    rotation: 0,
+    position: { x, y },
+    x,
+    y,
+  };
+}
+
+function createMockBoard(width: number, height: number, phase: number): (string | null)[][] {
+  const grid: (string | null)[][] = Array.from({ length: height }, () =>
+    Array.from({ length: width }, () => null)
+  );
+
+  for (let y = Math.floor(height * 0.45); y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      const wave = Math.sin((x + phase * 0.7) * 0.8 + y * 0.35);
+      const threshold = y > height - 4 ? -0.8 : -0.2;
+      if (wave > threshold && ((x + y + phase) % 5 !== 0)) {
+        const t = MOCK_TETROMINO_TYPES[(x + y + phase) % MOCK_TETROMINO_TYPES.length];
+        grid[y][x] = t;
+      }
+    }
+  }
+
+  return grid;
+}
+
+function buildMockTimedEffects(
+  now: number,
+  definitions: Array<{ abilityType: string; durationMs: number; cadenceMs: number }>
+): Array<{ abilityType: string; remainingMs: number; durationMs: number }> {
+  return definitions
+    .map((entry) => {
+      const offset = now % entry.cadenceMs;
+      const remainingMs = entry.durationMs - (offset % entry.durationMs);
+      return {
+        abilityType: entry.abilityType,
+        remainingMs,
+        durationMs: entry.durationMs,
+      };
+    })
+    .filter((entry) => entry.remainingMs > 0);
+}
 
 /**
  * ServerAuthMultiplayerGame - Server-Authoritative Version
@@ -207,10 +414,26 @@ export function ServerAuthMultiplayerGame({
   theme,
   profile,
   onExit,
-  aiOpponent
+  aiOpponent,
+  mockMode = false,
 }: ServerAuthMultiplayerGameProps) {
+  const opponentMiniBoardWidth = 'clamp(65px, 17vw, 80px)';
+  const topUiInset = 'max(12px, calc(env(safe-area-inset-top) + 8px))';
+  const topEmptyStripHeight = 'clamp(44px, 8vh, 64px)';
+  const contentTopOffset = `calc(${topUiInset} + ${topEmptyStripHeight})`;
+  const overlayHeaderHeight = 'clamp(48px, 8vh, 88px)';
+  const statsCardsTop = `calc(${contentTopOffset} - clamp(4px, 0.8vh, 8px))`;
+  const boardTopClearance = `calc(${contentTopOffset} + ${overlayHeaderHeight} + clamp(0px, 0.2vh, 2px))`;
+  const statsOverlaySidePaddingPx = 8;
+  const statsOverlayGapPx = 6;
+  const statsThirdWidthExpr = `(100vw - ${statsOverlaySidePaddingPx * 2}px - ${statsOverlayGapPx * 2}px) / 3`;
+  const statsCardWidth = `calc(${statsThirdWidthExpr})`;
+  const statsMiddleLeft = `calc(${statsOverlaySidePaddingPx}px + (${statsThirdWidthExpr}) + ${statsOverlayGapPx}px)`;
+  const statsRightLeft = `calc(${statsOverlaySidePaddingPx}px + (${statsThirdWidthExpr} * 2) + ${statsOverlayGapPx * 2}px)`;
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const opponentCanvasRef = useRef<HTMLCanvasElement>(null);
+  const rightPanelRef = useRef<HTMLDivElement>(null);
+  const rightTopButtonsRef = useRef<HTMLDivElement>(null);
   const rendererRef = useRef<TetrisRenderer | null>(null);
   const opponentRendererRef = useRef<TetrisRenderer | null>(null);
   const gameClientRef = useRef<ServerAuthGameClient | null>(null);
@@ -247,6 +470,7 @@ export function ServerAuthMultiplayerGame({
   const [isDebugMode, setIsDebugMode] = useState(false);
   const [connectionStats, setConnectionStats] = useState<ConnectionStats | null>(null);
   const [effectClockMs, setEffectClockMs] = useState(() => Date.now());
+  const [opponentBoardOffsetPx, setOpponentBoardOffsetPx] = useState(0);
   const [isMobilePortrait, setIsMobilePortrait] = useState(() => {
     if (typeof window === 'undefined') return false;
     return window.matchMedia('(max-width: 900px) and (orientation: portrait)').matches;
@@ -350,6 +574,45 @@ export function ServerAuthMultiplayerGame({
     };
   }, []);
 
+  useEffect(() => {
+    if (useLegacyMobileLayout && isMobilePortrait) return;
+
+    let rafId = 0;
+
+    const measureOpponentBoardOffset = () => {
+      cancelAnimationFrame(rafId);
+      rafId = requestAnimationFrame(() => {
+        const playerCanvas = canvasRef.current;
+        const rightPanel = rightPanelRef.current;
+        const topButtons = rightTopButtonsRef.current;
+        if (!playerCanvas || !rightPanel || !topButtons) return;
+
+        const playerBoardTop = playerCanvas.getBoundingClientRect().top;
+        const topButtonsBottom = topButtons.getBoundingClientRect().bottom;
+        const computedOffset = Math.max(0, Math.min(280, Math.round(playerBoardTop - topButtonsBottom)));
+
+        setOpponentBoardOffsetPx((prev) => (Math.abs(prev - computedOffset) > 1 ? computedOffset : prev));
+      });
+    };
+
+    measureOpponentBoardOffset();
+    window.addEventListener('resize', measureOpponentBoardOffset);
+
+    let resizeObserver: ResizeObserver | null = null;
+    if (typeof ResizeObserver !== 'undefined') {
+      resizeObserver = new ResizeObserver(() => measureOpponentBoardOffset());
+      if (canvasRef.current) resizeObserver.observe(canvasRef.current);
+      if (rightPanelRef.current) resizeObserver.observe(rightPanelRef.current);
+      if (rightTopButtonsRef.current) resizeObserver.observe(rightTopButtonsRef.current);
+    }
+
+    return () => {
+      cancelAnimationFrame(rafId);
+      window.removeEventListener('resize', measureOpponentBoardOffset);
+      resizeObserver?.disconnect();
+    };
+  }, [isMobilePortrait]);
+
   // Initialize debug mode
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -438,6 +701,110 @@ export function ServerAuthMultiplayerGame({
     };
   }, []);
 
+  useEffect(() => {
+    if (!mockMode) return;
+
+    setIsConnected(true);
+    const startMs = Date.now();
+    let tickCount = 0;
+
+    const tick = () => {
+      tickCount += 1;
+      const now = Date.now();
+      const elapsed = now - startMs;
+      const phase = Math.floor(elapsed / 350);
+
+      const yourWideLoadActive = Math.floor(elapsed / 9000) % 2 === 0;
+      const yourBoardWidth = yourWideLoadActive ? 12 : 10;
+      const yourPieceX = 1 + (Math.floor(elapsed / 500) % Math.max(1, yourBoardWidth - 3));
+      const opponentPieceX = 1 + (Math.floor((elapsed + 2200) / 520) % 7);
+
+      const yourTimedEffects = buildMockTimedEffects(now, [
+        { abilityType: 'tilt', durationMs: 10000, cadenceMs: 18000 },
+        { abilityType: 'screen_shake', durationMs: 5000, cadenceMs: 24000 },
+      ]);
+      if (yourWideLoadActive) {
+        yourTimedEffects.push({
+          abilityType: 'wide_load',
+          remainingMs: 9000 - (elapsed % 9000),
+          durationMs: 9000,
+        });
+      }
+
+      const opponentTimedEffects = buildMockTimedEffects(now + 1800, [
+        { abilityType: 'mirage', durationMs: 5000, cadenceMs: 14000 },
+        { abilityType: 'reverse_controls', durationMs: 6000, cadenceMs: 20000 },
+        { abilityType: 'blind_spot', durationMs: 5000, cadenceMs: 17000 },
+      ]);
+
+      const yourActiveEffects = yourTimedEffects.map((entry) => entry.abilityType);
+      const opponentActiveEffects = opponentTimedEffects.map((entry) => entry.abilityType);
+
+      const yourStateMock: MockStatePayload = {
+        board: createMockBoard(yourBoardWidth, 20, phase),
+        currentPiece: createMockPiece(MOCK_TETROMINO_TYPES[phase % MOCK_TETROMINO_TYPES.length], yourPieceX, 2 + (phase % 2)),
+        magnetGhost: createMockPiece(MOCK_TETROMINO_TYPES[(phase + 1) % MOCK_TETROMINO_TYPES.length], yourPieceX + 1, 15),
+        nextPieces: ['I', 'T', 'L', 'O', 'S'],
+        score: 12800 + phase * 24,
+        stars: 120 + ((phase * 3) % 170),
+        linesCleared: 38 + Math.floor(phase / 8),
+        comboCount: phase % 5,
+        isGameOver: false,
+        activeEffects: yourActiveEffects,
+        timedEffects: yourTimedEffects,
+        pieceCountEffects: [
+          { abilityType: 'magnet', remaining: 2 + (phase % 2), total: 3 },
+          { abilityType: 'overcharge', remaining: 1 + (phase % 3), total: 3 },
+        ],
+        tiltDirection: phase % 2 === 0 ? 1 : -1,
+      };
+
+      const opponentStateMock: MockStatePayload = {
+        board: createMockBoard(10, 20, phase + 5),
+        currentPiece: createMockPiece(MOCK_TETROMINO_TYPES[(phase + 2) % MOCK_TETROMINO_TYPES.length], opponentPieceX, 3 + ((phase + 1) % 2)),
+        magnetGhost: null,
+        nextPieces: ['Z', 'J', 'I', 'T', 'O'],
+        score: 11900 + phase * 20,
+        stars: 95 + ((phase * 2) % 150),
+        linesCleared: 35 + Math.floor(phase / 9),
+        comboCount: (phase + 1) % 4,
+        isGameOver: false,
+        activeEffects: opponentActiveEffects,
+        timedEffects: opponentTimedEffects,
+        pieceCountEffects: [{ abilityType: 'shapeshifter', remaining: 1 + ((phase + 2) % 3), total: 3 }],
+        tiltDirection: phase % 3 === 0 ? -1 : 1,
+      };
+
+      setYourState(yourStateMock);
+      setOpponentState(opponentStateMock);
+      setConnectionStats({
+        latency: 36 + ((phase * 7) % 34),
+        avgLatency: 36 + ((phase * 7) % 34),
+        minLatency: 21,
+        maxLatency: 74,
+        quality: phase % 9 < 6 ? 'excellent' : 'good',
+      });
+
+      if (tickCount % 18 === 0) {
+        const abilityIds = ['earthquake', 'tilt', 'wide_load', 'magnet'];
+        const ability = ABILITIES[abilityIds[(tickCount / 18) % abilityIds.length] as keyof typeof ABILITIES];
+        if (ability) {
+          queueNotification(ability.name, ability.description, isDebuffAbility(ability) ? 'debuff' : 'buff');
+          triggerBoardAbilityVisual(ability.type, isDebuffAbility(ability) ? 'self' : 'opponent');
+        }
+      }
+    };
+
+    tick();
+    const interval = setInterval(tick, 250);
+
+    return () => {
+      clearInterval(interval);
+      setIsConnected(false);
+      setConnectionStats(null);
+    };
+  }, [mockMode, queueNotification, triggerBoardAbilityVisual]);
+
   const applyBoardDiffAnimations = useCallback((
     renderer: TetrisRenderer,
     target: BoardFxTarget,
@@ -505,6 +872,8 @@ export function ServerAuthMultiplayerGame({
 
   // Initialize server-authoritative game client
   useEffect(() => {
+    if (mockMode) return;
+
     const host = normalizePartykitHost(import.meta.env.VITE_PARTYKIT_HOST);
     const client = new ServerAuthGameClient(roomId, playerId, host, profile.loadout, aiOpponent, debugLogger || undefined);
     gameClientRef.current = client;
@@ -565,7 +934,7 @@ export function ServerAuthMultiplayerGame({
       client.disconnect();
       audioManager.stopMusic(true);
     };
-  }, [roomId, playerId, onExit]);
+  }, [roomId, playerId, onExit, aiOpponent, debugLogger, profile.loadout, mockMode]);
 
   // Fetch opponent's profile for Rank calculation
   useEffect(() => {
@@ -783,7 +1152,30 @@ export function ServerAuthMultiplayerGame({
 
   // Handle ability activation
   const handleAbilityActivate = (ability: Ability) => {
-    if (!gameClientRef.current || !yourState) return;
+    if (!yourState) return;
+
+    if (mockMode) {
+      if (yourState.stars < ability.cost) return;
+      const target = getAbilityTargeting(ability);
+      setYourState((prev: any) =>
+        prev
+          ? {
+              ...prev,
+              stars: Math.max(0, prev.stars - ability.cost),
+            }
+          : prev
+      );
+      queueNotification(
+        ability.name,
+        ability.description,
+        isDebuffAbility(ability) ? 'debuff' : 'buff'
+      );
+      queueBoardAbilityFx(ability.type, target);
+      triggerBoardAbilityVisual(ability.type, target);
+      return;
+    }
+
+    if (!gameClientRef.current) return;
 
     // In debug mode, bypass star cost check
     if (!isDebugMode && yourState.stars < ability.cost) {
@@ -1070,6 +1462,8 @@ export function ServerAuthMultiplayerGame({
   }, [gameFinished, winnerId, playerId]);
 
   const isWinner = winnerId === playerId;
+  const useLegacyMobileLayout = false;
+  const demoGridCellSize = 64;
 
   return (
     <div
@@ -1087,7 +1481,157 @@ export function ServerAuthMultiplayerGame({
         left: 0,
       }}
     >
-      {isMobilePortrait ? (
+      <FloatingBackground />
+      {mockMode && (
+        <div
+          style={{
+            position: 'absolute',
+            inset: 0,
+            zIndex: 9,
+            pointerEvents: 'none',
+          }}
+        >
+          {[
+            {
+              id: 'region-notifications',
+              label: 'Notifications',
+              color: 'rgba(255, 221, 87, 0.95)',
+              box: {
+                top: contentTopOffset,
+                left: '8px',
+                width: 'min(300px, 40vw)',
+                height: 'clamp(56px, 10vh, 96px)',
+              },
+            },
+            {
+              id: 'region-top-stats',
+              label: 'Top Stats (Score / Stars / Lines)',
+              color: 'rgba(125, 227, 255, 0.95)',
+              box: {
+                top: contentTopOffset,
+                left: `${statsOverlaySidePaddingPx}px`,
+                width: `calc(100% - ${statsOverlaySidePaddingPx * 2}px)`,
+                height: overlayHeaderHeight,
+              },
+            },
+            {
+              id: 'region-player',
+              label: 'Player Zone (Next + Main Board)',
+              color: 'rgba(0, 212, 255, 0.9)',
+              box: {
+                top: boardTopClearance,
+                left: '6px',
+                width: 'calc(100% - clamp(98px, 24vw, 126px) - 14px)',
+                bottom: 'calc(clamp(138px, 22vh, 176px))',
+              },
+            },
+            {
+              id: 'region-opponent-panel',
+              label: 'Opponent Panel',
+              color: 'rgba(255, 0, 110, 0.92)',
+              box: {
+                top: `calc(${contentTopOffset} + clamp(22px, 3vh, 34px))`,
+                right: '4px',
+                width: 'clamp(85px, 22vw, 110px)',
+                bottom: 'calc(clamp(138px, 22vh, 176px))',
+              },
+            },
+            {
+              id: 'region-opponent-board',
+              label: 'Opponent Board',
+              color: 'rgba(255, 120, 168, 0.95)',
+              box: {
+                top: boardTopClearance,
+                right: 'clamp(8px, 2vw, 16px)',
+                width: opponentMiniBoardWidth,
+                height: 'clamp(162px, 42vw, 210px)',
+              },
+            },
+            {
+              id: 'region-countdowns',
+              label: 'Effect Countdowns',
+              color: 'rgba(255, 170, 88, 0.95)',
+              box: {
+                top: `calc(${contentTopOffset} + clamp(260px, 40vh, 366px))`,
+                right: 'clamp(8px, 2vw, 16px)',
+                width: opponentMiniBoardWidth,
+                height: 'clamp(84px, 20vh, 180px)',
+              },
+            },
+            {
+              id: 'region-abilities',
+              label: 'Abilities Bar (6 slots)',
+              color: 'rgba(102, 227, 255, 0.95)',
+              box: {
+                left: '4px',
+                right: '4px',
+                bottom: 'calc(clamp(68px, 12vh, 94px))',
+                height: 'clamp(52px, 9vh, 64px)',
+              },
+            },
+            {
+              id: 'region-controls',
+              label: 'Action Buttons',
+              color: 'rgba(125, 255, 176, 0.95)',
+              box: {
+                left: '4px',
+                right: '4px',
+                bottom: '2px',
+                height: 'clamp(60px, 12vh, 80px)',
+              },
+            },
+          ].map((region) => (
+            <div
+              key={region.id}
+              style={{
+                position: 'absolute',
+                ...region.box,
+                border: `1px dashed ${region.color}`,
+                borderRadius: '8px',
+                background: 'rgba(255, 255, 255, 0.035)',
+                boxShadow: `inset 0 0 0 1px rgba(0, 0, 0, 0.16), 0 0 12px ${region.color.replace('0.95', '0.15').replace('0.92', '0.15').replace('0.9', '0.14')}`,
+              }}
+            >
+              <div
+                style={{
+                  position: 'absolute',
+                  top: '3px',
+                  left: '6px',
+                  padding: '1px 5px',
+                  borderRadius: '4px',
+                  border: `1px solid ${region.color.replace('0.95', '0.45').replace('0.92', '0.42').replace('0.9', '0.4')}`,
+                  background: 'rgba(8, 12, 20, 0.75)',
+                  fontSize: '10px',
+                  lineHeight: 1,
+                  fontWeight: 700,
+                  letterSpacing: '0.25px',
+                  color: region.color,
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                {region.label}
+              </div>
+            </div>
+          ))}
+          <div
+            style={{
+              position: 'absolute',
+              top: `calc(${topUiInset} + 2px)`,
+              right: '8px',
+              fontSize: '10px',
+              color: 'rgba(255,255,255,0.82)',
+              background: 'rgba(0,0,0,0.38)',
+              border: '1px solid rgba(255,255,255,0.2)',
+              borderRadius: '4px',
+              padding: '2px 6px',
+              letterSpacing: '0.2px',
+            }}
+          >
+            Major Layout Containers Overlay
+          </div>
+        </div>
+      )}
+      {useLegacyMobileLayout && isMobilePortrait ? (
         <MobileGameLayout
           header={(
             <GameHeader
@@ -1178,40 +1722,8 @@ export function ServerAuthMultiplayerGame({
                     boxShadow: selfBoardFx?.glow || '0 0 18px rgba(0, 212, 255, 0.45), inset 0 0 18px rgba(0, 212, 255, 0.08)',
                   }}
                 />
-                {stateHasEffect(yourState, 'ink_splash') && (
-                  <div
-                    style={{
-                      position: 'absolute',
-                      inset: 0,
-                      borderRadius: '9px',
-                      overflow: 'hidden',
-                      pointerEvents: 'none',
-                      zIndex: 6,
-                      mixBlendMode: 'multiply',
-                    }}
-                  >
-                    <div
-                      style={{
-                        position: 'absolute',
-                        inset: 0,
-                        background: 'radial-gradient(circle at 50% 50%, rgba(0,0,0,0.12) 0%, rgba(0,0,0,0.45) 100%)',
-                      }}
-                    />
-                    {INK_SPLASH_BLOBS.map((blob, index) => (
-                      <div
-                        key={`mobile-self-ink-${index}`}
-                        style={{
-                          position: 'absolute',
-                          top: blob.top,
-                          left: blob.left,
-                          width: blob.w,
-                          height: blob.h,
-                          borderRadius: blob.r,
-                          background: 'radial-gradient(circle at 35% 35%, rgba(18,18,18,0.98) 0%, rgba(0,0,0,0.88) 70%, rgba(0,0,0,0.75) 100%)',
-                        }}
-                      />
-                    ))}
-                  </div>
+                {stateHasEffect(yourState, 'ink_splash') && !mockMode && (
+                  <InkSplashMask idPrefix="mobile-self" borderRadius="9px" />
                 )}
               </div>
               <AnimatePresence>
@@ -1278,7 +1790,7 @@ export function ServerAuthMultiplayerGame({
         <div
           style={{
             position: 'absolute',
-            top: '6px',
+            top: contentTopOffset,
             left: '6px',
             padding: '2px 5px',
             background: 'rgba(0, 0, 0, 0.42)',
@@ -1331,145 +1843,170 @@ export function ServerAuthMultiplayerGame({
           </span>
         </div>
       )}
-      {(yourTimedEffects.length > 0 || opponentTimedEffects.length > 0 || yourPieceCountEffects.length > 0 || opponentPieceCountEffects.length > 0) && (
-        <div
-          style={{
-            position: 'absolute',
-            top: '6px',
-            left: '50%',
-            transform: 'translateX(-50%)',
-            zIndex: 8,
-            display: 'flex',
-            flexDirection: 'column',
-            gap: '3px',
-            width: 'min(92vw, 520px)',
-            pointerEvents: 'none',
-          }}
-        >
-          {/* Your effects row */}
-          {(yourTimedEffects.length > 0 || yourPieceCountEffects.length > 0) && (
-            <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap', justifyContent: 'center' }}>
-              {/* Timed effects */}
-              {yourTimedEffects.map((effect: TimedEffectEntry) => {
-                const progress = Math.max(0, Math.min(1, effect.remainingMs / effect.durationMs));
-                const ability = ABILITIES[effect.abilityType as keyof typeof ABILITIES];
-                return (
-                  <div
-                    key={`you-${effect.abilityType}`}
-                    style={{
-                      width: 'min(22vw, 110px)',
-                      minWidth: '88px',
-                      background: 'rgba(6, 10, 22, 0.85)',
-                      border: '1px solid rgba(0, 212, 255, 0.28)',
-                      borderRadius: '5px',
-                      overflow: 'hidden',
-                    }}
-                  >
-                    <div style={{ fontSize: '9px', color: '#7de3ff', padding: '2px 5px', fontWeight: 700 }}>
-                      {ability?.shortName || effect.abilityType}
-                    </div>
-                    <div style={{ height: '3px', background: 'rgba(255,255,255,0.14)' }}>
-                      <div
-                        style={{
-                          height: '100%',
-                          width: `${progress * 100}%`,
-                          background: 'linear-gradient(90deg, #00d4ff 0%, #66f6ff 100%)',
-                          transition: 'width 100ms linear',
-                        }}
-                      />
-                    </div>
-                  </div>
-                );
-              })}
-              {/* Piece count effects */}
-              {yourPieceCountEffects.map((effect: any) => {
-                const ability = ABILITIES[effect.abilityType as keyof typeof ABILITIES];
-                return (
-                  <div
-                    key={`you-pc-${effect.abilityType}`}
-                    style={{
-                      width: 'min(22vw, 110px)',
-                      minWidth: '88px',
-                      background: 'rgba(6, 22, 10, 0.85)',
-                      border: '1px solid rgba(0, 255, 136, 0.28)',
-                      borderRadius: '5px',
-                      padding: '2px 5px',
-                    }}
-                  >
-                    <div style={{ fontSize: '9px', color: '#7dffb0', fontWeight: 700, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <span>{ability?.shortName || effect.abilityType}</span>
-                      <span style={{ fontSize: '10px', color: '#b0ffcf' }}>{effect.remaining}/{effect.total}</span>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-          {/* Opponent effects row */}
-          {(opponentTimedEffects.length > 0 || opponentPieceCountEffects.length > 0) && (
-            <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap', justifyContent: 'center' }}>
-              {/* Timed effects */}
-              {opponentTimedEffects.map((effect: TimedEffectEntry) => {
-                const progress = Math.max(0, Math.min(1, effect.remainingMs / effect.durationMs));
-                const ability = ABILITIES[effect.abilityType as keyof typeof ABILITIES];
-                return (
-                  <div
-                    key={`opp-${effect.abilityType}`}
-                    style={{
-                      width: 'min(22vw, 110px)',
-                      minWidth: '88px',
-                      background: 'rgba(24, 5, 16, 0.86)',
-                      border: '1px solid rgba(255, 0, 110, 0.28)',
-                      borderRadius: '5px',
-                      overflow: 'hidden',
-                    }}
-                  >
-                    <div style={{ fontSize: '9px', color: '#ff7aa9', padding: '2px 5px', fontWeight: 700 }}>
-                      {ability?.shortName || effect.abilityType}
-                    </div>
-                    <div style={{ height: '3px', background: 'rgba(255,255,255,0.14)' }}>
-                      <div
-                        style={{
-                          height: '100%',
-                          width: `${progress * 100}%`,
-                          background: 'linear-gradient(90deg, #ff2f7c 0%, #ff8e73 100%)',
-                          transition: 'width 100ms linear',
-                        }}
-                      />
-                    </div>
-                  </div>
-                );
-              })}
-              {/* Piece count effects */}
-              {opponentPieceCountEffects.map((effect: any) => {
-                const ability = ABILITIES[effect.abilityType as keyof typeof ABILITIES];
-                return (
-                  <div
-                    key={`opp-pc-${effect.abilityType}`}
-                    style={{
-                      width: 'min(22vw, 110px)',
-                      minWidth: '88px',
-                      background: 'rgba(22, 10, 6, 0.85)',
-                      border: '1px solid rgba(255, 165, 0, 0.28)',
-                      borderRadius: '5px',
-                      padding: '2px 5px',
-                    }}
-                  >
-                    <div style={{ fontSize: '9px', color: '#ffb07d', fontWeight: 700, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <span>{ability?.shortName || effect.abilityType}</span>
-                      <span style={{ fontSize: '10px', color: '#ffd0a0' }}>{effect.remaining}/{effect.total}</span>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
+      {/* Top Scoreboard split into independent overlay containers */}
+      <div
+        style={{
+          position: 'absolute',
+          top: statsCardsTop,
+          left: `${statsOverlaySidePaddingPx}px`,
+          zIndex: 7,
+          pointerEvents: 'none',
+          width: statsCardWidth,
+          minWidth: 0,
+          padding: '3px clamp(8px, 1.2vw, 12px) 5px',
+          borderRadius: '10px',
+          background: 'linear-gradient(180deg, rgba(0, 28, 42, 0.82) 0%, rgba(0, 14, 24, 0.72) 100%)',
+          border: '1px solid rgba(0, 212, 255, 0.42)',
+          boxShadow: '0 0 18px rgba(0, 212, 255, 0.22), inset 0 0 14px rgba(0, 212, 255, 0.14)',
+          textAlign: 'center',
+          fontVariantNumeric: 'tabular-nums',
+        }}
+      >
+        <div style={{ fontSize: 'clamp(7px, 0.95vw, 10px)', fontWeight: 700, letterSpacing: '0.7px', textTransform: 'uppercase', color: 'rgba(125, 227, 255, 0.95)', marginBottom: '4px' }}>
+          Score
         </div>
-      )}
+        <AnimatePresence mode="popLayout">
+          <motion.div
+            key={`top-score-${yourState?.score ?? 0}`}
+            variants={scoreVariants}
+            initial="initial"
+            animate="animate"
+            exit="exit"
+            transition={springs.gentle}
+            style={{
+              fontSize: 'clamp(30px, 8vw, 96px)',
+              lineHeight: 0.72,
+              fontWeight: 900,
+              letterSpacing: '-1.2px',
+              color: '#67eaff',
+              textShadow: '0 0 12px rgba(0, 212, 255, 0.95), 0 0 26px rgba(0, 212, 255, 0.45)',
+              whiteSpace: 'nowrap',
+              display: 'inline-block',
+            }}
+          >
+            <span
+              style={{
+                display: 'inline-block',
+                transform: 'scaleY(1.3)',
+                transformOrigin: 'center top',
+                marginTop: '2px',
+              }}
+            >
+              {yourState?.score ?? 0}
+            </span>
+          </motion.div>
+        </AnimatePresence>
+      </div>
+      <div
+        style={{
+          position: 'absolute',
+          top: statsCardsTop,
+          left: statsMiddleLeft,
+          zIndex: 7,
+          pointerEvents: 'none',
+          width: statsCardWidth,
+          minWidth: 0,
+          padding: '3px clamp(8px, 1.2vw, 12px) 5px',
+          borderRadius: '10px',
+          background: 'linear-gradient(180deg, rgba(38, 12, 60, 0.82) 0%, rgba(22, 8, 38, 0.72) 100%)',
+          border: '1px solid rgba(201, 66, 255, 0.45)',
+          boxShadow: '0 0 18px rgba(201, 66, 255, 0.25), inset 0 0 14px rgba(201, 66, 255, 0.16)',
+          textAlign: 'center',
+          fontVariantNumeric: 'tabular-nums',
+        }}
+      >
+        <div style={{ fontSize: 'clamp(7px, 0.95vw, 10px)', fontWeight: 700, letterSpacing: '0.7px', textTransform: 'uppercase', color: 'rgba(227, 160, 255, 0.95)', marginBottom: '4px' }}>
+          Stars
+        </div>
+        <AnimatePresence mode="popLayout">
+          <motion.div
+            key={`top-stars-${yourState?.stars ?? 0}`}
+            variants={scoreVariants}
+            initial="initial"
+            animate="animate"
+            exit="exit"
+            transition={springs.gentle}
+            style={{
+              fontSize: 'clamp(30px, 8vw, 96px)',
+              lineHeight: 0.72,
+              fontWeight: 900,
+              letterSpacing: '-1.2px',
+              color: '#df82ff',
+              textShadow: '0 0 12px rgba(201, 66, 255, 0.95), 0 0 26px rgba(201, 66, 255, 0.45)',
+              whiteSpace: 'nowrap',
+              display: 'inline-block',
+            }}
+          >
+            <span
+              style={{
+                display: 'inline-block',
+                transform: 'scaleY(1.3)',
+                transformOrigin: 'center top',
+                marginTop: '2px',
+              }}
+            >
+              {yourState?.stars ?? 0}
+            </span>
+          </motion.div>
+        </AnimatePresence>
+      </div>
+      <div
+        style={{
+          position: 'absolute',
+          top: statsCardsTop,
+          left: statsRightLeft,
+          zIndex: 7,
+          pointerEvents: 'none',
+          width: statsCardWidth,
+          minWidth: 0,
+          padding: '3px clamp(8px, 1.2vw, 12px) 5px',
+          borderRadius: '10px',
+          background: 'linear-gradient(180deg, rgba(4, 44, 26, 0.82) 0%, rgba(3, 22, 13, 0.72) 100%)',
+          border: '1px solid rgba(0, 255, 136, 0.42)',
+          boxShadow: '0 0 18px rgba(0, 255, 136, 0.22), inset 0 0 14px rgba(0, 255, 136, 0.14)',
+          textAlign: 'center',
+          fontVariantNumeric: 'tabular-nums',
+        }}
+      >
+        <div style={{ fontSize: 'clamp(7px, 0.95vw, 10px)', fontWeight: 700, letterSpacing: '0.7px', textTransform: 'uppercase', color: 'rgba(153, 255, 204, 0.95)', marginBottom: '4px' }}>
+          Lines
+        </div>
+        <AnimatePresence mode="popLayout">
+          <motion.div
+            key={`top-lines-${yourState?.linesCleared ?? 0}`}
+            variants={scoreVariants}
+            initial="initial"
+            animate="animate"
+            exit="exit"
+            transition={springs.gentle}
+            style={{
+              fontSize: 'clamp(30px, 8vw, 96px)',
+              lineHeight: 0.72,
+              fontWeight: 900,
+              letterSpacing: '-1.2px',
+              color: '#7dffb0',
+              textShadow: '0 0 12px rgba(0, 255, 136, 0.95), 0 0 26px rgba(0, 255, 136, 0.45)',
+              whiteSpace: 'nowrap',
+              display: 'inline-block',
+            }}
+          >
+            <span
+              style={{
+                display: 'inline-block',
+                transform: 'scaleY(1.3)',
+                transformOrigin: 'center top',
+                marginTop: '2px',
+              }}
+            >
+              {yourState?.linesCleared ?? 0}
+            </span>
+          </motion.div>
+        </AnimatePresence>
+      </div>
       {/* Main Game Area */}
-      <div style={{ display: 'flex', flex: 1, overflow: 'hidden', padding: 'clamp(2px, 0.5vw, 4px)', gap: 'clamp(2px, 0.5vw, 4px)' }}>
-        {/* Left: Your Board */}
-        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, position: 'relative' }}>
+	      <div style={{ display: 'flex', flex: 1, overflow: 'hidden', padding: 'clamp(2px, 0.5vw, 4px)', gap: 'clamp(2px, 0.5vw, 4px)' }}>
+	        {/* Left: Your Board */}
+	        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, position: 'relative', paddingTop: boardTopClearance }}>
           {/* Defensive Ability Indicator - Your Board */}
           {yourDefensiveAbility && (
             <div
@@ -1533,11 +2070,14 @@ export function ServerAuthMultiplayerGame({
               display: 'flex',
               flexDirection: 'column',
               alignItems: 'center',
-              justifyContent: 'center',
+              justifyContent: 'flex-start',
               position: 'relative',
             }}
           >
             <div style={{ display: 'flex', alignItems: 'flex-start', gap: '4px' }}>
+              {displayNextPieces.length > 0 && (
+                <NextPiecePanel nextPieces={displayNextPieces} />
+              )}
               <div
                 style={{
                   position: 'relative',
@@ -1567,45 +2107,10 @@ export function ServerAuthMultiplayerGame({
                     boxShadow: selfBoardFx?.glow || '0 0 20px rgba(0, 212, 255, 0.5), 0 0 40px rgba(0, 212, 255, 0.2), inset 0 0 20px rgba(0, 212, 255, 0.05)',
                   }}
                 />
-                {stateHasEffect(yourState, 'ink_splash') && (
-                  <div
-                    style={{
-                      position: 'absolute',
-                      inset: 0,
-                      borderRadius: 'clamp(6px, 1.5vw, 10px)',
-                      overflow: 'hidden',
-                      pointerEvents: 'none',
-                      zIndex: 6,
-                      mixBlendMode: 'multiply',
-                    }}
-                  >
-                    <div
-                      style={{
-                        position: 'absolute',
-                        inset: 0,
-                        background: 'radial-gradient(circle at 50% 50%, rgba(0,0,0,0.12) 0%, rgba(0,0,0,0.45) 100%)',
-                      }}
-                    />
-                    {INK_SPLASH_BLOBS.map((blob, index) => (
-                      <div
-                        key={`self-ink-${index}`}
-                        style={{
-                          position: 'absolute',
-                          top: blob.top,
-                          left: blob.left,
-                          width: blob.w,
-                          height: blob.h,
-                          borderRadius: blob.r,
-                          background: 'radial-gradient(circle at 35% 35%, rgba(18,18,18,0.98) 0%, rgba(0,0,0,0.88) 70%, rgba(0,0,0,0.75) 100%)',
-                        }}
-                      />
-                    ))}
-                  </div>
+                {stateHasEffect(yourState, 'ink_splash') && !mockMode && (
+                  <InkSplashMask idPrefix="self" borderRadius="clamp(6px, 1.5vw, 10px)" />
                 )}
               </div>
-              {displayNextPieces.length > 0 && (
-                <NextPiecePanel nextPieces={displayNextPieces} />
-              )}
             </div>
             {/* Stars earned popups */}
             <AnimatePresence>
@@ -1642,120 +2147,77 @@ export function ServerAuthMultiplayerGame({
               ))}
             </AnimatePresence>
           </motion.div>
-          {yourState && (
-            <div
-              style={{
-                marginTop: '4px',
-                padding: '4px 6px',
-                background: 'transparent',
-                borderRadius: '8px',
-                fontSize: 'clamp(9px, 2.2vw, 11px)',
-                textAlign: 'center',
-                fontWeight: '700',
-                fontVariantNumeric: 'tabular-nums',
-                display: 'flex',
-                justifyContent: 'space-around',
-                alignItems: 'center',
-                gap: 'clamp(6px, 1.5vw, 10px)',
-                flexWrap: 'wrap',
-              }}
-            >
-              <div style={{ display: 'flex', alignItems: 'center', gap: 'clamp(2px, 0.5vw, 3px)' }}>
-                <span style={{ color: '#00d4ff', opacity: 0.7, fontSize: 'clamp(7px, 1.75vw, 9px)', fontWeight: '600' }}>Score</span>
-                <AnimatePresence mode="popLayout">
-                  <motion.span
-                    key={`score-${yourState.score}`}
-                    variants={scoreVariants}
-                    initial="initial"
-                    animate="animate"
-                    exit="exit"
-                    transition={springs.gentle}
-                    style={{ color: '#00d4ff', textShadow: '0 0 8px rgba(0, 212, 255, 0.8)', display: 'inline-block' }}
-                  >
-                    {yourState.score}
-                  </motion.span>
-                </AnimatePresence>
-              </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 'clamp(2px, 0.5vw, 3px)' }}>
-                <span style={{ color: '#c942ff', opacity: 0.7, fontSize: 'clamp(7px, 1.75vw, 9px)', fontWeight: '600' }}>Stars</span>
-                <AnimatePresence mode="popLayout">
-                  <motion.span
-                    key={`stars-${yourState.stars}`}
-                    variants={scoreVariants}
-                    initial="initial"
-                    animate="animate"
-                    exit="exit"
-                    transition={springs.gentle}
-                    style={{ color: '#c942ff', textShadow: '0 0 8px rgba(201, 66, 255, 0.8)', display: 'inline-block' }}
-                  >
-                    {yourState.stars}⭐
-                  </motion.span>
-                </AnimatePresence>
-              </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 'clamp(2px, 0.5vw, 3px)' }}>
-                <span style={{ color: '#00ff88', opacity: 0.7, fontSize: 'clamp(7px, 1.75vw, 9px)', fontWeight: '600' }}>Lines</span>
-                <AnimatePresence mode="popLayout">
-                  <motion.span
-                    key={`lines-${yourState.linesCleared}`}
-                    variants={scoreVariants}
-                    initial="initial"
-                    animate="animate"
-                    exit="exit"
-                    transition={springs.gentle}
-                    style={{ color: '#00ff88', textShadow: '0 0 8px rgba(0, 255, 136, 0.8)', display: 'inline-block' }}
-                  >
-                    {yourState.linesCleared}
-                  </motion.span>
-                </AnimatePresence>
-              </div>
-            </div>
-          )}
         </div>
 
         {/* Right: Vertical Panel */}
-        <div style={{
+        <div
+          ref={rightPanelRef}
+          style={{
           width: 'clamp(85px, 22vw, 110px)',
           display: 'flex',
           flexDirection: 'column',
           gap: 'clamp(4px, 1vh, 8px)',
-          overflow: 'hidden'
+          overflow: 'hidden',
         }}>
           {/* Top Buttons */}
-          <div style={{
+          <div
+            ref={rightTopButtonsRef}
+            style={{
             display: 'flex',
             gap: 'clamp(4px, 1vw, 6px)',
             justifyContent: 'center',
             alignItems: 'center',
           }}>
-            <div style={{
-              width: 'clamp(30px, 7.5vw, 38px)',
-              height: 'clamp(30px, 7.5vw, 38px)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-            }}>
-              <UserButton
-                appearance={{
-                  elements: {
-                    rootBox: { width: '100%', height: '100%' },
-                    avatarBox: { width: '100%', height: '100%' },
-                  },
-                }}
-              />
-            </div>
+	            <div style={{
+	              width: 'clamp(30px, 7.5vw, 38px)',
+	              height: 'clamp(30px, 7.5vw, 38px)',
+	              display: 'flex',
+	              alignItems: 'center',
+	              justifyContent: 'center',
+	            }}>
+                {mockMode ? (
+                  <div
+                    style={{
+                      width: '100%',
+                      height: '100%',
+                      borderRadius: '50%',
+                      border: '1px solid rgba(0, 212, 255, 0.5)',
+                      background: 'rgba(0, 212, 255, 0.12)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      fontSize: '10px',
+                      fontWeight: 800,
+                      color: '#7de3ff',
+                    }}
+                  >
+                    MOCK
+                  </div>
+                ) : (
+                  <UserButton
+                    appearance={{
+                      elements: {
+                        rootBox: { width: '100%', height: '100%' },
+                        avatarBox: { width: '100%', height: '100%' },
+                      },
+                    }}
+                  />
+                )}
+	            </div>
 
           </div>
 
 	          {/* Opponent's Board */}
-	          <div style={{
-	            display: 'flex',
-	            flexDirection: 'column',
-	            alignItems: 'center',
-	            background: 'transparent',
-	            padding: 'clamp(4px, 1vw, 6px)',
-	            borderRadius: 'clamp(6px, 1.5vw, 10px)',
-	            position: 'relative',
-	          }}>
+		          <div style={{
+		            display: 'flex',
+		            flexDirection: 'column',
+		            alignItems: 'center',
+		            background: 'transparent',
+                marginTop: opponentBoardOffsetPx > 0 ? `${opponentBoardOffsetPx}px` : 'clamp(18px, 5vh, 54px)',
+		            padding: 'clamp(4px, 1vw, 6px)',
+		            borderRadius: 'clamp(6px, 1.5vw, 10px)',
+		            position: 'relative',
+		          }}>
 	            {/* Defensive Ability Indicator - Opponent */}
 	            {opponentDefensiveAbility && (
 	              <div
@@ -1794,7 +2256,7 @@ export function ServerAuthMultiplayerGame({
 	            <div
 	              style={{
 	                position: 'relative',
-	                width: 'clamp(65px, 17vw, 80px)',
+	                width: opponentMiniBoardWidth,
 	                height: 'clamp(130px, 34vw, 160px)',
 	                transform: getTiltAngle(opponentState)
 	                  ? `rotate(${getTiltAngle(opponentState)}deg) scale(0.95)`
@@ -1816,39 +2278,14 @@ export function ServerAuthMultiplayerGame({
 	                  boxShadow: opponentBoardFx?.glow || '0 0 10px rgba(255, 0, 110, 0.3), inset 0 0 10px rgba(255, 0, 110, 0.05)',
 	                }}
 	              />
-                {stateHasEffect(opponentState, 'ink_splash') && (
-                  <div
-                    style={{
-                      position: 'absolute',
-                      inset: 0,
-                      borderRadius: 'clamp(4px, 1vw, 6px)',
-                      overflow: 'hidden',
-                      pointerEvents: 'none',
-                      zIndex: 6,
-                      mixBlendMode: 'multiply',
-                    }}
-                  >
-                    {INK_SPLASH_BLOBS.map((blob, index) => (
-                      <div
-                        key={`opponent-ink-${index}`}
-                        style={{
-                          position: 'absolute',
-                          top: blob.top,
-                          left: blob.left,
-                          width: blob.w,
-                          height: blob.h,
-                          borderRadius: blob.r,
-                          background: 'rgba(0,0,0,0.9)',
-                        }}
-                      />
-                    ))}
-                  </div>
+                {stateHasEffect(opponentState, 'ink_splash') && !mockMode && (
+                  <InkSplashMask idPrefix="opponent" borderRadius="clamp(4px, 1vw, 6px)" />
                 )}
 	            </div>
-	            {opponentState && (
-              <div style={{
-                marginTop: '3px',
-                padding: '3px 6px',
+		            {opponentState && (
+	              <div style={{
+	                marginTop: '3px',
+	                padding: '3px 6px',
                 background: 'transparent',
                 borderRadius: '4px',
                 fontSize: 'clamp(6px, 1.5vw, 8px)',
@@ -1856,98 +2293,241 @@ export function ServerAuthMultiplayerGame({
                 fontWeight: '700',
               }}>
                 <div style={{ color: '#ff006e', textShadow: '0 0 8px rgba(255, 0, 110, 0.8)' }}>{opponentState.score}</div>
-                <div style={{ color: '#c942ff', textShadow: '0 0 8px rgba(201, 66, 255, 0.8)' }}>{opponentState.stars}</div>
+	                <div style={{ color: '#c942ff', textShadow: '0 0 8px rgba(201, 66, 255, 0.8)' }}>{opponentState.stars}</div>
+	              </div>
+	            )}
+	          </div>
+
+            {(yourTimedEffects.length > 0 || opponentTimedEffects.length > 0 || yourPieceCountEffects.length > 0 || opponentPieceCountEffects.length > 0) && (
+	              <div
+	                style={{
+	                  marginTop: '6px',
+	                  display: 'flex',
+	                  flexDirection: 'column',
+	                  gap: '4px',
+	                  width: opponentMiniBoardWidth,
+	                  maxWidth: opponentMiniBoardWidth,
+	                  alignSelf: 'center',
+	                  maxHeight: 'calc(100dvh - 360px)',
+	                  overflowY: 'auto',
+	                  paddingRight: 0,
+	                }}
+	              >
+                {opponentTimedEffects.map((effect: TimedEffectEntry) => {
+                  const progress = Math.max(0, Math.min(1, effect.remainingMs / effect.durationMs));
+                  const ability = ABILITIES[effect.abilityType as keyof typeof ABILITIES];
+                  return (
+                    <div
+                      key={`right-opp-${effect.abilityType}`}
+                      style={{
+                        background: 'rgba(24, 5, 16, 0.86)',
+                        border: '1px solid rgba(255, 0, 110, 0.28)',
+                        borderRadius: '5px',
+                        overflow: 'hidden',
+                      }}
+                    >
+                      <div style={{ fontSize: '8px', color: '#ff7aa9', padding: '2px 4px', fontWeight: 700 }}>
+                        OPP {ability?.shortName || effect.abilityType}
+                      </div>
+                      <div style={{ height: '3px', background: 'rgba(255,255,255,0.14)' }}>
+                        <div
+                          style={{
+                            height: '100%',
+                            width: `${progress * 100}%`,
+                            background: 'linear-gradient(90deg, #ff2f7c 0%, #ff8e73 100%)',
+                            transition: 'width 100ms linear',
+                          }}
+                        />
+                      </div>
+                    </div>
+                  );
+                })}
+
+                {opponentPieceCountEffects.map((effect: any) => {
+                  const ability = ABILITIES[effect.abilityType as keyof typeof ABILITIES];
+                  const progress = effect.total > 0 ? Math.max(0, Math.min(1, effect.remaining / effect.total)) : 0;
+                  return (
+                    <div
+                      key={`right-opp-pc-${effect.abilityType}`}
+                      style={{
+                        background: 'rgba(22, 10, 6, 0.85)',
+                        border: '1px solid rgba(255, 165, 0, 0.28)',
+                        borderRadius: '5px',
+                        overflow: 'hidden',
+                      }}
+                    >
+                      <div style={{ fontSize: '8px', color: '#ffb07d', padding: '2px 4px', fontWeight: 700 }}>
+                        OPP {ability?.shortName || effect.abilityType} {effect.remaining}/{effect.total}
+                      </div>
+                      <div style={{ height: '3px', background: 'rgba(255,255,255,0.14)' }}>
+                        <div
+                          style={{
+                            height: '100%',
+                            width: `${progress * 100}%`,
+                            background: 'linear-gradient(90deg, #ff9f40 0%, #ffd06b 100%)',
+                            transition: 'width 100ms linear',
+                          }}
+                        />
+                      </div>
+                    </div>
+                  );
+                })}
+
+                {yourTimedEffects.map((effect: TimedEffectEntry) => {
+                  const progress = Math.max(0, Math.min(1, effect.remainingMs / effect.durationMs));
+                  const ability = ABILITIES[effect.abilityType as keyof typeof ABILITIES];
+                  return (
+                    <div
+                      key={`right-you-${effect.abilityType}`}
+                      style={{
+                        background: 'rgba(6, 10, 22, 0.85)',
+                        border: '1px solid rgba(0, 212, 255, 0.28)',
+                        borderRadius: '5px',
+                        overflow: 'hidden',
+                      }}
+                    >
+                      <div style={{ fontSize: '8px', color: '#7de3ff', padding: '2px 4px', fontWeight: 700 }}>
+                        YOU {ability?.shortName || effect.abilityType}
+                      </div>
+                      <div style={{ height: '3px', background: 'rgba(255,255,255,0.14)' }}>
+                        <div
+                          style={{
+                            height: '100%',
+                            width: `${progress * 100}%`,
+                            background: 'linear-gradient(90deg, #00d4ff 0%, #66f6ff 100%)',
+                            transition: 'width 100ms linear',
+                          }}
+                        />
+                      </div>
+                    </div>
+                  );
+                })}
+
+                {yourPieceCountEffects.map((effect: any) => {
+                  const ability = ABILITIES[effect.abilityType as keyof typeof ABILITIES];
+                  const progress = effect.total > 0 ? Math.max(0, Math.min(1, effect.remaining / effect.total)) : 0;
+                  return (
+                    <div
+                      key={`right-you-pc-${effect.abilityType}`}
+                      style={{
+                        background: 'rgba(6, 22, 10, 0.85)',
+                        border: '1px solid rgba(0, 255, 136, 0.28)',
+                        borderRadius: '5px',
+                        overflow: 'hidden',
+                      }}
+                    >
+                      <div style={{ fontSize: '8px', color: '#7dffb0', padding: '2px 4px', fontWeight: 700 }}>
+                        YOU {ability?.shortName || effect.abilityType} {effect.remaining}/{effect.total}
+                      </div>
+                      <div style={{ height: '3px', background: 'rgba(255,255,255,0.14)' }}>
+                        <div
+                          style={{
+                            height: '100%',
+                            width: `${progress * 100}%`,
+                            background: 'linear-gradient(90deg, #00ff88 0%, #8affc5 100%)',
+                            transition: 'width 100ms linear',
+                          }}
+                        />
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             )}
-          </div>
 
-          {/* Abilities List */}
-          <div style={{
-            flex: 1,
-            display: 'flex',
-            flexDirection: 'column',
-            gap: 'clamp(3px, 0.7vw, 5px)',
-            overflow: 'auto',
-            minHeight: 0,
-            paddingRight: 'clamp(2px, 0.5vw, 3px)',
-          }}>
-            {yourState && availableAbilities.slice(0, 8).map((ability, index) => {
-              const isAffordable = yourState.stars >= ability.cost;
-              const isDebuff = isDebuffAbility(ability);
+	        </div>
+	      </div>
 
-              return (
-                <motion.button
-                  key={index}
-                  whileHover={isAffordable ? "hover" : undefined}
-                  whileTap={isAffordable ? "tap" : undefined}
-                  variants={buttonVariants}
-                  transition={springs.bouncy}
-                  onClick={() => {
-                    if (isAffordable) {
-                      haptics.medium();
-                      handleAbilityActivate(ability);
-                    }
-                  }}
-                  disabled={!isAffordable}
-                  style={{
-                    padding: 'clamp(6px, 1.5vw, 8px) clamp(8px, 2vw, 12px)',
-                    background: isAffordable ? 'rgba(10, 10, 30, 0.6)' : 'rgba(10, 10, 30, 0.3)',
-                    backdropFilter: 'blur(20px)',
-                    border: isAffordable ? '1px solid rgba(255, 255, 255, 0.2)' : '1px solid rgba(255,255,255,0.05)',
-                    borderRadius: 'clamp(6px, 1.5vw, 8px)',
-                    color: '#ffffff',
-                    cursor: isAffordable ? 'pointer' : 'not-allowed',
-                    opacity: isAffordable ? 1 : 0.3,
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    alignItems: 'center',
-                    gap: 'clamp(4px, 1vw, 6px)',
-                    boxShadow: isAffordable ? '0 4px 15px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.1)' : 'none',
-                    minHeight: 'clamp(32px, 8vw, 40px)',
-                  }}
-                  title={`${ability.name}: ${ability.description}`}
-                >
-                  <div style={{
-                    fontSize: 'clamp(9px, 2.2vw, 11px)',
-                    fontWeight: '800',
-                    letterSpacing: '0.5px',
-                    color: isAffordable ? '#ffffff' : '#666',
-                    textShadow: isAffordable
-                      ? (isDebuff ? '0 0 8px rgba(255, 0, 110, 0.6)' : '0 0 8px rgba(0, 212, 255, 0.6)')
-                      : 'none',
-                    textAlign: 'left',
-                    flex: 1,
-                    minWidth: 0,
-                  }}>
-                    {ability.shortName}
-                  </div>
-                  <div style={{
-                    fontSize: 'clamp(7px, 1.8vw, 9px)',
-                    fontWeight: '800',
-                    background: isAffordable
-                      ? (isDebuff ? 'rgba(255, 0, 110, 0.15)' : 'rgba(0, 212, 255, 0.15)')
-                      : 'rgba(100, 100, 100, 0.1)',
-                    padding: 'clamp(1px, 0.3vw, 2px) clamp(4px, 1vw, 6px)',
-                    borderRadius: 'clamp(3px, 0.8vw, 4px)',
-                    border: `1px solid ${isAffordable
-                      ? (isDebuff ? 'rgba(255, 0, 110, 0.3)' : 'rgba(0, 212, 255, 0.3)')
-                      : 'rgba(255,255,255,0.05)'}`,
-                    color: isAffordable ? (isDebuff ? '#ff006e' : '#00d4ff') : '#666',
-                    flexShrink: 0,
-                    minWidth: 'clamp(20px, 5vw, 28px)',
-                    textAlign: 'center',
-                  }}>
-                    {ability.cost}
-                  </div>
-                </motion.button>
-              );
-            })}
-          </div>
-        </div>
+      {/* Bottom Ability Bar (6 slots) */}
+      <div style={{
+        height: 'clamp(52px, 9vh, 64px)',
+        display: 'grid',
+        gridTemplateColumns: 'repeat(6, minmax(0, 1fr))',
+        gap: 'clamp(4px, 0.8vw, 8px)',
+        padding: 'clamp(6px, 1vw, 10px)',
+        background: 'linear-gradient(180deg, rgba(8, 10, 24, 0.45) 0%, rgba(6, 8, 18, 0.75) 100%)',
+        backdropFilter: 'blur(18px)',
+        borderTop: '1px solid rgba(255, 255, 255, 0.1)',
+      }}>
+        {Array.from({ length: 6 }).map((_, index) => {
+          const ability = availableAbilities[index];
+          if (!ability) {
+            return (
+              <div
+                key={`ability-empty-${index}`}
+                style={{
+                  borderRadius: '8px',
+                  border: '1px dashed rgba(255,255,255,0.12)',
+                  background: 'rgba(255,255,255,0.03)',
+                }}
+              />
+            );
+          }
+
+          const isAffordable = (yourState?.stars ?? 0) >= ability.cost;
+          const isDebuff = isDebuffAbility(ability);
+
+          return (
+            <motion.button
+              key={`bottom-ability-${ability.id}-${index}`}
+              whileTap={isAffordable ? 'tap' : undefined}
+              variants={buttonVariants}
+              transition={springs.snappy}
+              onClick={() => {
+                if (!isAffordable) return;
+                haptics.medium();
+                handleAbilityActivate(ability);
+              }}
+              disabled={!isAffordable}
+              title={`${ability.name}: ${ability.description}`}
+              style={{
+                borderRadius: '8px',
+                border: `1px solid ${isAffordable
+                  ? (isDebuff ? 'rgba(255, 0, 110, 0.35)' : 'rgba(0, 212, 255, 0.35)')
+                  : 'rgba(255,255,255,0.08)'}`,
+                background: isAffordable ? 'rgba(10, 10, 30, 0.7)' : 'rgba(10, 10, 30, 0.35)',
+                color: '#fff',
+                display: 'grid',
+                gridTemplateRows: '1fr 1fr',
+                alignItems: 'center',
+                justifyItems: 'center',
+                rowGap: '1px',
+                padding: '3px 4px',
+                cursor: isAffordable ? 'pointer' : 'not-allowed',
+                opacity: isAffordable ? 1 : 0.45,
+                minWidth: 0,
+                textAlign: 'center',
+              }}
+            >
+              <span
+                style={{
+                  fontSize: 'clamp(7px, 1.1vw, 9px)',
+                  fontWeight: 800,
+                  letterSpacing: '0.3px',
+                  whiteSpace: 'nowrap',
+                  lineHeight: 1,
+                }}
+              >
+                {ability.shortName}
+              </span>
+              <span
+                style={{
+                  fontSize: 'clamp(10px, 1.5vw, 12px)',
+                  fontWeight: 800,
+                  color: isDebuff ? '#ff6b9a' : '#66e3ff',
+                  lineHeight: 1,
+                }}
+              >
+                {ability.cost}
+              </span>
+            </motion.button>
+          );
+        })}
       </div>
 
       {/* Touch Controls */}
       <div style={{
+        marginTop: 'clamp(8px, 1.6vh, 14px)',
         height: 'clamp(60px, 12vh, 80px)',
         display: 'flex',
         gap: 'clamp(4px, 1vw, 8px)',
@@ -2326,28 +2906,71 @@ export function ServerAuthMultiplayerGame({
         />
       )}
 
-      {/* Stacked ability notifications */}
-      <div style={{
-        position: 'fixed',
-        top: 'clamp(60px, 10vh, 80px)',
-        left: '50%',
-        transform: 'translateX(-50%)',
-        zIndex: 10000,
-        display: 'flex',
-        flexDirection: 'column',
-        gap: '8px',
-        pointerEvents: 'none',
-      }}>
-        {abilityNotifications.map((notif) => (
-          <Notification
-            key={notif.id}
-            visible={true}
-            title={notif.name}
-            message={notif.description}
-            variant={notif.category}
-          />
-        ))}
-      </div>
+      {/* Compact notifications (starts below top-empty strip in demo mode) */}
+      {abilityNotifications.length > 0 && (
+        <div
+          style={{
+            position: 'fixed',
+            top: contentTopOffset,
+            left: '8px',
+            width: mockMode ? `${demoGridCellSize * 6 - 12}px` : '320px',
+            maxHeight: mockMode ? `${demoGridCellSize * 2 - 12}px` : '120px',
+            zIndex: 10000,
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '4px',
+            pointerEvents: 'none',
+            overflow: 'hidden',
+          }}
+        >
+          {abilityNotifications.map((notif) => (
+            <motion.div
+              key={notif.id}
+              initial={{ opacity: 0, y: -6, scale: 0.98 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: -6, scale: 0.98 }}
+              transition={{ duration: 0.14, ease: 'easeOut' }}
+              style={{
+                borderRadius: '6px',
+                border: `1px solid ${notif.category === 'debuff' ? 'rgba(255, 0, 110, 0.5)' : 'rgba(0, 212, 255, 0.5)'}`,
+                background: notif.category === 'debuff' ? 'rgba(36, 6, 20, 0.85)' : 'rgba(6, 20, 36, 0.85)',
+                boxShadow: notif.category === 'debuff'
+                  ? '0 0 10px rgba(255, 0, 110, 0.22)'
+                  : '0 0 10px rgba(0, 212, 255, 0.22)',
+                padding: '4px 6px',
+              }}
+            >
+              <div
+                style={{
+                  fontSize: '12px',
+                  fontWeight: 800,
+                  lineHeight: 1.15,
+                  color: notif.category === 'debuff' ? '#ff76a7' : '#7de3ff',
+                  marginBottom: '2px',
+                  whiteSpace: 'nowrap',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                }}
+              >
+                {notif.name}
+              </div>
+              <div
+                style={{
+                  fontSize: '10px',
+                  lineHeight: 1.25,
+                  color: 'rgba(255,255,255,0.88)',
+                  display: '-webkit-box',
+                  WebkitLineClamp: 2,
+                  WebkitBoxOrient: 'vertical',
+                  overflow: 'hidden',
+                }}
+              >
+                {notif.description}
+              </div>
+            </motion.div>
+          ))}
+        </div>
+      )}
 
       {/* Debug Panel */}
       {isDebugMode && debugLogger && (
