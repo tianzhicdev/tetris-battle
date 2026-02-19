@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, useCallback, useMemo } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion, AnimatePresence, useAnimationControls } from 'framer-motion';
 import { useAbilityStore } from '../stores/abilityStore';
 import { TetrisRenderer } from '../renderer/TetrisRenderer';
 import {
@@ -470,6 +470,11 @@ export function ServerAuthMultiplayerGame({
     if (typeof window === 'undefined') return false;
     return window.matchMedia('(max-width: 900px) and (orientation: portrait)').matches;
   });
+  const statsBlastControls = useAnimationControls();
+  const rightPanelBlastControls = useAnimationControls();
+  const abilitiesBlastControls = useAnimationControls();
+  const controlsBlastControls = useAnimationControls();
+  const playerDropBounceControls = useAnimationControls();
 
   const { availableAbilities, setLoadout } = useAbilityStore();
 
@@ -568,6 +573,58 @@ export function ServerAuthMultiplayerGame({
       window.removeEventListener('resize', updateLayout);
     };
   }, []);
+
+  const triggerHardDropBounce = useCallback(() => {
+    void playerDropBounceControls.start({
+      y: [0, -6, 2, 0],
+      transition: {
+        duration: 0.18,
+        times: [0, 0.35, 0.72, 1],
+        ease: 'easeOut',
+      },
+    });
+  }, [playerDropBounceControls]);
+
+  const triggerLineClearExplosionPulse = useCallback((linesCleared: number) => {
+    const magnitude = linesCleared >= 4 ? 14 : linesCleared >= 2 ? 10 : 7;
+    const duration = linesCleared >= 4 ? 0.28 : 0.22;
+
+    void statsBlastControls.start({
+      y: [0, -magnitude, 0],
+      transition: {
+        duration,
+        times: [0, 0.35, 1],
+        ease: 'easeOut',
+      },
+    });
+
+    void rightPanelBlastControls.start({
+      x: [0, magnitude, 0],
+      transition: {
+        duration,
+        times: [0, 0.35, 1],
+        ease: 'easeOut',
+      },
+    });
+
+    void abilitiesBlastControls.start({
+      y: [0, magnitude, 0],
+      transition: {
+        duration,
+        times: [0, 0.35, 1],
+        ease: 'easeOut',
+      },
+    });
+
+    void controlsBlastControls.start({
+      y: [0, magnitude + 2, 0],
+      transition: {
+        duration,
+        times: [0, 0.35, 1],
+        ease: 'easeOut',
+      },
+    });
+  }, [statsBlastControls, rightPanelBlastControls, abilitiesBlastControls, controlsBlastControls]);
 
   // Initialize debug mode
   useEffect(() => {
@@ -1067,6 +1124,7 @@ export function ServerAuthMultiplayerGame({
     const linesDiff = yourState.linesCleared - prevLinesRef.current;
     if (linesDiff > 0) {
       console.log(`[SERVER-AUTH] ${linesDiff} lines cleared!`);
+      triggerLineClearExplosionPulse(linesDiff);
 
       if (linesDiff >= 4) {
         // TETRIS!
@@ -1090,7 +1148,7 @@ export function ServerAuthMultiplayerGame({
       setTimeout(() => setScreenShake(0), 400);
     }
     prevLinesRef.current = yourState.linesCleared;
-  }, [yourState?.linesCleared]);
+  }, [yourState?.linesCleared, triggerLineClearExplosionPulse]);
 
   // Show "+N ⭐" popup when stars are earned (threshold filters passive regen)
   useEffect(() => {
@@ -1306,9 +1364,12 @@ export function ServerAuthMultiplayerGame({
 
     switch (input) {
       case 'move_left':
+        haptics.light();
+        audioManager.playSfx('piece_move_left', 0.34);
+        break;
       case 'move_right':
         haptics.light();
-        audioManager.playSfx('piece_move', 0.3);
+        audioManager.playSfx('piece_move_right', 0.34);
         break;
       case 'soft_drop':
         haptics.light();
@@ -1317,6 +1378,7 @@ export function ServerAuthMultiplayerGame({
       case 'hard_drop':
         haptics.medium();
         audioManager.playSfx('hard_drop');
+        triggerHardDropBounce();
         break;
       case 'rotate_cw':
         haptics.light();
@@ -1325,7 +1387,7 @@ export function ServerAuthMultiplayerGame({
     }
 
     gameClientRef.current.sendInput(input);
-  }, [yourState, gameFinished]);
+  }, [yourState, gameFinished, triggerHardDropBounce]);
 
   const handleMoveLeft = useCallback(() => sendMobileInput('move_left'), [sendMobileInput]);
   const handleMoveRight = useCallback(() => sendMobileInput('move_right'), [sendMobileInput]);
@@ -1342,12 +1404,12 @@ export function ServerAuthMultiplayerGame({
       switch (e.key) {
         case 'ArrowLeft':
           e.preventDefault();
-          audioManager.playSfx('piece_move', 0.3);
+          audioManager.playSfx('piece_move_left', 0.34);
           gameClientRef.current.sendInput('move_left');
           break;
         case 'ArrowRight':
           e.preventDefault();
-          audioManager.playSfx('piece_move', 0.3);
+          audioManager.playSfx('piece_move_right', 0.34);
           gameClientRef.current.sendInput('move_right');
           break;
         case 'ArrowDown':
@@ -1366,6 +1428,7 @@ export function ServerAuthMultiplayerGame({
           e.preventDefault();
           audioManager.playSfx('hard_drop');
           haptics.medium();
+          triggerHardDropBounce();
           gameClientRef.current.sendInput('hard_drop');
           break;
         case '1':
@@ -1382,7 +1445,7 @@ export function ServerAuthMultiplayerGame({
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [yourState, gameFinished, availableAbilities]);
+  }, [yourState, gameFinished, availableAbilities, triggerHardDropBounce]);
 
   // Calculate rewards when game finishes
   useEffect(() => {
@@ -1752,7 +1815,8 @@ export function ServerAuthMultiplayerGame({
               overflow: 'hidden',
             }}
           >
-            <div
+            <motion.div
+              animate={statsBlastControls}
               style={{
                 position: 'relative',
                 width: statsCardsWidth,
@@ -2071,7 +2135,7 @@ export function ServerAuthMultiplayerGame({
                   ))}
                 </div>
               )}
-            </div>
+            </motion.div>
 
             {/* Main Game Area */}
 	          <div
@@ -2154,7 +2218,10 @@ export function ServerAuthMultiplayerGame({
               position: 'relative',
             }}
           >
-            <div style={{ display: 'flex', alignItems: 'flex-start', gap: '4px' }}>
+            <motion.div
+              animate={playerDropBounceControls}
+              style={{ display: 'flex', alignItems: 'flex-start', gap: '4px' }}
+            >
               {displayNextPieces.length > 0 && (
                 <NextPiecePanel nextPieces={displayNextPieces} />
               )}
@@ -2191,7 +2258,7 @@ export function ServerAuthMultiplayerGame({
                   <InkSplashMask idPrefix="self" borderRadius="clamp(6px, 1.5vw, 10px)" />
                 )}
               </div>
-            </div>
+            </motion.div>
             {/* Stars earned popups */}
             <AnimatePresence>
               {starPopups.map(popup => (
@@ -2230,14 +2297,15 @@ export function ServerAuthMultiplayerGame({
         </div>
 
         {/* Right: Vertical Panel */}
-        <div
-          style={{
-          width: 'clamp(85px, 22vw, 110px)',
-          display: 'flex',
-          flexDirection: 'column',
-          gap: 'clamp(4px, 1vh, 8px)',
-          overflow: 'hidden',
-        }}>
+	        <motion.div
+            animate={rightPanelBlastControls}
+	          style={{
+	          width: 'clamp(85px, 22vw, 110px)',
+	          display: 'flex',
+	          flexDirection: 'column',
+	          gap: 'clamp(4px, 1vh, 8px)',
+	          overflow: 'hidden',
+	        }}>
 	          {/* Opponent's Board */}
 		          <div style={{
 		            display: 'flex',
@@ -2465,11 +2533,12 @@ export function ServerAuthMultiplayerGame({
               </div>
             )}
 
-	        </div>
+	        </motion.div>
       </div>
 
       {/* Bottom Ability Bar (6 slots) */}
-      <div
+      <motion.div
+        animate={abilitiesBlastControls}
         style={{
         height: abilitiesBarHeight,
         display: 'grid',
@@ -2554,10 +2623,12 @@ export function ServerAuthMultiplayerGame({
             </motion.button>
           );
         })}
-      </div>
+      </motion.div>
 
       {/* Touch Controls */}
-      <div style={{
+      <motion.div
+        animate={controlsBlastControls}
+        style={{
         marginTop: controlsGapHeight,
         height: controlsBarHeight,
         display: 'flex',
@@ -2577,7 +2648,7 @@ export function ServerAuthMultiplayerGame({
             e.preventDefault();
             if (!gameClientRef.current) return;
             haptics.light();
-            audioManager.playSfx('piece_move', 0.3);
+            audioManager.playSfx('piece_move_left', 0.34);
             gameClientRef.current.sendInput('move_left');
           }}
           style={{
@@ -2610,6 +2681,7 @@ export function ServerAuthMultiplayerGame({
             if (!gameClientRef.current) return;
             audioManager.playSfx('hard_drop');
             haptics.medium();
+            triggerHardDropBounce();
             gameClientRef.current.sendInput('hard_drop');
           }}
           style={{
@@ -2707,7 +2779,7 @@ export function ServerAuthMultiplayerGame({
             e.preventDefault();
             if (!gameClientRef.current) return;
             haptics.light();
-            audioManager.playSfx('piece_move', 0.3);
+            audioManager.playSfx('piece_move_right', 0.34);
             gameClientRef.current.sendInput('move_right');
           }}
           style={{
@@ -2729,7 +2801,7 @@ export function ServerAuthMultiplayerGame({
             <polyline points="9 18 15 12 9 6" />
           </svg>
         </motion.button>
-      </div>
+      </motion.div>
           </div>
         </>
       )}
