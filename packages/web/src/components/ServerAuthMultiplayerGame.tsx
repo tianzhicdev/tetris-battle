@@ -13,7 +13,6 @@ import { FloatingBackground } from './FloatingBackground';
 
 import { ParticleEffect } from './ParticleEffect';
 import { FlashOverlay } from './FlashOverlay';
-import { UserButton } from '@clerk/clerk-react';
 import { DebugLogger } from '../services/debug/DebugLogger';
 import { DebugPanel } from './debug/DebugPanel';
 import { useDebugStore } from '../stores/debugStore';
@@ -419,21 +418,27 @@ export function ServerAuthMultiplayerGame({
 }: ServerAuthMultiplayerGameProps) {
   const opponentMiniBoardWidth = 'clamp(65px, 17vw, 80px)';
   const topUiInset = 'max(12px, calc(env(safe-area-inset-top) + 8px))';
-  const topEmptyStripHeight = 'clamp(44px, 8vh, 64px)';
-  const contentTopOffset = `calc(${topUiInset} + ${topEmptyStripHeight})`;
-  const overlayHeaderHeight = 'clamp(48px, 8vh, 88px)';
-  const statsCardsTop = `calc(${contentTopOffset} - clamp(4px, 0.8vh, 8px))`;
-  const boardTopClearance = `calc(${contentTopOffset} + ${overlayHeaderHeight} + clamp(0px, 0.2vh, 2px))`;
+  const bottomUiInset = 'max(2px, env(safe-area-inset-bottom))';
+  const statsCardsTop = topUiInset;
+  const statsRowHeight = 'clamp(56px, 9vh, 76px)';
+  const statsToBoardGap = '0px';
+  const abilitiesBarHeight = 'clamp(52px, 9vh, 64px)';
+  const controlsGapHeight = '0px';
+  const controlsBarHeight = 'clamp(60px, 12vh, 80px)';
+  const boardBottomPadding = 'clamp(4px, 0.9vh, 8px)';
+  const playerZoneTopFallback = `calc(${statsCardsTop} + ${statsRowHeight} + ${statsToBoardGap})`;
+  const playerZoneHeightFallback = `calc(100dvh - ${playerZoneTopFallback} - ${abilitiesBarHeight} - ${controlsGapHeight} - ${controlsBarHeight} - ${boardBottomPadding} - ${bottomUiInset})`;
+  const contentTopOffset = `calc(${statsCardsTop} + ${statsRowHeight} + clamp(2px, 0.4vh, 6px))`;
   const statsOverlaySidePaddingPx = 8;
   const statsOverlayGapPx = 6;
-  const statsThirdWidthExpr = `(100vw - ${statsOverlaySidePaddingPx * 2}px - ${statsOverlayGapPx * 2}px) / 3`;
-  const statsCardWidth = `calc(${statsThirdWidthExpr})`;
-  const statsMiddleLeft = `calc(${statsOverlaySidePaddingPx}px + (${statsThirdWidthExpr}) + ${statsOverlayGapPx}px)`;
-  const statsRightLeft = `calc(${statsOverlaySidePaddingPx}px + (${statsThirdWidthExpr} * 2) + ${statsOverlayGapPx * 2}px)`;
+  const statsFourthWidthExpr = `(100vw - ${statsOverlaySidePaddingPx * 2}px - ${statsOverlayGapPx * 3}px) / 4`;
+  const statsCardWidth = `calc(${statsFourthWidthExpr})`;
+  const statsStarsLeft = `calc(${statsOverlaySidePaddingPx}px + (${statsFourthWidthExpr}) + ${statsOverlayGapPx}px)`;
+  const statsLinesLeft = `calc(${statsOverlaySidePaddingPx}px + (${statsFourthWidthExpr} * 2) + ${statsOverlayGapPx * 2}px)`;
+  const statsExitLeft = `calc(${statsOverlaySidePaddingPx}px + (${statsFourthWidthExpr} * 3) + ${statsOverlayGapPx * 3}px)`;
+  const statsCardAnchorRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const opponentCanvasRef = useRef<HTMLCanvasElement>(null);
-  const rightPanelRef = useRef<HTMLDivElement>(null);
-  const rightTopButtonsRef = useRef<HTMLDivElement>(null);
   const rendererRef = useRef<TetrisRenderer | null>(null);
   const opponentRendererRef = useRef<TetrisRenderer | null>(null);
   const gameClientRef = useRef<ServerAuthGameClient | null>(null);
@@ -470,11 +475,16 @@ export function ServerAuthMultiplayerGame({
   const [isDebugMode, setIsDebugMode] = useState(false);
   const [connectionStats, setConnectionStats] = useState<ConnectionStats | null>(null);
   const [effectClockMs, setEffectClockMs] = useState(() => Date.now());
-  const [opponentBoardOffsetPx, setOpponentBoardOffsetPx] = useState(0);
+  const [statsCardBottomPx, setStatsCardBottomPx] = useState<number | null>(null);
+  const [statsCardHeightPx, setStatsCardHeightPx] = useState<number | null>(null);
   const [isMobilePortrait, setIsMobilePortrait] = useState(() => {
     if (typeof window === 'undefined') return false;
     return window.matchMedia('(max-width: 900px) and (orientation: portrait)').matches;
   });
+  const playerZoneTop = statsCardBottomPx !== null ? `${statsCardBottomPx + 1}px` : playerZoneTopFallback;
+  const playerZoneHeight = statsCardBottomPx !== null
+    ? `calc(100dvh - ${statsCardBottomPx + 1}px - ${abilitiesBarHeight} - ${controlsGapHeight} - ${controlsBarHeight} - ${boardBottomPadding} - ${bottomUiInset})`
+    : playerZoneHeightFallback;
 
   const { availableAbilities, setLoadout } = useAbilityStore();
 
@@ -575,43 +585,42 @@ export function ServerAuthMultiplayerGame({
   }, []);
 
   useEffect(() => {
-    if (useLegacyMobileLayout && isMobilePortrait) return;
-
     let rafId = 0;
 
-    const measureOpponentBoardOffset = () => {
+    const measureStatsBottom = () => {
       cancelAnimationFrame(rafId);
       rafId = requestAnimationFrame(() => {
-        const playerCanvas = canvasRef.current;
-        const rightPanel = rightPanelRef.current;
-        const topButtons = rightTopButtonsRef.current;
-        if (!playerCanvas || !rightPanel || !topButtons) return;
-
-        const playerBoardTop = playerCanvas.getBoundingClientRect().top;
-        const topButtonsBottom = topButtons.getBoundingClientRect().bottom;
-        const computedOffset = Math.max(0, Math.min(280, Math.round(playerBoardTop - topButtonsBottom)));
-
-        setOpponentBoardOffsetPx((prev) => (Math.abs(prev - computedOffset) > 1 ? computedOffset : prev));
+        const anchor = statsCardAnchorRef.current;
+        if (!anchor) return;
+        const anchorRect = anchor.getBoundingClientRect();
+        const nextBottom = Math.round(anchorRect.bottom);
+        const nextHeight = Math.round(anchorRect.height);
+        setStatsCardBottomPx((prev) => {
+          if (prev === null) return nextBottom;
+          return Math.abs(prev - nextBottom) > 1 ? nextBottom : prev;
+        });
+        setStatsCardHeightPx((prev) => {
+          if (prev === null) return nextHeight;
+          return Math.abs(prev - nextHeight) > 1 ? nextHeight : prev;
+        });
       });
     };
 
-    measureOpponentBoardOffset();
-    window.addEventListener('resize', measureOpponentBoardOffset);
+    measureStatsBottom();
+    window.addEventListener('resize', measureStatsBottom);
 
     let resizeObserver: ResizeObserver | null = null;
-    if (typeof ResizeObserver !== 'undefined') {
-      resizeObserver = new ResizeObserver(() => measureOpponentBoardOffset());
-      if (canvasRef.current) resizeObserver.observe(canvasRef.current);
-      if (rightPanelRef.current) resizeObserver.observe(rightPanelRef.current);
-      if (rightTopButtonsRef.current) resizeObserver.observe(rightTopButtonsRef.current);
+    if (typeof ResizeObserver !== 'undefined' && statsCardAnchorRef.current) {
+      resizeObserver = new ResizeObserver(() => measureStatsBottom());
+      resizeObserver.observe(statsCardAnchorRef.current);
     }
 
     return () => {
       cancelAnimationFrame(rafId);
-      window.removeEventListener('resize', measureOpponentBoardOffset);
+      window.removeEventListener('resize', measureStatsBottom);
       resizeObserver?.disconnect();
     };
-  }, [isMobilePortrait]);
+  }, [yourState?.score, yourState?.stars, yourState?.linesCleared]);
 
   // Initialize debug mode
   useEffect(() => {
@@ -1497,7 +1506,7 @@ export function ServerAuthMultiplayerGame({
               label: 'Notifications',
               color: 'rgba(255, 221, 87, 0.95)',
               box: {
-                top: contentTopOffset,
+                top: statsCardsTop,
                 left: '8px',
                 width: 'min(300px, 40vw)',
                 height: 'clamp(56px, 10vh, 96px)',
@@ -1505,13 +1514,13 @@ export function ServerAuthMultiplayerGame({
             },
             {
               id: 'region-top-stats',
-              label: 'Top Stats (Score / Stars / Lines)',
+              label: 'Top Stats + Exit',
               color: 'rgba(125, 227, 255, 0.95)',
               box: {
-                top: contentTopOffset,
+                top: statsCardsTop,
                 left: `${statsOverlaySidePaddingPx}px`,
                 width: `calc(100% - ${statsOverlaySidePaddingPx * 2}px)`,
-                height: overlayHeaderHeight,
+                height: statsRowHeight,
               },
             },
             {
@@ -1519,10 +1528,10 @@ export function ServerAuthMultiplayerGame({
               label: 'Player Zone (Next + Main Board)',
               color: 'rgba(0, 212, 255, 0.9)',
               box: {
-                top: boardTopClearance,
+                top: playerZoneTop,
                 left: '6px',
                 width: 'calc(100% - clamp(98px, 24vw, 126px) - 14px)',
-                bottom: 'calc(clamp(138px, 22vh, 176px))',
+                bottom: `calc(${abilitiesBarHeight} + ${controlsGapHeight} + ${controlsBarHeight} + ${boardBottomPadding} + ${bottomUiInset})`,
               },
             },
             {
@@ -1530,10 +1539,10 @@ export function ServerAuthMultiplayerGame({
               label: 'Opponent Panel',
               color: 'rgba(255, 0, 110, 0.92)',
               box: {
-                top: `calc(${contentTopOffset} + clamp(22px, 3vh, 34px))`,
+                top: playerZoneTop,
                 right: '4px',
                 width: 'clamp(85px, 22vw, 110px)',
-                bottom: 'calc(clamp(138px, 22vh, 176px))',
+                bottom: `calc(${abilitiesBarHeight} + ${controlsGapHeight} + ${controlsBarHeight} + ${boardBottomPadding} + ${bottomUiInset})`,
               },
             },
             {
@@ -1541,7 +1550,7 @@ export function ServerAuthMultiplayerGame({
               label: 'Opponent Board',
               color: 'rgba(255, 120, 168, 0.95)',
               box: {
-                top: boardTopClearance,
+                top: playerZoneTop,
                 right: 'clamp(8px, 2vw, 16px)',
                 width: opponentMiniBoardWidth,
                 height: 'clamp(162px, 42vw, 210px)',
@@ -1552,7 +1561,7 @@ export function ServerAuthMultiplayerGame({
               label: 'Effect Countdowns',
               color: 'rgba(255, 170, 88, 0.95)',
               box: {
-                top: `calc(${contentTopOffset} + clamp(260px, 40vh, 366px))`,
+                top: `calc(${playerZoneTop} + clamp(172px, 36vw, 214px))`,
                 right: 'clamp(8px, 2vw, 16px)',
                 width: opponentMiniBoardWidth,
                 height: 'clamp(84px, 20vh, 180px)',
@@ -1565,8 +1574,8 @@ export function ServerAuthMultiplayerGame({
               box: {
                 left: '4px',
                 right: '4px',
-                bottom: 'calc(clamp(68px, 12vh, 94px))',
-                height: 'clamp(52px, 9vh, 64px)',
+                bottom: `calc(${controlsGapHeight} + ${controlsBarHeight} + ${bottomUiInset})`,
+                height: abilitiesBarHeight,
               },
             },
             {
@@ -1576,8 +1585,8 @@ export function ServerAuthMultiplayerGame({
               box: {
                 left: '4px',
                 right: '4px',
-                bottom: '2px',
-                height: 'clamp(60px, 12vh, 80px)',
+                bottom: bottomUiInset,
+                height: controlsBarHeight,
               },
             },
           ].map((region) => (
@@ -1845,6 +1854,7 @@ export function ServerAuthMultiplayerGame({
       )}
       {/* Top Scoreboard split into independent overlay containers */}
       <div
+        ref={statsCardAnchorRef}
         style={{
           position: 'absolute',
           top: statsCardsTop,
@@ -1853,7 +1863,7 @@ export function ServerAuthMultiplayerGame({
           pointerEvents: 'none',
           width: statsCardWidth,
           minWidth: 0,
-          padding: '3px clamp(8px, 1.2vw, 12px) 5px',
+          padding: '2px clamp(8px, 1.2vw, 12px) 3px',
           borderRadius: '10px',
           background: 'linear-gradient(180deg, rgba(0, 28, 42, 0.82) 0%, rgba(0, 14, 24, 0.72) 100%)',
           border: '1px solid rgba(0, 212, 255, 0.42)',
@@ -1901,12 +1911,12 @@ export function ServerAuthMultiplayerGame({
         style={{
           position: 'absolute',
           top: statsCardsTop,
-          left: statsMiddleLeft,
+          left: statsStarsLeft,
           zIndex: 7,
           pointerEvents: 'none',
           width: statsCardWidth,
           minWidth: 0,
-          padding: '3px clamp(8px, 1.2vw, 12px) 5px',
+          padding: '2px clamp(8px, 1.2vw, 12px) 3px',
           borderRadius: '10px',
           background: 'linear-gradient(180deg, rgba(38, 12, 60, 0.82) 0%, rgba(22, 8, 38, 0.72) 100%)',
           border: '1px solid rgba(201, 66, 255, 0.45)',
@@ -1954,12 +1964,12 @@ export function ServerAuthMultiplayerGame({
         style={{
           position: 'absolute',
           top: statsCardsTop,
-          left: statsRightLeft,
+          left: statsLinesLeft,
           zIndex: 7,
           pointerEvents: 'none',
           width: statsCardWidth,
           minWidth: 0,
-          padding: '3px clamp(8px, 1.2vw, 12px) 5px',
+          padding: '2px clamp(8px, 1.2vw, 12px) 3px',
           borderRadius: '10px',
           background: 'linear-gradient(180deg, rgba(4, 44, 26, 0.82) 0%, rgba(3, 22, 13, 0.72) 100%)',
           border: '1px solid rgba(0, 255, 136, 0.42)',
@@ -2003,10 +2013,64 @@ export function ServerAuthMultiplayerGame({
           </motion.div>
         </AnimatePresence>
       </div>
+      <motion.button
+        whileTap="tap"
+        variants={buttonVariants}
+        transition={springs.snappy}
+        onClick={onExit}
+        style={{
+          position: 'absolute',
+          top: statsCardsTop,
+          left: statsExitLeft,
+          zIndex: 8,
+          width: statsCardWidth,
+          minWidth: 0,
+          height: statsCardHeightPx !== null ? `${statsCardHeightPx}px` : undefined,
+          boxSizing: 'border-box',
+          padding: '2px clamp(8px, 1.2vw, 12px) 3px',
+          borderRadius: '10px',
+          background: 'linear-gradient(180deg, rgba(46, 18, 18, 0.82) 0%, rgba(24, 10, 10, 0.72) 100%)',
+          border: '1px solid rgba(255, 122, 122, 0.45)',
+          boxShadow: '0 0 18px rgba(255, 122, 122, 0.22), inset 0 0 14px rgba(255, 122, 122, 0.14)',
+          textAlign: 'center',
+          color: '#ffd9d9',
+          cursor: 'pointer',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          lineHeight: 1,
+        }}
+      >
+        <span
+          style={{
+            fontSize: 'clamp(18px, 4.2vw, 40px)',
+            fontWeight: 900,
+            lineHeight: 0.88,
+            letterSpacing: '-0.4px',
+            color: '#ff9a9a',
+            textShadow: '0 0 10px rgba(255, 122, 122, 0.9), 0 0 22px rgba(255, 122, 122, 0.45)',
+            whiteSpace: 'nowrap',
+          }}
+        >
+          Exit
+        </span>
+      </motion.button>
       {/* Main Game Area */}
-	      <div style={{ display: 'flex', flex: 1, overflow: 'hidden', padding: 'clamp(2px, 0.5vw, 4px)', gap: 'clamp(2px, 0.5vw, 4px)' }}>
+	      <div
+          style={{
+            display: 'flex',
+            flex: 1,
+            minHeight: 0,
+            overflow: 'hidden',
+            paddingLeft: 'clamp(2px, 0.5vw, 4px)',
+            paddingRight: 'clamp(2px, 0.5vw, 4px)',
+            paddingBottom: boardBottomPadding,
+            paddingTop: playerZoneTop,
+            gap: 'clamp(2px, 0.5vw, 4px)',
+          }}
+        >
 	        {/* Left: Your Board */}
-	        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, position: 'relative', paddingTop: boardTopClearance }}>
+	        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, minHeight: 0, position: 'relative' }}>
           {/* Defensive Ability Indicator - Your Board */}
           {yourDefensiveAbility && (
             <div
@@ -2081,7 +2145,7 @@ export function ServerAuthMultiplayerGame({
               <div
                 style={{
                   position: 'relative',
-                  maxHeight: 'calc(100dvh - 110px)',
+                  maxHeight: playerZoneHeight,
                   maxWidth: '100%',
                   width: 'fit-content',
                   transform: getTiltAngle(yourState)
@@ -2098,7 +2162,7 @@ export function ServerAuthMultiplayerGame({
                     display: 'block',
                     border: `2px solid ${selfBoardFx?.borderColor || '#00d4ff'}`,
                     backgroundColor: 'rgba(5,5,15,0.8)',
-                    maxHeight: 'calc(100dvh - 110px)',
+                    maxHeight: playerZoneHeight,
                     maxWidth: '100%',
                     height: 'auto',
                     width: 'auto',
@@ -2151,7 +2215,6 @@ export function ServerAuthMultiplayerGame({
 
         {/* Right: Vertical Panel */}
         <div
-          ref={rightPanelRef}
           style={{
           width: 'clamp(85px, 22vw, 110px)',
           display: 'flex',
@@ -2159,61 +2222,12 @@ export function ServerAuthMultiplayerGame({
           gap: 'clamp(4px, 1vh, 8px)',
           overflow: 'hidden',
         }}>
-          {/* Top Buttons */}
-          <div
-            ref={rightTopButtonsRef}
-            style={{
-            display: 'flex',
-            gap: 'clamp(4px, 1vw, 6px)',
-            justifyContent: 'center',
-            alignItems: 'center',
-          }}>
-	            <div style={{
-	              width: 'clamp(30px, 7.5vw, 38px)',
-	              height: 'clamp(30px, 7.5vw, 38px)',
-	              display: 'flex',
-	              alignItems: 'center',
-	              justifyContent: 'center',
-	            }}>
-                {mockMode ? (
-                  <div
-                    style={{
-                      width: '100%',
-                      height: '100%',
-                      borderRadius: '50%',
-                      border: '1px solid rgba(0, 212, 255, 0.5)',
-                      background: 'rgba(0, 212, 255, 0.12)',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      fontSize: '10px',
-                      fontWeight: 800,
-                      color: '#7de3ff',
-                    }}
-                  >
-                    MOCK
-                  </div>
-                ) : (
-                  <UserButton
-                    appearance={{
-                      elements: {
-                        rootBox: { width: '100%', height: '100%' },
-                        avatarBox: { width: '100%', height: '100%' },
-                      },
-                    }}
-                  />
-                )}
-	            </div>
-
-          </div>
-
 	          {/* Opponent's Board */}
 		          <div style={{
 		            display: 'flex',
 		            flexDirection: 'column',
 		            alignItems: 'center',
 		            background: 'transparent',
-                marginTop: opponentBoardOffsetPx > 0 ? `${opponentBoardOffsetPx}px` : 'clamp(18px, 5vh, 54px)',
 		            padding: 'clamp(4px, 1vw, 6px)',
 		            borderRadius: 'clamp(6px, 1.5vw, 10px)',
 		            position: 'relative',
@@ -2308,7 +2322,7 @@ export function ServerAuthMultiplayerGame({
 	                  width: opponentMiniBoardWidth,
 	                  maxWidth: opponentMiniBoardWidth,
 	                  alignSelf: 'center',
-	                  maxHeight: 'calc(100dvh - 360px)',
+	                  maxHeight: `calc(${playerZoneHeight} - clamp(150px, 32vw, 198px))`,
 	                  overflowY: 'auto',
 	                  paddingRight: 0,
 	                }}
@@ -2436,11 +2450,12 @@ export function ServerAuthMultiplayerGame({
             )}
 
 	        </div>
-	      </div>
+      </div>
 
       {/* Bottom Ability Bar (6 slots) */}
-      <div style={{
-        height: 'clamp(52px, 9vh, 64px)',
+      <div
+        style={{
+        height: abilitiesBarHeight,
         display: 'grid',
         gridTemplateColumns: 'repeat(6, minmax(0, 1fr))',
         gap: 'clamp(4px, 0.8vw, 8px)',
@@ -2527,11 +2542,12 @@ export function ServerAuthMultiplayerGame({
 
       {/* Touch Controls */}
       <div style={{
-        marginTop: 'clamp(8px, 1.6vh, 14px)',
-        height: 'clamp(60px, 12vh, 80px)',
+        marginTop: controlsGapHeight,
+        height: controlsBarHeight,
         display: 'flex',
         gap: 'clamp(4px, 1vw, 8px)',
         padding: 'clamp(6px, 1.5vw, 10px)',
+        paddingBottom: `calc(clamp(6px, 1.5vw, 10px) + ${bottomUiInset})`,
         background: 'linear-gradient(180deg, rgba(10,10,25,0.4) 0%, rgba(5,5,15,0.8) 100%)',
         backdropFilter: 'blur(20px)',
         borderTop: '1px solid rgba(0, 212, 255, 0.2)',
@@ -2906,12 +2922,12 @@ export function ServerAuthMultiplayerGame({
         />
       )}
 
-      {/* Compact notifications (starts below top-empty strip in demo mode) */}
+      {/* Compact notifications (overlays top stats row) */}
       {abilityNotifications.length > 0 && (
         <div
           style={{
             position: 'fixed',
-            top: contentTopOffset,
+            top: statsCardsTop,
             left: '8px',
             width: mockMode ? `${demoGridCellSize * 6 - 12}px` : '320px',
             maxHeight: mockMode ? `${demoGridCellSize * 2 - 12}px` : '120px',
