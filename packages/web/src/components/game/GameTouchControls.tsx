@@ -11,15 +11,17 @@ interface GameTouchControlsProps {
 }
 
 const baseButton: CSSProperties = {
-  background: 'rgba(10, 10, 30, 0.62)',
-  border: '1px solid rgba(255, 255, 255, 0.2)',
-  color: '#fff',
+  background: 'rgba(255,255,255,0.025)',
+  border: '1px solid rgba(255,255,255,0.06)',
   borderRadius: '10px',
+  color: 'rgba(255,255,255,0.19)',
+  height: 44,
   display: 'flex',
   alignItems: 'center',
   justifyContent: 'center',
   touchAction: 'manipulation',
-  backdropFilter: 'blur(16px)',
+  fontFamily: 'system-ui',
+  WebkitTapHighlightColor: 'transparent',
 };
 
 export function GameTouchControls({ onMoveLeft, onMoveRight, onHardDrop, onSoftDrop, onRotateCw }: GameTouchControlsProps) {
@@ -28,7 +30,7 @@ export function GameTouchControls({ onMoveLeft, onMoveRight, onHardDrop, onSoftD
       style={{
         height: '100%',
         display: 'flex',
-        gap: '8px',
+        gap: '6px',
         padding: '10px',
         background: 'linear-gradient(180deg, rgba(10,10,25,0.3) 0%, rgba(5,5,15,0.85) 100%)',
         borderTop: '1px solid rgba(0, 212, 255, 0.25)',
@@ -39,9 +41,9 @@ export function GameTouchControls({ onMoveLeft, onMoveRight, onHardDrop, onSoftD
         variants={buttonVariants}
         transition={springs.snappy}
         onPointerDown={(e) => { e.preventDefault(); onMoveLeft(); }}
-        style={{ ...baseButton, flex: 1 }}
+        style={{ ...baseButton, flex: 1, fontSize: 14 }}
       >
-        ◀
+        ◁
       </motion.button>
 
       <motion.button
@@ -55,14 +57,11 @@ export function GameTouchControls({ onMoveLeft, onMoveRight, onHardDrop, onSoftD
         style={{
           ...baseButton,
           flex: 1.2,
-          border: '2px solid rgba(255, 0, 110, 0.45)',
-          boxShadow: '0 0 18px rgba(255, 0, 110, 0.22)',
-          fontSize: '12px',
-          fontWeight: 800,
-          letterSpacing: '0.5px',
+          width: 56,
+          fontSize: 12,
         }}
       >
-        DROP
+        ▽▽
       </motion.button>
 
       <motion.button
@@ -70,9 +69,9 @@ export function GameTouchControls({ onMoveLeft, onMoveRight, onHardDrop, onSoftD
         variants={buttonVariants}
         transition={springs.snappy}
         onPointerDown={(e) => { e.preventDefault(); onSoftDrop(); }}
-        style={{ ...baseButton, flex: 1 }}
+        style={{ ...baseButton, flex: 1, fontSize: 14 }}
       >
-        ▼
+        ▽
       </motion.button>
 
       <motion.button
@@ -80,9 +79,9 @@ export function GameTouchControls({ onMoveLeft, onMoveRight, onHardDrop, onSoftD
         variants={buttonVariants}
         transition={springs.snappy}
         onPointerDown={(e) => { e.preventDefault(); onRotateCw(); }}
-        style={{ ...baseButton, flex: 1 }}
+        style={{ ...baseButton, flex: 1, fontSize: 18 }}
       >
-        ⟳
+        ↻
       </motion.button>
 
       <motion.button
@@ -90,9 +89,9 @@ export function GameTouchControls({ onMoveLeft, onMoveRight, onHardDrop, onSoftD
         variants={buttonVariants}
         transition={springs.snappy}
         onPointerDown={(e) => { e.preventDefault(); onMoveRight(); }}
-        style={{ ...baseButton, flex: 1 }}
+        style={{ ...baseButton, flex: 1, fontSize: 14 }}
       >
-        ▶
+        ▷
       </motion.button>
     </div>
   );

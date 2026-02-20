@@ -308,6 +308,40 @@ function MockGameDemo() {
   );
 }
 
+function StaticGameDemo() {
+  const { theme } = useTheme();
+  const currentTheme = toLegacyTheme(theme);
+  const now = Date.now();
+  const mockProfile: UserProfile = {
+    userId: 'mock_player_static_001',
+    username: 'StaticLayout',
+    coins: 99999,
+    matchmakingRating: 1460,
+    gamesPlayed: 320,
+    gamesWon: 188,
+    lastActiveAt: now,
+    unlockedAbilities: ABILITY_IDS,
+    loadout: ['earthquake', 'ink_splash', 'wide_load', 'tilt', 'magnet', 'screen_shake'],
+    createdAt: now - 1000 * 60 * 60 * 24 * 30,
+    updatedAt: now,
+  };
+
+  return (
+    <ServerAuthMultiplayerGame
+      roomId="mock_room_static"
+      playerId={mockProfile.userId}
+      opponentId="mock_opponent_static_001"
+      theme={currentTheme}
+      profile={mockProfile}
+      onExit={() => {
+        window.location.href = window.location.pathname;
+      }}
+      mockMode
+      mockStatic
+    />
+  );
+}
+
 function App() {
   // Check if demo mode is enabled via URL parameter
   const params = new URLSearchParams(window.location.search);
@@ -333,6 +367,14 @@ function App() {
     return (
       <ThemeProvider userId="preview-game-layout">
         <MockGameDemo />
+      </ThemeProvider>
+    );
+  }
+
+  if (demoMode === 'static') {
+    return (
+      <ThemeProvider userId="preview-game-static">
+        <StaticGameDemo />
       </ThemeProvider>
     );
   }

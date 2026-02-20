@@ -9,6 +9,37 @@ const CELL = 10;        // px per mini-cell
 const SLOT = 48;        // px height per piece slot
 const PANEL_W = 46;     // canvas width
 const GAP = 4;          // px gap between slots
+const OPACITY_FALLOFF = [0.8, 0.5, 0.3, 0.15, 0.1] as const;
+
+const PIECE_GRADIENT_ANGLE: Record<TetrominoType, number> = {
+  I: 180,
+  O: 135,
+  T: 150,
+  S: 120,
+  Z: 160,
+  J: 140,
+  L: 125,
+};
+
+function createAngledGradient(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  size: number,
+  angleDeg: number,
+  color: string
+): CanvasGradient {
+  const radians = (angleDeg * Math.PI) / 180;
+  const half = size / 2;
+  const cx = x + half;
+  const cy = y + half;
+  const dx = Math.cos(radians) * half;
+  const dy = Math.sin(radians) * half;
+  const gradient = ctx.createLinearGradient(cx - dx, cy - dy, cx + dx, cy + dy);
+  gradient.addColorStop(0, hexToRgba(color, 0.9));
+  gradient.addColorStop(1, hexToRgba(color, 0.6));
+  return gradient;
+}
 
 interface Props {
   nextPieces: string[];  // up to 5 TetrominoType strings
@@ -61,6 +92,8 @@ export function NextPiecePanel({ nextPieces }: Props) {
       const type = typeStr as TetrominoType;
       const shape = TETROMINO_SHAPES[type]?.[0];
       if (!shape) return;
+      const pieceOpacity = OPACITY_FALLOFF[slotIndex] ?? 0.1;
+      const gradientAngle = PIECE_GRADIENT_ANGLE[type] ?? 135;
 
       const rows = shape.length;
       const cols = shape[0].length;
@@ -72,13 +105,11 @@ export function NextPiecePanel({ nextPieces }: Props) {
       const slotY = slotIndex * (SLOT + GAP);
       const offsetY = slotY + Math.floor((SLOT - pieceH) / 2);
 
-      // Slot background
-      ctx.fillStyle = 'rgba(255,255,255,0.04)';
-      roundedRectPath(ctx, 2, slotY, PANEL_W - 4, SLOT, 4);
-      ctx.fill();
-
       // Get piece color from theme, fall back to tetrominos.ts default
       const color = (theme.colors?.pieces as Record<string, string>)?.[type] ?? '#ffffff';
+
+      ctx.save();
+      ctx.globalAlpha = pieceOpacity;
 
       // Draw each cell
       for (let r = 0; r < rows; r++) {
@@ -88,9 +119,7 @@ export function NextPiecePanel({ nextPieces }: Props) {
           const y = offsetY + r * CELL;
           const size = CELL - 1;
           const radius = Math.min(3, size * 0.25);
-          const gradient = ctx.createLinearGradient(x + 0.5, y + 0.5, x + 0.5 + size, y + 0.5 + size);
-          gradient.addColorStop(0, hexToRgba(color, 0.9));
-          gradient.addColorStop(1, hexToRgba(color, 0.6));
+          const gradient = createAngledGradient(ctx, x + 0.5, y + 0.5, size, gradientAngle, color);
 
           ctx.save();
           roundedRectPath(ctx, x + 0.5, y + 0.5, size, size, radius);
@@ -119,6 +148,8 @@ export function NextPiecePanel({ nextPieces }: Props) {
           ctx.restore();
         }
       }
+
+      ctx.restore();
     });
   }, [nextPieces, theme, canvasH]);
 
