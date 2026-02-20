@@ -98,6 +98,68 @@ type TimedEffectEntry = {
   durationMs: number;
 };
 
+type ClearedRowSnapshot = {
+  rowIndex: number;
+  cells: string[];
+};
+
+type LineClearParticle = {
+  x: number;
+  y: number;
+  vx: number;
+  vy: number;
+  size: number;
+  life: number;
+  decay: number;
+  color: string;
+  rotation: number;
+  rotationVelocity: number;
+};
+
+function hexToRgbaColor(hex: string, alpha: number): string {
+  const r = parseInt(hex.slice(1, 3), 16);
+  const g = parseInt(hex.slice(3, 5), 16);
+  const b = parseInt(hex.slice(5, 7), 16);
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+}
+
+function extractClearedRowsFromPreviousBoard(previousGrid: any[][], linesCleared: number): ClearedRowSnapshot[] {
+  if (!Array.isArray(previousGrid) || linesCleared <= 0) return [];
+
+  const fullRows = previousGrid
+    .map((row, rowIndex) => ({ rowIndex, cells: row }))
+    .filter(({ cells }) => Array.isArray(cells) && cells.length > 0 && cells.every((cell) => typeof cell === 'string'))
+    .map(({ rowIndex, cells }) => ({ rowIndex, cells: cells as string[] }));
+
+  if (fullRows.length >= linesCleared) {
+    return fullRows.slice(-linesCleared);
+  }
+
+  if (fullRows.length > 0) {
+    return fullRows;
+  }
+
+  // Fallback: choose the densest rows nearest the bottom when exact full rows are not observable.
+  const denseRows = previousGrid
+    .map((row, rowIndex) => {
+      const typedRow = Array.isArray(row) ? row : [];
+      const filled = typedRow.filter((cell) => typeof cell === 'string').length;
+      return { rowIndex, filled, cells: typedRow.filter((cell): cell is string => typeof cell === 'string') };
+    })
+    .filter((row) => row.filled > 0)
+    .sort((a, b) => {
+      if (b.filled !== a.filled) return b.filled - a.filled;
+      return b.rowIndex - a.rowIndex;
+    })
+    .slice(0, linesCleared)
+    .sort((a, b) => a.rowIndex - b.rowIndex);
+
+  return denseRows.map((row) => ({
+    rowIndex: row.rowIndex,
+    cells: previousGrid[row.rowIndex].map((cell: any) => (typeof cell === 'string' ? cell : '')),
+  }));
+}
+
 function cloneBoardGrid(grid: any[][]): any[][] {
   return grid.map((row) => [...row]);
 }
@@ -460,10 +522,14 @@ export function ServerAuthMultiplayerGame({
   const statsExitLeft = `calc(${statsOverlaySidePaddingPx}px + (${statsFourthWidthExpr} * 3) + ${statsOverlayGapPx * 3}px)`;
   const statsCardAnchorRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const lineClearOverlayRef = useRef<HTMLCanvasElement>(null);
   const opponentCanvasRef = useRef<HTMLCanvasElement>(null);
   const rendererRef = useRef<TetrisRenderer | null>(null);
   const opponentRendererRef = useRef<TetrisRenderer | null>(null);
   const gameClientRef = useRef<ServerAuthGameClient | null>(null);
+  const lineClearParticlesRef = useRef<LineClearParticle[]>([]);
+  const lineClearParticlesRafRef = useRef<number | null>(null);
+  const prevBoardForLineClearFxRef = useRef<any[][] | null>(null);
 
   // Local state for rendering (from server)
   const [yourState, setYourState] = useState<any | null>(null);
@@ -582,6 +648,16 @@ export function ServerAuthMultiplayerGame({
   useEffect(() => {
     const interval = setInterval(() => setEffectClockMs(Date.now()), 100);
     return () => clearInterval(interval);
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (lineClearParticlesRafRef.current !== null) {
+        cancelAnimationFrame(lineClearParticlesRafRef.current);
+      }
+      lineClearParticlesRafRef.current = null;
+      lineClearParticlesRef.current = [];
+    };
   }, []);
 
   useEffect(() => {
@@ -759,6 +835,97 @@ export function ServerAuthMultiplayerGame({
       }),
     ]);
   }, [abilitiesBlastControls, controlsBlastControls, rightPanelBlastControls, statsBlastControls]);
+
+  const runLineClearParticlesFrame = useCallback(() => {
+    const canvas = lineClearOverlayRef.current;
+    const ctx = canvas?.getContext('2d');
+    if (!canvas || !ctx) {
+      lineClearParticlesRafRef.current = null;
+      return;
+    }
+
+    const particles = lineClearParticlesRef.current;
+    if (particles.length === 0) {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      lineClearParticlesRafRef.current = null;
+      return;
+    }
+
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    const nextParticles: LineClearParticle[] = [];
+    for (const particle of particles) {
+      particle.vy += 0.12;
+      particle.x += particle.vx;
+      particle.y += particle.vy;
+      particle.rotation += particle.rotationVelocity;
+      particle.life -= particle.decay;
+      if (particle.life <= 0) continue;
+
+      ctx.save();
+      ctx.translate(particle.x, particle.y);
+      ctx.rotate(particle.rotation);
+      ctx.shadowBlur = 8;
+      ctx.shadowColor = hexToRgbaColor(particle.color, Math.min(1, particle.life + 0.25));
+      ctx.fillStyle = hexToRgbaColor(particle.color, particle.life);
+      ctx.fillRect(-particle.size / 2, -particle.size / 2, particle.size, particle.size);
+      ctx.restore();
+
+      nextParticles.push(particle);
+    }
+
+    lineClearParticlesRef.current = nextParticles;
+    if (nextParticles.length > 0) {
+      lineClearParticlesRafRef.current = requestAnimationFrame(runLineClearParticlesFrame);
+      return;
+    }
+
+    lineClearParticlesRafRef.current = null;
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+  }, []);
+
+  const spawnLineClearParticles = useCallback((clearedRows: ClearedRowSnapshot[], boardWidth: number, boardHeight: number) => {
+    const canvas = lineClearOverlayRef.current;
+    if (!canvas || clearedRows.length === 0 || boardWidth <= 0 || boardHeight <= 0) return;
+
+    const pieceColors = theme.colors as Record<string, string>;
+    const cellWidth = canvas.width / boardWidth;
+    const cellHeight = canvas.height / boardHeight;
+    const spawned: LineClearParticle[] = [];
+
+    for (const clearedRow of clearedRows) {
+      const yCenter = (clearedRow.rowIndex + 0.5) * cellHeight;
+      for (let x = 0; x < boardWidth; x++) {
+        const piece = clearedRow.cells[x];
+        if (!piece) continue;
+        const color = pieceColors[piece] || '#ffffff';
+        const xCenter = (x + 0.5) * cellWidth;
+
+        for (let i = 0; i < 6; i++) {
+          const angle = Math.random() * Math.PI * 2;
+          const speed = 0.9 + Math.random() * 2.8;
+          spawned.push({
+            x: xCenter + (Math.random() - 0.5) * cellWidth * 0.4,
+            y: yCenter + (Math.random() - 0.5) * cellHeight * 0.4,
+            vx: Math.cos(angle) * speed,
+            vy: Math.sin(angle) * speed - 0.6,
+            size: Math.max(2, Math.min(cellWidth, cellHeight) * (0.14 + Math.random() * 0.24)),
+            life: 1,
+            decay: 0.015 + Math.random() * 0.025,
+            color,
+            rotation: Math.random() * Math.PI * 2,
+            rotationVelocity: (Math.random() - 0.5) * 0.25,
+          });
+        }
+      }
+    }
+
+    if (spawned.length === 0) return;
+    lineClearParticlesRef.current = [...lineClearParticlesRef.current, ...spawned];
+    if (lineClearParticlesRafRef.current === null) {
+      lineClearParticlesRafRef.current = requestAnimationFrame(runLineClearParticlesFrame);
+    }
+  }, [runLineClearParticlesFrame, theme.colors]);
 
   useEffect(() => {
     if (!mockMode) return;
@@ -991,6 +1158,17 @@ export function ServerAuthMultiplayerGame({
       prevYourPieceRef.current = null;
       prevSelfBoardRef.current = null;
       prevOpponentBoardRef.current = null;
+      prevBoardForLineClearFxRef.current = null;
+      lineClearParticlesRef.current = [];
+      if (lineClearParticlesRafRef.current !== null) {
+        cancelAnimationFrame(lineClearParticlesRafRef.current);
+        lineClearParticlesRafRef.current = null;
+      }
+      const overlayCanvas = lineClearOverlayRef.current;
+      const overlayCtx = overlayCanvas?.getContext('2d');
+      if (overlayCanvas && overlayCtx) {
+        overlayCtx.clearRect(0, 0, overlayCanvas.width, overlayCanvas.height);
+      }
       pendingBoardAbilityFxRef.current = { self: null, opponent: null };
       client.disconnect();
       audioManager.stopMusic(true);
@@ -1167,12 +1345,22 @@ export function ServerAuthMultiplayerGame({
   // Track line clears from server for effects
   const prevLinesRef = useRef(0);
   useEffect(() => {
-    if (!yourState) return;
+    if (!yourState || !Array.isArray(yourState.board)) return;
 
     const linesDiff = yourState.linesCleared - prevLinesRef.current;
     if (linesDiff > 0) {
       console.log(`[SERVER-AUTH] ${linesDiff} lines cleared!`);
       triggerLineClearExplosionPulse(linesDiff);
+
+      const previousBoard = prevBoardForLineClearFxRef.current;
+      if (previousBoard) {
+        const clearedRows = extractClearedRowsFromPreviousBoard(previousBoard, linesDiff);
+        if (clearedRows.length > 0) {
+          const boardWidth = previousBoard[0]?.length ?? yourState.board[0]?.length ?? 10;
+          const boardHeight = previousBoard.length || yourState.board.length || 20;
+          spawnLineClearParticles(clearedRows, boardWidth, boardHeight);
+        }
+      }
 
       if (linesDiff >= 4) {
         // TETRIS!
@@ -1196,7 +1384,8 @@ export function ServerAuthMultiplayerGame({
       setTimeout(() => setScreenShake(0), 400);
     }
     prevLinesRef.current = yourState.linesCleared;
-  }, [yourState?.linesCleared, triggerLineClearExplosionPulse]);
+    prevBoardForLineClearFxRef.current = cloneBoardGrid(yourState.board);
+  }, [yourState?.linesCleared, yourState?.board, spawnLineClearParticles, triggerLineClearExplosionPulse]);
 
   // Show "+N ⭐" popup when stars are earned (threshold filters passive regen)
   useEffect(() => {
@@ -1542,7 +1731,7 @@ export function ServerAuthMultiplayerGame({
         overflow: 'hidden',
         background: 'linear-gradient(135deg, #0a0e27 0%, #1a1433 50%, #0f0a1e 100%)',
         color: '#ffffff',
-        fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
+        fontFamily: '"Orbitron", "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
         position: 'fixed',
         top: 0,
         left: 0,
@@ -1779,6 +1968,8 @@ export function ServerAuthMultiplayerGame({
                   height={500}
                   style={{
                     display: 'block',
+                    position: 'relative',
+                    zIndex: 1,
                     height: '100%',
                     maxHeight: 'calc(100dvh - 170px)',
                     width: 'auto',
@@ -1787,6 +1978,29 @@ export function ServerAuthMultiplayerGame({
                     border: `2px solid ${selfBoardFx?.borderColor || '#00d4ff'}`,
                     backgroundColor: 'rgba(5,5,15,0.8)',
                     boxShadow: selfBoardFx?.glow || '0 0 18px rgba(0, 212, 255, 0.45), inset 0 0 18px rgba(0, 212, 255, 0.08)',
+                  }}
+                />
+                <div
+                  style={{
+                    position: 'absolute',
+                    inset: 0,
+                    borderRadius: '9px',
+                    pointerEvents: 'none',
+                    zIndex: 2,
+                    background: 'radial-gradient(ellipse at center, transparent 40%, rgba(10,10,24,0.6) 100%)',
+                  }}
+                />
+                <canvas
+                  ref={lineClearOverlayRef}
+                  width={250}
+                  height={500}
+                  style={{
+                    position: 'absolute',
+                    inset: 0,
+                    width: '100%',
+                    height: '100%',
+                    pointerEvents: 'none',
+                    zIndex: 3,
                   }}
                 />
                 {stateHasEffect(yourState, 'ink_splash') && !mockMode && (
@@ -2230,6 +2444,8 @@ export function ServerAuthMultiplayerGame({
                   height={500}
                   style={{
                     display: 'block',
+                    position: 'relative',
+                    zIndex: 1,
                     border: `2px solid ${selfBoardFx?.borderColor || '#00d4ff'}`,
                     backgroundColor: 'rgba(5,5,15,0.8)',
                     maxHeight: playerZoneHeight,
@@ -2239,6 +2455,29 @@ export function ServerAuthMultiplayerGame({
                     objectFit: 'contain',
                     borderRadius: 'clamp(6px, 1.5vw, 10px)',
                     boxShadow: selfBoardFx?.glow || '0 0 20px rgba(0, 212, 255, 0.5), 0 0 40px rgba(0, 212, 255, 0.2), inset 0 0 20px rgba(0, 212, 255, 0.05)',
+                  }}
+                />
+                <div
+                  style={{
+                    position: 'absolute',
+                    inset: 0,
+                    borderRadius: 'clamp(6px, 1.5vw, 10px)',
+                    pointerEvents: 'none',
+                    zIndex: 2,
+                    background: 'radial-gradient(ellipse at center, transparent 40%, rgba(10,10,24,0.6) 100%)',
+                  }}
+                />
+                <canvas
+                  ref={lineClearOverlayRef}
+                  width={250}
+                  height={500}
+                  style={{
+                    position: 'absolute',
+                    inset: 0,
+                    width: '100%',
+                    height: '100%',
+                    pointerEvents: 'none',
+                    zIndex: 3,
                   }}
                 />
                 {stateHasEffect(yourState, 'ink_splash') && !mockMode && (

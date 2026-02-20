@@ -17,6 +17,77 @@ export interface Theme {
   ) => void;
 }
 
+function hexToRgba(hex: string, alpha: number): string {
+  const r = parseInt(hex.slice(1, 3), 16);
+  const g = parseInt(hex.slice(3, 5), 16);
+  const b = parseInt(hex.slice(5, 7), 16);
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+}
+
+function roundedRectPath(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+  radius: number
+): void {
+  const r = Math.max(0, Math.min(radius, Math.min(width, height) / 2));
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.lineTo(x + width - r, y);
+  ctx.quadraticCurveTo(x + width, y, x + width, y + r);
+  ctx.lineTo(x + width, y + height - r);
+  ctx.quadraticCurveTo(x + width, y + height, x + width - r, y + height);
+  ctx.lineTo(x + r, y + height);
+  ctx.quadraticCurveTo(x, y + height, x, y + height - r);
+  ctx.lineTo(x, y + r);
+  ctx.quadraticCurveTo(x, y, x + r, y);
+  ctx.closePath();
+}
+
+function renderPolishedBlock(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  size: number,
+  color: string
+): void {
+  const radius = Math.min(3, size * 0.25);
+  const fill = ctx.createLinearGradient(x, y, x + size, y + size);
+  fill.addColorStop(0, hexToRgba(color, 0.9));
+  fill.addColorStop(1, hexToRgba(color, 0.6));
+
+  // Outer soft glow.
+  ctx.save();
+  roundedRectPath(ctx, x, y, size, size, radius);
+  ctx.fillStyle = fill;
+  ctx.shadowColor = hexToRgba(color, 0.4);
+  ctx.shadowBlur = 20;
+  ctx.fill();
+  ctx.restore();
+
+  // Crisp near glow.
+  ctx.save();
+  roundedRectPath(ctx, x, y, size, size, radius);
+  ctx.fillStyle = fill;
+  ctx.shadowColor = color;
+  ctx.shadowBlur = 8;
+  ctx.fill();
+  ctx.restore();
+
+  // Top-left inner highlight for reflective depth.
+  ctx.save();
+  roundedRectPath(ctx, x, y, size, size, radius);
+  ctx.clip();
+  const highlight = ctx.createLinearGradient(x, y, x + size * 0.58, y + size * 0.58);
+  highlight.addColorStop(0, 'rgba(255, 255, 255, 0.2)');
+  highlight.addColorStop(1, 'rgba(255, 255, 255, 0)');
+  ctx.fillStyle = highlight;
+  ctx.fillRect(x, y, size * 0.58, size * 0.58);
+  ctx.restore();
+}
+
 // Classic Tetris Theme - Simple colored blocks
 const classicTheme: Theme = {
   name: 'Classic',
@@ -34,22 +105,7 @@ const classicTheme: Theme = {
   textColor: '#ffffff',
   uiBackgroundColor: '#1a1a1a',
   renderBlock: (ctx, x, y, size, type) => {
-    const color = classicTheme.colors[type];
-    // Solid block with border
-    ctx.fillStyle = color;
-    ctx.fillRect(x, y, size, size);
-
-    // Border
-    ctx.strokeStyle = '#000000';
-    ctx.lineWidth = 2;
-    ctx.strokeRect(x + 1, y + 1, size - 2, size - 2);
-
-    // Shine effect
-    const gradient = ctx.createLinearGradient(x, y, x + size, y + size);
-    gradient.addColorStop(0, 'rgba(255, 255, 255, 0.3)');
-    gradient.addColorStop(1, 'rgba(0, 0, 0, 0.2)');
-    ctx.fillStyle = gradient;
-    ctx.fillRect(x, y, size, size);
+    renderPolishedBlock(ctx, x, y, size, classicTheme.colors[type]);
   },
 };
 
@@ -70,44 +126,7 @@ const retroTheme: Theme = {
   textColor: '#00ffff',
   uiBackgroundColor: '#1a1a3a',
   renderBlock: (ctx, x, y, size, type) => {
-    const color = retroTheme.colors[type];
-    const pixelSize = Math.max(2, Math.floor(size / 8));
-
-    // Base color
-    ctx.fillStyle = color;
-    ctx.fillRect(x, y, size, size);
-
-    // Pixel pattern overlay
-    ctx.fillStyle = 'rgba(255, 255, 255, 0.2)';
-    for (let py = 0; py < size; py += pixelSize * 2) {
-      for (let px = 0; px < size; px += pixelSize * 2) {
-        if ((px + py) % (pixelSize * 4) === 0) {
-          ctx.fillRect(x + px, y + py, pixelSize, pixelSize);
-        }
-      }
-    }
-
-    // Outer border
-    ctx.strokeStyle = '#000000';
-    ctx.lineWidth = 2;
-    ctx.strokeRect(x, y, size, size);
-
-    // Inner highlight (top-left)
-    ctx.strokeStyle = 'rgba(255, 255, 255, 0.5)';
-    ctx.lineWidth = pixelSize;
-    ctx.beginPath();
-    ctx.moveTo(x + pixelSize, y + size - pixelSize);
-    ctx.lineTo(x + pixelSize, y + pixelSize);
-    ctx.lineTo(x + size - pixelSize, y + pixelSize);
-    ctx.stroke();
-
-    // Inner shadow (bottom-right)
-    ctx.strokeStyle = 'rgba(0, 0, 0, 0.5)';
-    ctx.beginPath();
-    ctx.moveTo(x + size - pixelSize, y + pixelSize);
-    ctx.lineTo(x + size - pixelSize, y + size - pixelSize);
-    ctx.lineTo(x + pixelSize, y + size - pixelSize);
-    ctx.stroke();
+    renderPolishedBlock(ctx, x, y, size, retroTheme.colors[type]);
   },
 };
 
@@ -128,53 +147,7 @@ const glassTheme: Theme = {
   textColor: '#ffffff',
   uiBackgroundColor: 'rgba(10, 10, 25, 0.8)',
   renderBlock: (ctx, x, y, size, type) => {
-    const color = glassTheme.colors[type];
-
-    // Parse color to RGB for calculations
-    const r = parseInt(color.slice(1, 3), 16);
-    const g = parseInt(color.slice(3, 5), 16);
-    const b = parseInt(color.slice(5, 7), 16);
-
-    // Translucent base color
-    ctx.fillStyle = `rgba(${r}, ${g}, ${b}, 0.7)`;
-    ctx.fillRect(x, y, size, size);
-
-    // Inner glow gradient
-    const innerGlow = ctx.createRadialGradient(
-      x + size / 2, y + size / 2, 0,
-      x + size / 2, y + size / 2, size / 2
-    );
-    innerGlow.addColorStop(0, `rgba(255, 255, 255, 0.4)`);
-    innerGlow.addColorStop(0.5, `rgba(${r}, ${g}, ${b}, 0.2)`);
-    innerGlow.addColorStop(1, `rgba(${r}, ${g}, ${b}, 0)`);
-    ctx.fillStyle = innerGlow;
-    ctx.fillRect(x, y, size, size);
-
-    // Highlight on top-left (glass reflection)
-    const highlight = ctx.createLinearGradient(x, y, x + size * 0.6, y + size * 0.6);
-    highlight.addColorStop(0, 'rgba(255, 255, 255, 0.5)');
-    highlight.addColorStop(1, 'rgba(255, 255, 255, 0)');
-    ctx.fillStyle = highlight;
-    ctx.fillRect(x, y, size * 0.5, size * 0.5);
-
-    // Outer border with glow
-    ctx.strokeStyle = `rgba(${r}, ${g}, ${b}, 0.8)`;
-    ctx.lineWidth = 2;
-    ctx.strokeRect(x + 1, y + 1, size - 2, size - 2);
-
-    // Inner bright edge
-    ctx.strokeStyle = `rgba(255, 255, 255, 0.3)`;
-    ctx.lineWidth = 1;
-    ctx.strokeRect(x + 2, y + 2, size - 4, size - 4);
-
-    // Shadow/depth effect on bottom-right
-    const shadow = ctx.createLinearGradient(
-      x + size, y + size, x + size * 0.4, y + size * 0.4
-    );
-    shadow.addColorStop(0, `rgba(0, 0, 0, 0.4)`);
-    shadow.addColorStop(1, 'rgba(0, 0, 0, 0)');
-    ctx.fillStyle = shadow;
-    ctx.fillRect(x + size * 0.5, y + size * 0.5, size * 0.5, size * 0.5);
+    renderPolishedBlock(ctx, x, y, size, glassTheme.colors[type]);
   },
 };
 
