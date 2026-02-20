@@ -13,6 +13,7 @@ import { FloatingBackground } from './FloatingBackground';
 
 import { ParticleEffect } from './ParticleEffect';
 import { FlashOverlay } from './FlashOverlay';
+import { CyberpunkParticles, type CyberpunkParticlesHandle } from './CyberpunkParticles';
 import { DebugLogger } from '../services/debug/DebugLogger';
 import { DebugPanel } from './debug/DebugPanel';
 import { useDebugStore } from '../stores/debugStore';
@@ -130,6 +131,22 @@ type HardDropTrailEffect = {
   boardWidth: number;
   boardHeight: number;
   cells: HardDropTrailCell[];
+  expiresAt: number;
+};
+
+type FloatingText = {
+  id: number;
+  text: string;
+  x: number;
+  y: number;
+  color: string;
+  size: number;
+  born: number;
+};
+
+type LockFlash = {
+  cells: Array<{ x: number; y: number }>;
+  color: string;
   expiresAt: number;
 };
 
@@ -538,6 +555,7 @@ export function ServerAuthMultiplayerGame({
   const opponentCanvasRef = useRef<HTMLCanvasElement>(null);
   const rendererRef = useRef<TetrisRenderer | null>(null);
   const opponentRendererRef = useRef<TetrisRenderer | null>(null);
+  const cyberpunkParticlesRef = useRef<CyberpunkParticlesHandle>(null);
   const gameClientRef = useRef<ServerAuthGameClient | null>(null);
   const lineClearParticlesRef = useRef<LineClearParticle[]>([]);
   const hardDropParticlesRef = useRef<LineClearParticle[]>([]);
@@ -555,6 +573,9 @@ export function ServerAuthMultiplayerGame({
 
   const [screenShake, setScreenShake] = useState(0);
   const [flashEffect, setFlashEffect] = useState<{ color: string } | null>(null);
+  const [floatingTexts, setFloatingTexts] = useState<FloatingText[]>([]);
+  const [flashingRows, setFlashingRows] = useState<Array<{ rowIndex: number; expiresAt: number }>>([]);
+  const [lockFlash, setLockFlash] = useState<LockFlash | null>(null);
   const [particles, setParticles] = useState<{ x: number; y: number; id: number; count?: number; colors?: string[] } | null>(null);
   const [selfBoardFx, setSelfBoardFx] = useState<BoardFxState | null>(null);
   const [opponentBoardFx, setOpponentBoardFx] = useState<BoardFxState | null>(null);
@@ -880,6 +901,14 @@ export function ServerAuthMultiplayerGame({
     ]);
   }, [abilitiesBlastControls, controlsBlastControls, rightPanelBlastControls, statsBlastControls]);
 
+  const addFloatingText = useCallback((text: string, x: number, y: number, color: string, size: number) => {
+    const id = Date.now() + Math.random();
+    setFloatingTexts(prev => [...prev, { id, text, x, y, color, size, born: Date.now() }]);
+    setTimeout(() => {
+      setFloatingTexts(prev => prev.filter(t => t.id !== id));
+    }, 1400);
+  }, []);
+
   const runLineClearParticlesFrame = useCallback(() => {
     const canvas = lineClearOverlayRef.current;
     const ctx = canvas?.getContext('2d');
@@ -920,6 +949,22 @@ export function ServerAuthMultiplayerGame({
       hardDropTrailRef.current = null;
     }
 
+    // Render flashing rows (white flash effect)
+    const activeFlashingRows = flashingRows.filter(row => row.expiresAt > now);
+    if (activeFlashingRows.length > 0) {
+      const cellHeight = canvas.height / 20; // Standard tetris height
+
+      ctx.save();
+      for (const { rowIndex } of activeFlashingRows) {
+        const y = rowIndex * cellHeight;
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
+        ctx.shadowBlur = 16;
+        ctx.shadowColor = '#ffffff';
+        ctx.fillRect(0, y, canvas.width, cellHeight);
+      }
+      ctx.restore();
+    }
+
     const integrateParticles = (particles: LineClearParticle[]): LineClearParticle[] => {
       const nextParticles: LineClearParticle[] = [];
       for (const particle of particles) {
@@ -947,14 +992,15 @@ export function ServerAuthMultiplayerGame({
     lineClearParticlesRef.current = integrateParticles(lineClearParticlesRef.current);
     hardDropParticlesRef.current = integrateParticles(hardDropParticlesRef.current);
 
-    if (isTrailActive || lineClearParticlesRef.current.length > 0 || hardDropParticlesRef.current.length > 0) {
+    const hasActiveFlash = activeFlashingRows.length > 0;
+    if (isTrailActive || hasActiveFlash || lineClearParticlesRef.current.length > 0 || hardDropParticlesRef.current.length > 0) {
       lineClearParticlesRafRef.current = requestAnimationFrame(runLineClearParticlesFrame);
       return;
     }
 
     lineClearParticlesRafRef.current = null;
     ctx.clearRect(0, 0, canvas.width, canvas.height);
-  }, []);
+  }, [flashingRows]);
 
   const spawnLineClearParticles = useCallback((clearedRows: ClearedRowSnapshot[], boardWidth: number, boardHeight: number) => {
     const canvas = lineClearOverlayRef.current;
@@ -1085,6 +1131,16 @@ export function ServerAuthMultiplayerGame({
 
     if (dustParticles.length > 0) {
       hardDropParticlesRef.current = [...hardDropParticlesRef.current, ...dustParticles];
+    }
+
+    // Spawn cyberpunk trail particles for hard drop
+    if (trailCells.length > 0) {
+      const CELL_SIZE = 25;
+      trailCells.forEach(({ x: boardX, endY, color }) => {
+        const x = boardX * CELL_SIZE + CELL_SIZE / 2;
+        const y = endY * CELL_SIZE + CELL_SIZE / 2;
+        cyberpunkParticlesRef.current?.addParticles(x, y, color, 5, 'trail');
+      });
     }
 
     if ((trailCells.length > 0 || dustParticles.length > 0) && lineClearParticlesRafRef.current === null) {
@@ -1602,6 +1658,65 @@ export function ServerAuthMultiplayerGame({
           const boardWidth = previousBoard[0]?.length ?? yourState.board[0]?.length ?? 10;
           const boardHeight = previousBoard.length || yourState.board.length || 20;
           spawnLineClearParticles(clearedRows, boardWidth, boardHeight);
+
+          // Spawn cyberpunk particles for each cleared cell
+          const CELL_SIZE = 25; // Match canvas cell size
+          clearedRows.forEach(({ rowIndex, cells }) => {
+            cells.forEach((cellColor, colIndex) => {
+              if (cellColor) {
+                const x = colIndex * CELL_SIZE + CELL_SIZE / 2;
+                const y = rowIndex * CELL_SIZE + CELL_SIZE / 2;
+                // Burst particles (explosive)
+                cyberpunkParticlesRef.current?.addParticles(x, y, cellColor, 8, 'burst');
+                // Line sweep particles (slower, glowing)
+                cyberpunkParticlesRef.current?.addParticles(x, y, cellColor, 3, 'lineSweep');
+              }
+            });
+          });
+
+          // Add floating text for line clear
+          const labels = ['', 'SINGLE', 'DOUBLE', 'TRIPLE', 'TETRIS!'];
+          const colors = ['', '#ffffff', '#00f0f0', '#f0a020', '#ff2080'];
+          const label = labels[linesDiff] || 'MULTI!';
+          const labelColor = colors[linesDiff] || '#ff2080';
+          const size = linesDiff === 4 ? 24 : 18;
+          const comboCount = yourState.comboCount ?? 0;
+          const comboText = comboCount > 1 ? ` ×${comboCount}` : '';
+
+          // Get center row for positioning
+          const centerRowIndex = clearedRows[Math.floor(clearedRows.length / 2)]?.rowIndex ?? 10;
+
+          // Line clear label
+          addFloatingText(
+            label + comboText,
+            boardWidth * CELL_SIZE / 2,
+            centerRowIndex * CELL_SIZE - 10,
+            labelColor,
+            size
+          );
+
+          // Score earned (estimate based on lines cleared)
+          const baseScore = linesDiff * 100;
+          const scoreEarned = baseScore * (comboCount > 1 ? comboCount : 1);
+          addFloatingText(
+            `+${scoreEarned}`,
+            boardWidth * CELL_SIZE / 2,
+            centerRowIndex * CELL_SIZE + 18,
+            '#ffffffcc',
+            13
+          );
+
+          // Add flashing row effect (280ms duration)
+          const flashDuration = 280;
+          const now = Date.now();
+          const newFlashingRows = clearedRows.map(({ rowIndex }) => ({
+            rowIndex,
+            expiresAt: now + flashDuration
+          }));
+          setFlashingRows(prev => [...prev, ...newFlashingRows]);
+          setTimeout(() => {
+            setFlashingRows(prev => prev.filter(row => row.expiresAt > Date.now()));
+          }, flashDuration + 50);
         }
       }
 
@@ -1628,7 +1743,7 @@ export function ServerAuthMultiplayerGame({
     }
     prevLinesRef.current = yourState.linesCleared;
     prevBoardForLineClearFxRef.current = cloneBoardGrid(yourState.board);
-  }, [yourState?.linesCleared, yourState?.board, spawnLineClearParticles, triggerLineClearExplosionPulse]);
+  }, [yourState?.linesCleared, yourState?.board, yourState?.comboCount, spawnLineClearParticles, triggerLineClearExplosionPulse, addFloatingText]);
 
   // Show "+N ⭐" popup when stars are earned (threshold filters passive regen)
   useEffect(() => {
@@ -1643,6 +1758,52 @@ export function ServerAuthMultiplayerGame({
     }
     prevStarsRef.current = yourState.stars;
   }, [yourState?.stars]);
+
+  // Track piece changes for lock particles
+  const prevPieceRef = useRef<any>(null);
+  useEffect(() => {
+    if (!yourState?.currentPiece) return;
+
+    const currentPiece = yourState.currentPiece as any;
+    const prevPiece = prevPieceRef.current;
+
+    // Detect when piece changes (previous piece locked, new piece spawned)
+    if (prevPiece && (
+      prevPiece.type !== currentPiece.type ||
+      prevPiece.x !== currentPiece.x ||
+      prevPiece.y !== currentPiece.y ||
+      Math.abs(prevPiece.x - currentPiece.x) > 3 // New piece spawned at different location
+    )) {
+      // Previous piece locked - spawn lock particles and flash
+      const CELL_SIZE = 25;
+      const shape = prevPiece.shape || [];
+      const color = prevPiece.color || '#00d4ff';
+      const lockCells: Array<{ x: number; y: number }> = [];
+
+      for (let r = 0; r < shape.length; r++) {
+        for (let c = 0; c < shape[r].length; c++) {
+          if (shape[r][c]) {
+            const x = (prevPiece.x + c) * CELL_SIZE + CELL_SIZE / 2;
+            const y = (prevPiece.y + r) * CELL_SIZE + CELL_SIZE / 2;
+            cyberpunkParticlesRef.current?.addParticles(x, y, color, 3, 'lock');
+            lockCells.push({ x: prevPiece.x + c, y: prevPiece.y + r });
+          }
+        }
+      }
+
+      // Trigger lock flash effect (180ms duration)
+      if (lockCells.length > 0) {
+        setLockFlash({
+          cells: lockCells,
+          color,
+          expiresAt: Date.now() + 180
+        });
+        setTimeout(() => setLockFlash(null), 200);
+      }
+    }
+
+    prevPieceRef.current = currentPiece;
+  }, [yourState?.currentPiece]);
 
   // Handle ability activation
   const handleAbilityActivate = (ability: Ability) => {
@@ -2207,7 +2368,7 @@ export function ServerAuthMultiplayerGame({
                   transform: getTiltAngle(yourState) ? `rotate(${getTiltAngle(yourState)}deg) scale(0.96)` : 'none',
                   transition: 'transform 200ms ease-out',
                   position: 'relative',
-                  background: 'rgba(5, 5, 22, 0.78)',
+                  background: 'rgba(5, 5, 22, 1)',
                   backdropFilter: 'blur(6px)',
                   WebkitBackdropFilter: 'blur(6px)',
                   borderRadius: '9px',
@@ -2254,6 +2415,11 @@ export function ServerAuthMultiplayerGame({
                     zIndex: 3,
                   }}
                 />
+                <CyberpunkParticles
+                  ref={cyberpunkParticlesRef}
+                  width={250}
+                  height={500}
+                />
                 {stateHasEffect(yourState, 'ink_splash') && !mockMode && (
                   <InkSplashMask idPrefix="mobile-self" borderRadius="9px" />
                 )}
@@ -2284,6 +2450,56 @@ export function ServerAuthMultiplayerGame({
                   </motion.div>
                 ))}
               </AnimatePresence>
+              {/* Floating score text on line clears */}
+              {floatingTexts.map(ft => {
+                const age = Math.min((Date.now() - ft.born) / 1400, 1);
+                return (
+                  <div key={ft.id} style={{
+                    position: 'absolute',
+                    left: ft.x,
+                    top: ft.y - age * 50,
+                    transform: `translateX(-50%) scale(${1 + age * 0.15})`,
+                    fontSize: ft.size,
+                    fontWeight: 900,
+                    color: ft.color,
+                    textShadow: `0 0 10px ${ft.color}, 0 0 30px ${ft.color}66`,
+                    opacity: age < 0.15 ? age / 0.15 : 1 - (age - 0.15) / 0.85,
+                    zIndex: 20,
+                    pointerEvents: 'none',
+                    letterSpacing: 3,
+                    whiteSpace: 'nowrap',
+                    fontFamily: 'Orbitron',
+                  }}>
+                    {ft.text}
+                  </div>
+                );
+              })}
+              {/* Lock flash effect on piece settling */}
+              {lockFlash && lockFlash.expiresAt > Date.now() && lockFlash.cells.map((cell, i) => {
+                const CELL_SIZE = 25;
+                const age = Math.min((Date.now() - (lockFlash.expiresAt - 180)) / 180, 1);
+                const opacity = 1 - age;
+                const scale = 1.15 - (age * 0.15);
+
+                return (
+                  <div
+                    key={`lf-${i}`}
+                    style={{
+                      position: 'absolute',
+                      left: cell.x * CELL_SIZE - 4,
+                      top: cell.y * CELL_SIZE - 4,
+                      width: CELL_SIZE + 8,
+                      height: CELL_SIZE + 8,
+                      background: `radial-gradient(circle, ${lockFlash.color}44, transparent 70%)`,
+                      opacity,
+                      transform: `scale(${scale})`,
+                      zIndex: 3,
+                      pointerEvents: 'none',
+                      transition: 'opacity 0.18s ease-out, transform 0.18s ease-out',
+                    }}
+                  />
+                );
+              })}
             </motion.div>
           )}
           opponentPreview={(

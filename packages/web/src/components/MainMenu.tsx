@@ -8,6 +8,7 @@ import { FloatingBackground } from './FloatingBackground';
 import { audioManager } from '../services/audioManager';
 import { useFriendStore } from '../stores/friendStore';
 import { glassSuccess, glassBlue, glassPurple, mergeGlass } from '../styles/glassUtils';
+import { T } from '../design-tokens';
 
 interface MainMenuProps {
   onSelectMode: (mode: 'solo' | 'multiplayer') => void;
@@ -46,7 +47,7 @@ export function MainMenu({ onSelectMode, theme, profile, onProfileUpdate, onChal
         paddingRight: 'clamp(10px, 3vw, 24px)',
         backgroundColor: theme.backgroundColor,
         color: theme.textColor,
-        fontFamily: 'monospace',
+        fontFamily: T.font.body,
         position: 'relative',
       }}
     >
@@ -113,13 +114,14 @@ export function MainMenu({ onSelectMode, theme, profile, onProfileUpdate, onChal
               fontSize: 'clamp(20px, 6vw, 28px)',
               color: '#ffffff',
               cursor: 'pointer',
-              fontFamily: 'monospace',
+              fontFamily: T.font.display,
               fontWeight: 'bold',
+              letterSpacing: '3px',
               transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
               width: '100%',
               minHeight: '80px',
-              borderRadius: '16px',
-              textShadow: '0 0 20px rgba(201, 66, 255, 0.8)',
+              borderRadius: `${T.radius.xl}px`,
+              textShadow: T.glow(T.accent.purple, 1.5),
             })}
             onMouseDown={(e) => e.currentTarget.style.transform = 'scale(0.95)'}
             onMouseUp={(e) => e.currentTarget.style.transform = 'scale(1)'}
@@ -149,14 +151,15 @@ export function MainMenu({ onSelectMode, theme, profile, onProfileUpdate, onChal
           style={mergeGlass(glassBlue(), {
             padding: '12px 20px',
             fontSize: '14px',
-            color: '#00d4ff',
+            color: T.accent.cyan,
             cursor: 'pointer',
-            fontFamily: 'monospace',
+            fontFamily: T.font.display,
             fontWeight: 'bold',
+            letterSpacing: '1px',
             minWidth: '90px',
             touchAction: 'manipulation',
-            borderRadius: '8px',
-            textShadow: '0 0 10px rgba(0, 212, 255, 0.5)',
+            borderRadius: `${T.radius.md}px`,
+            textShadow: `0 0 10px ${T.accent.cyan}88`,
             transition: 'all 0.2s ease',
             position: 'relative' as const,
           })}
@@ -167,7 +170,7 @@ export function MainMenu({ onSelectMode, theme, profile, onProfileUpdate, onChal
               position: 'absolute',
               top: '-4px',
               right: '-4px',
-              background: '#ff006e',
+              background: T.accent.pink,
               color: '#fff',
               borderRadius: '10px',
               padding: '1px 5px',
@@ -189,14 +192,15 @@ export function MainMenu({ onSelectMode, theme, profile, onProfileUpdate, onChal
           style={mergeGlass(glassBlue(), {
             padding: '12px 20px',
             fontSize: '14px',
-            color: '#00d4ff',
+            color: T.accent.cyan,
             cursor: 'pointer',
-            fontFamily: 'monospace',
+            fontFamily: T.font.display,
             fontWeight: 'bold',
+            letterSpacing: '1px',
             minWidth: '90px',
             touchAction: 'manipulation',
-            borderRadius: '8px',
-            textShadow: '0 0 10px rgba(0, 212, 255, 0.5)',
+            borderRadius: `${T.radius.md}px`,
+            textShadow: `0 0 10px ${T.accent.cyan}88`,
             transition: 'all 0.2s ease',
           })}
         >
@@ -211,14 +215,15 @@ export function MainMenu({ onSelectMode, theme, profile, onProfileUpdate, onChal
           style={mergeGlass(glassSuccess(), {
             padding: '12px 20px',
             fontSize: '14px',
-            color: '#00ff88',
+            color: T.accent.green,
             cursor: 'pointer',
-            fontFamily: 'monospace',
+            fontFamily: T.font.display,
             fontWeight: 'bold',
+            letterSpacing: '1px',
             minWidth: '90px',
             touchAction: 'manipulation',
-            borderRadius: '8px',
-            textShadow: '0 0 10px rgba(0, 255, 136, 0.5)',
+            borderRadius: `${T.radius.md}px`,
+            textShadow: `0 0 10px ${T.accent.green}88`,
             transition: 'all 0.2s ease',
           })}
         >

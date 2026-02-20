@@ -145,7 +145,7 @@ const classicTheme: Theme = {
     L: '#f0a000', // Orange
     J: '#0000f0', // Blue
   },
-  backgroundColor: 'rgba(5, 5, 20, 0.75)',
+  backgroundColor: 'rgba(5, 5, 20, 1)',
   gridColor: 'rgba(255, 255, 255, 0.02)',
   textColor: '#ffffff',
   uiBackgroundColor: '#1a1a1a',
@@ -166,7 +166,7 @@ const retroTheme: Theme = {
     L: '#ff8800', // Orange
     J: '#0088ff', // Bright blue
   },
-  backgroundColor: 'rgba(5, 5, 20, 0.75)', // Dark blue-black
+  backgroundColor: 'rgba(5, 5, 20, 1)', // Dark blue-black
   gridColor: 'rgba(255, 255, 255, 0.02)',
   textColor: '#00ffff',
   uiBackgroundColor: '#1a1a3a',
@@ -187,7 +187,7 @@ const glassTheme: Theme = {
     L: '#f0a000', // Orange
     J: '#0000f0', // Blue
   },
-  backgroundColor: 'rgba(5, 5, 20, 0.75)',
+  backgroundColor: 'rgba(5, 5, 20, 1)',
   gridColor: 'rgba(255, 255, 255, 0.02)',
   textColor: '#ffffff',
   uiBackgroundColor: 'rgba(10, 10, 25, 0.8)',

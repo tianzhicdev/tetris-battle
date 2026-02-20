@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import type { MatchRewards } from '../lib/rewards';
+import { T } from '../design-tokens';
 
 interface PostMatchScreenProps {
   outcome: 'win' | 'loss';
@@ -16,7 +17,7 @@ export function PostMatchScreen({ outcome, rewards, onContinue }: PostMatchScree
     return () => clearTimeout(timer);
   }, []);
 
-  const outcomeColor = outcome === 'win' ? '#00ff00' : '#ff0000';
+  const outcomeColor = outcome === 'win' ? T.accent.green : T.accent.red;
   const outcomeText = outcome === 'win' ? 'VICTORY' : 'DEFEAT';
 
   return (
@@ -56,7 +57,7 @@ export function PostMatchScreen({ outcome, rewards, onContinue }: PostMatchScree
         {showRewards && (
           <div style={{ marginBottom: '30px' }}>
             <h2 style={{
-              color: '#00ff00',
+              color: T.accent.green,
               marginBottom: '20px',
               fontSize: '24px',
             }}>
@@ -67,7 +68,7 @@ export function PostMatchScreen({ outcome, rewards, onContinue }: PostMatchScree
             <div style={{ marginBottom: '25px' }}>
               <div style={{
                 fontSize: '20px',
-                color: '#ffaa00',
+                color: T.accent.yellow,
                 marginBottom: '10px',
               }}>
                 💰 +{rewards.coins} Coins
@@ -75,7 +76,7 @@ export function PostMatchScreen({ outcome, rewards, onContinue }: PostMatchScree
 
               <div style={{
                 fontSize: '14px',
-                color: '#888',
+                color: T.text.secondary,
                 paddingLeft: '20px',
               }}>
                 <div>Base reward: +{rewards.breakdown.baseCoins}</div>
@@ -89,7 +90,7 @@ export function PostMatchScreen({ outcome, rewards, onContinue }: PostMatchScree
 
               <div style={{
                 fontSize: '18px',
-                color: '#ffd700',
+                color: T.accent.yellow,
                 marginTop: '15px',
                 fontWeight: 'bold',
               }}>

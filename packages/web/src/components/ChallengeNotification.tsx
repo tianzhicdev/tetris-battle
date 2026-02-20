@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useFriendStore } from '../stores/friendStore';
 import { audioManager } from '../services/audioManager';
+import { T } from '../design-tokens';
 
 interface ChallengeNotificationProps {
   userId: string;
@@ -96,19 +97,19 @@ export function ChallengeNotification({ userId, onNavigate }: ChallengeNotificat
           }}
         >
           <div style={{
-            background: 'rgba(10, 10, 30, 0.95)',
+            background: T.bg.panel,
             backdropFilter: 'blur(30px)',
-            border: '1px solid rgba(0, 212, 255, 0.3)',
-            borderRadius: '12px',
-            boxShadow: '0 8px 32px rgba(0, 0, 0, 0.6), inset 0 1px 0 rgba(255, 255, 255, 0.1)',
+            border: `1px solid ${T.accent.cyan}4d`,
+            borderRadius: `${T.radius.lg}px`,
+            boxShadow: `${T.glow(T.accent.cyan, 0.8)}, inset 0 1px 0 rgba(255, 255, 255, 0.1)`,
             padding: 'clamp(16px, 4vw, 24px)',
             width: 'min(400px, 100%)',
             pointerEvents: 'auto',
           }}>
             <div style={{
               fontSize: 'clamp(18px, 5vw, 24px)',
-              color: '#fff',
-              fontFamily: 'monospace',
+              color: T.text.primary,
+              fontFamily: T.font.display,
               fontWeight: 'bold',
               marginBottom: '8px',
               textAlign: 'center',
@@ -118,14 +119,14 @@ export function ChallengeNotification({ userId, onNavigate }: ChallengeNotificat
 
             <div style={{
               fontSize: '14px',
-              color: '#888',
-              fontFamily: 'monospace',
+              color: T.text.secondary,
+              fontFamily: T.font.mono,
               marginBottom: '16px',
               textAlign: 'center',
             }}>
               Expires in{' '}
               <span style={{
-                color: timeLeft <= 30 ? '#ff006e' : '#ffd700',
+                color: timeLeft <= 30 ? T.accent.pink : T.accent.yellow,
                 fontWeight: 'bold',
               }}>
                 {formatTime(timeLeft)}
@@ -143,27 +144,27 @@ export function ChallengeNotification({ userId, onNavigate }: ChallengeNotificat
                 style={{
                   padding: '10px 24px',
                   fontSize: '14px',
-                  color: '#00ff88',
-                  background: 'rgba(0, 255, 136, 0.1)',
-                  border: '1px solid rgba(0, 255, 136, 0.3)',
-                  borderRadius: '8px',
+                  color: T.accent.green,
+                  background: `${T.accent.green}1a`,
+                  border: `1px solid ${T.accent.green}4d`,
+                  borderRadius: `${T.radius.md}px`,
                   cursor: pendingAccept ? 'wait' : 'pointer',
-                  fontFamily: 'monospace',
+                  fontFamily: T.font.mono,
                   fontWeight: 'bold',
                   opacity: pendingAccept ? 0.5 : 1,
                   transition: 'all 0.2s ease',
                   backdropFilter: 'blur(10px)',
-                  boxShadow: '0 2px 8px rgba(0, 255, 136, 0.2)',
+                  boxShadow: T.glow(T.accent.green, 0.4),
                 }}
                 onMouseEnter={(e) => {
                   if (!pendingAccept) {
-                    e.currentTarget.style.background = 'rgba(0, 255, 136, 0.2)';
-                    e.currentTarget.style.borderColor = 'rgba(0, 255, 136, 0.5)';
+                    e.currentTarget.style.background = `${T.accent.green}33`;
+                    e.currentTarget.style.borderColor = `${T.accent.green}80`;
                   }
                 }}
                 onMouseLeave={(e) => {
-                  e.currentTarget.style.background = 'rgba(0, 255, 136, 0.1)';
-                  e.currentTarget.style.borderColor = 'rgba(0, 255, 136, 0.3)';
+                  e.currentTarget.style.background = `${T.accent.green}1a`;
+                  e.currentTarget.style.borderColor = `${T.accent.green}4d`;
                 }}
               >
                 {pendingAccept ? 'Accepting...' : 'Accept'}
@@ -175,27 +176,27 @@ export function ChallengeNotification({ userId, onNavigate }: ChallengeNotificat
                 style={{
                   padding: '10px 24px',
                   fontSize: '14px',
-                  color: '#ff006e',
-                  background: 'rgba(255, 0, 110, 0.1)',
-                  border: '1px solid rgba(255, 0, 110, 0.3)',
-                  borderRadius: '8px',
+                  color: T.accent.pink,
+                  background: `${T.accent.pink}1a`,
+                  border: `1px solid ${T.accent.pink}4d`,
+                  borderRadius: `${T.radius.md}px`,
                   cursor: pendingAccept ? 'wait' : 'pointer',
-                  fontFamily: 'monospace',
+                  fontFamily: T.font.mono,
                   fontWeight: 'bold',
                   opacity: pendingAccept ? 0.5 : 1,
                   transition: 'all 0.2s ease',
                   backdropFilter: 'blur(10px)',
-                  boxShadow: '0 2px 8px rgba(255, 0, 110, 0.2)',
+                  boxShadow: T.glow(T.accent.pink, 0.4),
                 }}
                 onMouseEnter={(e) => {
                   if (!pendingAccept) {
-                    e.currentTarget.style.background = 'rgba(255, 0, 110, 0.2)';
-                    e.currentTarget.style.borderColor = 'rgba(255, 0, 110, 0.5)';
+                    e.currentTarget.style.background = `${T.accent.pink}33`;
+                    e.currentTarget.style.borderColor = `${T.accent.pink}80`;
                   }
                 }}
                 onMouseLeave={(e) => {
-                  e.currentTarget.style.background = 'rgba(255, 0, 110, 0.1)';
-                  e.currentTarget.style.borderColor = 'rgba(255, 0, 110, 0.3)';
+                  e.currentTarget.style.background = `${T.accent.pink}1a`;
+                  e.currentTarget.style.borderColor = `${T.accent.pink}4d`;
                 }}
               >
                 Decline

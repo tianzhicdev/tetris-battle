@@ -3,6 +3,7 @@ import type { UserProfile } from '@tetris-battle/game-core';
 import { useFriendStore } from '../stores/friendStore';
 import { audioManager } from '../services/audioManager';
 import { glassBlue, glassPurple, glassSuccess, glassDanger, glassPanel, mergeGlass } from '../styles/glassUtils';
+import { T } from '../design-tokens';
 
 interface FriendListProps {
   profile: UserProfile;
@@ -106,9 +107,9 @@ export function FriendList({ profile, onClose, onChallenge }: FriendListProps) {
 
   const statusColor = (status: 'online' | 'in_game' | 'offline') => {
     switch (status) {
-      case 'online': return '#00ff88';
-      case 'in_game': return '#ffd700';
-      case 'offline': return '#666';
+      case 'online': return T.accent.green;
+      case 'in_game': return T.accent.yellow;
+      case 'offline': return T.text.tertiary;
     }
   };
 
@@ -162,8 +163,8 @@ export function FriendList({ profile, onClose, onChallenge }: FriendListProps) {
           <h2 style={{
             margin: 0,
             fontSize: 'clamp(20px, 5vw, 24px)',
-            color: '#00d4ff',
-            fontFamily: 'monospace',
+            color: T.accent.cyan,
+            fontFamily: T.font.mono,
             fontWeight: 'bold',
             textShadow: '0 0 15px rgba(0, 212, 255, 0.6)',
           }}>
@@ -174,7 +175,7 @@ export function FriendList({ profile, onClose, onChallenge }: FriendListProps) {
             style={{
               background: 'none',
               border: 'none',
-              color: '#888',
+              color: T.text.secondary,
               fontSize: '24px',
               cursor: 'pointer',
               padding: '4px 8px',
@@ -203,8 +204,8 @@ export function FriendList({ profile, onClose, onChallenge }: FriendListProps) {
                 background: activeTab === tab.id ? 'rgba(0, 212, 255, 0.15)' : 'transparent',
                 border: 'none',
                 borderBottom: activeTab === tab.id ? '2px solid #00d4ff' : '2px solid transparent',
-                color: activeTab === tab.id ? '#00d4ff' : '#888',
-                fontFamily: 'monospace',
+                color: activeTab === tab.id ? T.accent.cyan : '#888',
+                fontFamily: T.font.mono,
                 fontSize: '13px',
                 fontWeight: 'bold',
                 cursor: 'pointer',
@@ -244,9 +245,9 @@ export function FriendList({ profile, onClose, onChallenge }: FriendListProps) {
           {activeTab === 'friends' && (
             <div>
               {friendsLoading ? (
-                <p style={{ textAlign: 'center', color: '#888', fontFamily: 'monospace' }}>Loading...</p>
+                <p style={{ textAlign: 'center', color: T.text.secondary, fontFamily: T.font.mono }}>Loading...</p>
               ) : friends.length === 0 ? (
-                <p style={{ textAlign: 'center', color: '#888', fontFamily: 'monospace', padding: '20px 0' }}>
+                <p style={{ textAlign: 'center', color: T.text.secondary, fontFamily: T.font.mono, padding: '20px 0' }}>
                   No friends yet. Add some friends to play together!
                 </p>
               ) : (
@@ -270,8 +271,8 @@ export function FriendList({ profile, onClose, onChallenge }: FriendListProps) {
                       justifyContent: 'center',
                       fontSize: '18px',
                       fontWeight: 'bold',
-                      color: '#00d4ff',
-                      fontFamily: 'monospace',
+                      color: T.accent.cyan,
+                      fontFamily: T.font.mono,
                       flexShrink: 0,
                     }}>
                       {friend.username.charAt(0).toUpperCase()}
@@ -282,7 +283,7 @@ export function FriendList({ profile, onClose, onChallenge }: FriendListProps) {
                       <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                         <span style={{
                           color: '#fff',
-                          fontFamily: 'monospace',
+                          fontFamily: T.font.mono,
                           fontWeight: 'bold',
                           fontSize: '14px',
                           overflow: 'hidden',
@@ -300,7 +301,7 @@ export function FriendList({ profile, onClose, onChallenge }: FriendListProps) {
                           flexShrink: 0,
                         }} />
                       </div>
-                      <div style={{ color: '#888', fontSize: '11px', fontFamily: 'monospace', marginTop: '2px' }}>
+                      <div style={{ color: T.text.secondary, fontSize: '11px', fontFamily: T.font.mono, marginTop: '2px' }}>
                         MMR {friend.matchmakingRating} · {friend.gamesPlayed} games · {statusText(friend.onlineStatus)}
                       </div>
                     </div>
@@ -313,9 +314,9 @@ export function FriendList({ profile, onClose, onChallenge }: FriendListProps) {
                           style={mergeGlass(glassPurple(), {
                             padding: '6px 12px',
                             fontSize: '11px',
-                            color: '#c942ff',
+                            color: T.accent.purple,
                             cursor: 'pointer',
-                            fontFamily: 'monospace',
+                            fontFamily: T.font.mono,
                             fontWeight: 'bold',
                             borderRadius: '6px',
                             textShadow: '0 0 8px rgba(201, 66, 255, 0.5)',
@@ -329,7 +330,7 @@ export function FriendList({ profile, onClose, onChallenge }: FriendListProps) {
                           padding: '6px 12px',
                           fontSize: '11px',
                           color: '#ffd700',
-                          fontFamily: 'monospace',
+                          fontFamily: T.font.mono,
                           fontWeight: 'bold',
                           opacity: 0.7,
                         }}>
@@ -345,7 +346,7 @@ export function FriendList({ profile, onClose, onChallenge }: FriendListProps) {
                           padding: '6px 8px',
                           fontSize: '11px',
                           cursor: 'pointer',
-                          fontFamily: 'monospace',
+                          fontFamily: T.font.mono,
                           borderRadius: '6px',
                         }}
                       >
@@ -362,7 +363,7 @@ export function FriendList({ profile, onClose, onChallenge }: FriendListProps) {
           {activeTab === 'requests' && (
             <div>
               {pendingRequests.length === 0 ? (
-                <p style={{ textAlign: 'center', color: '#888', fontFamily: 'monospace', padding: '20px 0' }}>
+                <p style={{ textAlign: 'center', color: T.text.secondary, fontFamily: T.font.mono, padding: '20px 0' }}>
                   No pending requests
                 </p>
               ) : (
@@ -387,7 +388,7 @@ export function FriendList({ profile, onClose, onChallenge }: FriendListProps) {
                       fontSize: '18px',
                       fontWeight: 'bold',
                       color: '#00ff9d',
-                      fontFamily: 'monospace',
+                      fontFamily: T.font.mono,
                       flexShrink: 0,
                     }}>
                       {request.username.charAt(0).toUpperCase()}
@@ -397,13 +398,13 @@ export function FriendList({ profile, onClose, onChallenge }: FriendListProps) {
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <span style={{
                         color: '#fff',
-                        fontFamily: 'monospace',
+                        fontFamily: T.font.mono,
                         fontWeight: 'bold',
                         fontSize: '14px',
                       }}>
                         {request.username}
                       </span>
-                      <div style={{ color: '#888', fontSize: '11px', fontFamily: 'monospace', marginTop: '2px' }}>
+                      <div style={{ color: T.text.secondary, fontSize: '11px', fontFamily: T.font.mono, marginTop: '2px' }}>
                         MMR {request.matchmakingRating} · {request.gamesPlayed} games
                       </div>
                     </div>
@@ -417,7 +418,7 @@ export function FriendList({ profile, onClose, onChallenge }: FriendListProps) {
                           fontSize: '11px',
                           color: '#00ff88',
                           cursor: 'pointer',
-                          fontFamily: 'monospace',
+                          fontFamily: T.font.mono,
                           fontWeight: 'bold',
                           borderRadius: '6px',
                           textShadow: '0 0 8px rgba(0, 255, 136, 0.5)',
@@ -432,7 +433,7 @@ export function FriendList({ profile, onClose, onChallenge }: FriendListProps) {
                           fontSize: '11px',
                           color: '#ff006e',
                           cursor: 'pointer',
-                          fontFamily: 'monospace',
+                          fontFamily: T.font.mono,
                           fontWeight: 'bold',
                           borderRadius: '6px',
                         })}
@@ -451,7 +452,7 @@ export function FriendList({ profile, onClose, onChallenge }: FriendListProps) {
             <div>
               {/* Direct add by username */}
               <div style={{ marginBottom: '20px' }}>
-                <label style={{ color: '#888', fontSize: '12px', fontFamily: 'monospace', display: 'block', marginBottom: '6px' }}>
+                <label style={{ color: T.text.secondary, fontSize: '12px', fontFamily: T.font.mono, display: 'block', marginBottom: '6px' }}>
                   Add by username
                 </label>
                 <div style={{ display: 'flex', gap: '8px' }}>
@@ -468,7 +469,7 @@ export function FriendList({ profile, onClose, onChallenge }: FriendListProps) {
                       border: '1px solid rgba(0, 212, 255, 0.3)',
                       borderRadius: '8px',
                       color: '#fff',
-                      fontFamily: 'monospace',
+                      fontFamily: T.font.mono,
                       fontSize: '14px',
                       outline: 'none',
                     }}
@@ -478,9 +479,9 @@ export function FriendList({ profile, onClose, onChallenge }: FriendListProps) {
                     style={mergeGlass(glassBlue(), {
                       padding: '10px 20px',
                       fontSize: '13px',
-                      color: '#00d4ff',
+                      color: T.accent.cyan,
                       cursor: 'pointer',
-                      fontFamily: 'monospace',
+                      fontFamily: T.font.mono,
                       fontWeight: 'bold',
                       borderRadius: '8px',
                       textShadow: '0 0 8px rgba(0, 212, 255, 0.5)',
@@ -493,7 +494,7 @@ export function FriendList({ profile, onClose, onChallenge }: FriendListProps) {
                 {requestStatus && (
                   <p style={{
                     fontSize: '12px',
-                    fontFamily: 'monospace',
+                    fontFamily: T.font.mono,
                     marginTop: '6px',
                     color: requestStatus === 'Request sent!' ? '#00ff88' : '#ff006e',
                   }}>
@@ -504,7 +505,7 @@ export function FriendList({ profile, onClose, onChallenge }: FriendListProps) {
 
               {/* Search */}
               <div>
-                <label style={{ color: '#888', fontSize: '12px', fontFamily: 'monospace', display: 'block', marginBottom: '6px' }}>
+                <label style={{ color: T.text.secondary, fontSize: '12px', fontFamily: T.font.mono, display: 'block', marginBottom: '6px' }}>
                   Search players
                 </label>
                 <input
@@ -519,7 +520,7 @@ export function FriendList({ profile, onClose, onChallenge }: FriendListProps) {
                     border: '1px solid rgba(0, 212, 255, 0.3)',
                     borderRadius: '8px',
                     color: '#fff',
-                    fontFamily: 'monospace',
+                    fontFamily: T.font.mono,
                     fontSize: '14px',
                     outline: 'none',
                     boxSizing: 'border-box',
@@ -528,11 +529,11 @@ export function FriendList({ profile, onClose, onChallenge }: FriendListProps) {
                 />
 
                 {searchLoading && (
-                  <p style={{ textAlign: 'center', color: '#888', fontFamily: 'monospace' }}>Searching...</p>
+                  <p style={{ textAlign: 'center', color: T.text.secondary, fontFamily: T.font.mono }}>Searching...</p>
                 )}
 
                 {!searchLoading && searchQuery.length >= 2 && searchResults.length === 0 && (
-                  <p style={{ textAlign: 'center', color: '#888', fontFamily: 'monospace' }}>No users found</p>
+                  <p style={{ textAlign: 'center', color: T.text.secondary, fontFamily: T.font.mono }}>No users found</p>
                 )}
 
                 {searchResults.map(user => (
@@ -554,8 +555,8 @@ export function FriendList({ profile, onClose, onChallenge }: FriendListProps) {
                       justifyContent: 'center',
                       fontSize: '16px',
                       fontWeight: 'bold',
-                      color: '#00d4ff',
-                      fontFamily: 'monospace',
+                      color: T.accent.cyan,
+                      fontFamily: T.font.mono,
                       flexShrink: 0,
                     }}>
                       {user.username.charAt(0).toUpperCase()}
@@ -564,13 +565,13 @@ export function FriendList({ profile, onClose, onChallenge }: FriendListProps) {
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <span style={{
                         color: '#fff',
-                        fontFamily: 'monospace',
+                        fontFamily: T.font.mono,
                         fontWeight: 'bold',
                         fontSize: '13px',
                       }}>
                         {user.username}
                       </span>
-                      <div style={{ color: '#888', fontSize: '11px', fontFamily: 'monospace', marginTop: '2px' }}>
+                      <div style={{ color: T.text.secondary, fontSize: '11px', fontFamily: T.font.mono, marginTop: '2px' }}>
                         MMR {user.matchmakingRating} · {user.gamesPlayed} games
                       </div>
                     </div>
@@ -582,9 +583,9 @@ export function FriendList({ profile, onClose, onChallenge }: FriendListProps) {
                           style={mergeGlass(glassBlue(), {
                             padding: '6px 14px',
                             fontSize: '11px',
-                            color: '#00d4ff',
+                            color: T.accent.cyan,
                             cursor: 'pointer',
-                            fontFamily: 'monospace',
+                            fontFamily: T.font.mono,
                             fontWeight: 'bold',
                             borderRadius: '6px',
                           })}
@@ -596,8 +597,8 @@ export function FriendList({ profile, onClose, onChallenge }: FriendListProps) {
                         <span style={{
                           padding: '6px 14px',
                           fontSize: '11px',
-                          color: '#888',
-                          fontFamily: 'monospace',
+                          color: T.text.secondary,
+                          fontFamily: T.font.mono,
                           fontWeight: 'bold',
                         }}>
                           Pending
@@ -611,7 +612,7 @@ export function FriendList({ profile, onClose, onChallenge }: FriendListProps) {
                             fontSize: '11px',
                             color: '#00ff88',
                             cursor: 'pointer',
-                            fontFamily: 'monospace',
+                            fontFamily: T.font.mono,
                             fontWeight: 'bold',
                             borderRadius: '6px',
                           })}
@@ -624,7 +625,7 @@ export function FriendList({ profile, onClose, onChallenge }: FriendListProps) {
                           padding: '6px 14px',
                           fontSize: '11px',
                           color: '#00ff88',
-                          fontFamily: 'monospace',
+                          fontFamily: T.font.mono,
                           fontWeight: 'bold',
                         }}>
                           Friends
@@ -635,7 +636,7 @@ export function FriendList({ profile, onClose, onChallenge }: FriendListProps) {
                           padding: '6px 14px',
                           fontSize: '11px',
                           color: '#ff006e',
-                          fontFamily: 'monospace',
+                          fontFamily: T.font.mono,
                           fontWeight: 'bold',
                         }}>
                           Blocked

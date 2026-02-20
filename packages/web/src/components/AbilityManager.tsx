@@ -3,6 +3,7 @@ import { ABILITIES, isDebuffAbility } from '@tetris-battle/game-core';
 import { ABILITY_UNLOCKS } from '@tetris-battle/game-core';
 import type { UserProfile } from '@tetris-battle/game-core';
 import { progressionService } from '../lib/supabase';
+import { T } from '../design-tokens';
 import { AbilityCard } from './AbilityCard';
 
 interface AbilityManagerProps {
@@ -62,10 +63,10 @@ export function AbilityManager({ profile, onClose, onProfileUpdate }: AbilityMan
       paddingRight: 'clamp(10px, 2vw, 20px)',
     }}>
       <div style={{
-        background: 'rgba(10, 10, 30, 0.95)',
-        border: '1px solid rgba(0, 255, 136, 0.3)',
-        borderRadius: 'clamp(12px, 3vw, 16px)',
-        boxShadow: '0 8px 32px rgba(0, 0, 0, 0.6), inset 0 1px 0 rgba(255, 255, 255, 0.1)',
+        background: T.bg.panel,
+        border: `1px solid ${T.border.accent}`,
+        borderRadius: `${T.radius.xl}px`,
+        boxShadow: T.panelGlow,
         maxWidth: 'min(900px, 100%)',
         width: '100%',
         maxHeight: '95vh',
@@ -76,7 +77,7 @@ export function AbilityManager({ profile, onClose, onProfileUpdate }: AbilityMan
         {/* Header */}
         <div style={{
           padding: 'clamp(12px, 3vw, 16px) clamp(15px, 4vw, 20px)',
-          borderBottom: '1px solid rgba(0, 255, 136, 0.3)',
+          borderBottom: `1px solid ${T.border.accent}`,
           display: 'flex',
           justifyContent: 'space-between',
           alignItems: 'center',
@@ -85,22 +86,25 @@ export function AbilityManager({ profile, onClose, onProfileUpdate }: AbilityMan
         }}>
           <h2 style={{
             margin: 0,
-            color: '#00ff88',
+            color: T.accent.cyan,
             fontSize: 'clamp(20px, 5vw, 26px)',
             fontWeight: 700,
-            textShadow: '0 0 15px rgba(0, 255, 136, 0.6)',
+            fontFamily: T.font.display,
+            letterSpacing: '2px',
+            textShadow: T.glow(T.accent.cyan, 1),
           }}>
             ABILITIES
           </h2>
           <div style={{ display: 'flex', gap: 'clamp(10px, 2.5vw, 16px)', alignItems: 'center' }}>
             <div style={{
-              background: 'rgba(255, 170, 0, 0.1)',
-              border: '1px solid rgba(255, 170, 0, 0.3)',
-              borderRadius: 'clamp(6px, 1.5vw, 8px)',
+              background: `${T.accent.yellow}18`,
+              border: `1px solid ${T.accent.yellow}44`,
+              borderRadius: `${T.radius.md}px`,
               padding: 'clamp(4px, 1vw, 6px) clamp(10px, 2.5vw, 14px)',
-              color: '#ffd700',
+              color: T.accent.yellow,
               fontSize: 'clamp(14px, 3.5vw, 18px)',
               fontWeight: 700,
+              fontFamily: T.font.mono,
             }}>
               {profile.coins} coins
             </div>

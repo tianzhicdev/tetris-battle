@@ -80,8 +80,8 @@ export const glassmorphismTheme: Theme = {
       L: '#f0a000', // Orange
       J: '#0000f0', // Blue
     },
-    background: 'rgba(5, 5, 22, 0.78)',
-    boardBackground: 'rgba(5, 5, 22, 0.78)',
+    background: 'rgba(5, 5, 22, 1)',
+    boardBackground: 'rgba(5, 5, 22, 1)',
     gridLines: 'rgba(255, 255, 255, 0.018)',
     text: '#ffffff',
     textSecondary: '#aaaaaa',
@@ -114,7 +114,7 @@ export const glassmorphismTheme: Theme = {
   },
 
   board: {
-    background: 'rgba(5, 5, 20, 0.75)',
+    background: 'rgba(5, 5, 20, 1)',
     gridLineWidth: '1px',
     gridLineColor: '#ffffff05',
     gridLineStyle: 'solid',
@@ -198,10 +198,10 @@ export const glassmorphismTheme: Theme = {
   },
 
   cssVars: {
-    '--theme-bg': 'rgba(5, 5, 20, 0.75)',
+    '--theme-bg': 'rgba(5, 5, 20, 1)',
     '--theme-text': '#ffffff',
     '--theme-accent': '#00f0f0',
-    '--theme-board-bg': 'rgba(5, 5, 20, 0.75)',
+    '--theme-board-bg': 'rgba(5, 5, 20, 1)',
     '--theme-grid': '#ffffff05',
   },
 };

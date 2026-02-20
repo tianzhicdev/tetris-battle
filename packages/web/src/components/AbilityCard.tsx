@@ -1,5 +1,6 @@
 import type { Ability } from '@tetris-battle/game-core';
 import { isDebuffAbility } from '@tetris-battle/game-core';
+import { T } from '../design-tokens';
 
 interface AbilityCardProps {
   ability: Ability;
@@ -27,7 +28,7 @@ export function AbilityCard({
   loadoutFull,
 }: AbilityCardProps) {
   const isDebuff = isDebuffAbility(ability);
-  const accentColor = isDebuff ? '#ff006e' : '#00d4ff';
+  const accentColor = isDebuff ? T.accent.pink : T.accent.cyan;
   const canAfford = coins >= unlockCost;
   const coinsNeeded = unlockCost - coins;
 
@@ -35,17 +36,17 @@ export function AbilityCard({
     <div
       style={{
         background: isEquipped
-          ? 'rgba(0, 255, 136, 0.08)'
-          : 'rgba(10, 10, 30, 0.6)',
-        border: `1px solid ${isEquipped ? 'rgba(0, 255, 136, 0.5)' : 'rgba(255, 255, 255, 0.15)'}`,
-        borderRadius: 'clamp(8px, 2vw, 10px)',
+          ? `${T.accent.green}14`
+          : T.bg.card,
+        border: `1px solid ${isEquipped ? `${T.accent.green}80` : T.border.accent}`,
+        borderRadius: `${T.radius.md}px`,
         padding: 'clamp(10px, 2.5vw, 14px)',
         display: 'flex',
         flexDirection: 'column',
         gap: 'clamp(6px, 1.5vw, 8px)',
         transition: 'all 0.2s ease',
         boxShadow: isEquipped
-          ? '0 4px 20px rgba(0, 255, 136, 0.15), inset 0 1px 0 rgba(255, 255, 255, 0.1)'
+          ? `${T.glow(T.accent.green, 0.8)}, inset 0 1px 0 rgba(255, 255, 255, 0.1)`
           : '0 2px 10px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.05)',
       }}
     >
@@ -67,10 +68,10 @@ export function AbilityCard({
         >
           {ability.shortName}
         </span>
-        <span style={{ color: '#fff', fontSize: 'clamp(13px, 3.2vw, 14px)', fontWeight: 700, flex: 1 }}>
+        <span style={{ color: T.text.primary, fontSize: 'clamp(13px, 3.2vw, 14px)', fontWeight: 700, flex: 1 }}>
           {ability.name}
         </span>
-        <span style={{ color: 'rgba(255,255,255,0.5)', fontSize: '11px', flexShrink: 0 }}>
+        <span style={{ color: T.text.secondary, fontSize: '11px', flexShrink: 0 }}>
           {ability.cost}★
         </span>
       </div>
@@ -78,7 +79,7 @@ export function AbilityCard({
       {/* Description */}
       <div style={{
         fontSize: 'clamp(11px, 2.7vw, 12px)',
-        color: 'rgba(255, 255, 255, 0.65)',
+        color: T.text.secondary,
         lineHeight: 1.4,
       }}>
         {ability.description}
@@ -92,10 +93,10 @@ export function AbilityCard({
             style={{
               width: '100%',
               padding: 'clamp(6px, 1.5vw, 8px)',
-              background: 'rgba(0, 255, 136, 0.15)',
-              color: '#00ff88',
-              border: '1px solid rgba(0, 255, 136, 0.4)',
-              borderRadius: 'clamp(4px, 1vw, 6px)',
+              background: `${T.accent.green}26`,
+              color: T.accent.green,
+              border: `1px solid ${T.accent.green}66`,
+              borderRadius: `${T.radius.sm}px`,
               cursor: 'pointer',
               fontSize: 'clamp(11px, 2.7vw, 12px)',
               fontWeight: 700,
@@ -111,10 +112,10 @@ export function AbilityCard({
             style={{
               width: '100%',
               padding: 'clamp(6px, 1.5vw, 8px)',
-              background: loadoutFull ? 'rgba(255, 255, 255, 0.05)' : 'rgba(0, 212, 255, 0.15)',
-              color: loadoutFull ? '#666' : '#00d4ff',
-              border: `1px solid ${loadoutFull ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 212, 255, 0.4)'}`,
-              borderRadius: 'clamp(4px, 1vw, 6px)',
+              background: loadoutFull ? 'rgba(255, 255, 255, 0.05)' : `${T.accent.cyan}26`,
+              color: loadoutFull ? T.text.tertiary : T.accent.cyan,
+              border: `1px solid ${loadoutFull ? 'rgba(255, 255, 255, 0.1)' : `${T.accent.cyan}66`}`,
+              borderRadius: `${T.radius.sm}px`,
               cursor: loadoutFull ? 'not-allowed' : 'pointer',
               fontSize: 'clamp(11px, 2.7vw, 12px)',
               fontWeight: 700,
@@ -130,10 +131,10 @@ export function AbilityCard({
             style={{
               width: '100%',
               padding: 'clamp(6px, 1.5vw, 8px)',
-              background: 'rgba(255, 215, 0, 0.15)',
-              color: '#ffd700',
-              border: '1px solid rgba(255, 215, 0, 0.4)',
-              borderRadius: 'clamp(4px, 1vw, 6px)',
+              background: `${T.accent.yellow}26`,
+              color: T.accent.yellow,
+              border: `1px solid ${T.accent.yellow}66`,
+              borderRadius: `${T.radius.sm}px`,
               cursor: isBuying ? 'wait' : 'pointer',
               fontSize: 'clamp(11px, 2.7vw, 12px)',
               fontWeight: 700,
@@ -149,9 +150,9 @@ export function AbilityCard({
               width: '100%',
               padding: 'clamp(6px, 1.5vw, 8px)',
               background: 'rgba(255, 255, 255, 0.03)',
-              color: '#666',
+              color: T.text.tertiary,
               border: '1px solid rgba(255, 255, 255, 0.08)',
-              borderRadius: 'clamp(4px, 1vw, 6px)',
+              borderRadius: `${T.radius.sm}px`,
               cursor: 'not-allowed',
               fontSize: 'clamp(11px, 2.7vw, 12px)',
               fontWeight: 700,
