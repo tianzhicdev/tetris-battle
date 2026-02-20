@@ -36,149 +36,122 @@ export function AbilityCard({
   return (
     <div
       style={{
-        background: isEquipped
-          ? `${T.accent.green}14`
-          : T.bg.card,
-        border: `1px solid ${isEquipped ? `${T.accent.green}80` : T.border.accent}`,
+        background: isEquipped ? `${accentColor}08` : T.bg.card,
+        border: `1px solid ${isEquipped ? `${accentColor}33` : T.border.subtle}`,
         borderRadius: `${T.radius.md}px`,
-        padding: 'clamp(10px, 2.5vw, 14px)',
-        display: 'flex',
-        flexDirection: 'column',
-        gap: 'clamp(6px, 1.5vw, 8px)',
-        transition: 'all 0.2s ease',
-        boxShadow: isEquipped
-          ? `${T.glow(T.accent.green, 0.8)}, inset 0 1px 0 rgba(255, 255, 255, 0.1)`
-          : '0 2px 10px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.05)',
+        padding: 12,
+        cursor: 'pointer',
+        transition: 'all 0.2s',
       }}
     >
-      {/* Header: icon + badge + name + star cost */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+      {/* Header: icon + name + star cost */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6 }}>
         <Icon
           type="ability"
           name={ability.type}
           color={accentColor}
-          size={28}
-          glow={isEquipped}
+          size={24}
+          active={isEquipped}
         />
-        <span
-          style={{
-            padding: '2px 7px',
-            borderRadius: '999px',
-            border: `1px solid ${accentColor}`,
-            color: accentColor,
-            background: 'rgba(255, 255, 255, 0.04)',
-            fontSize: '10px',
-            fontWeight: 800,
-            letterSpacing: '0.4px',
-            lineHeight: 1.2,
-            flexShrink: 0,
-          }}
-        >
-          {ability.shortName}
-        </span>
-        <span style={{ color: T.text.primary, fontSize: 'clamp(13px, 3.2vw, 14px)', fontWeight: 700, fontFamily: T.font.display, letterSpacing: '0.5px', flex: 1 }}>
+        <div style={{ flex: 1, fontSize: 11, fontWeight: 700, fontFamily: T.font.display, color: T.text.primary, letterSpacing: 1 }}>
           {ability.name}
-        </span>
-        <span style={{ color: T.text.secondary, fontSize: '11px', flexShrink: 0 }}>
-          {ability.cost}★
-        </span>
+        </div>
+        <div style={{ fontSize: 10, fontFamily: T.font.mono, color: T.accent.purple }}>
+          ★{ability.cost}
+        </div>
       </div>
 
       {/* Description */}
       <div style={{
-        fontSize: 'clamp(11px, 2.7vw, 12px)',
+        fontSize: 10,
         color: T.text.secondary,
-        fontFamily: T.font.body,
-        lineHeight: 1.4,
+        lineHeight: 1.5,
+        fontFamily: 'system-ui',
+        marginBottom: 8,
       }}>
         {ability.description}
       </div>
 
       {/* Action button */}
-      <div style={{ marginTop: 'auto', paddingTop: '2px' }}>
-        {isEquipped ? (
-          <button
-            onClick={onUnequip}
-            style={{
-              width: '100%',
-              padding: 'clamp(6px, 1.5vw, 8px)',
-              background: `${T.accent.green}26`,
-              color: T.accent.green,
-              border: `1px solid ${T.accent.green}66`,
-              borderRadius: `${T.radius.sm}px`,
-              cursor: 'pointer',
-              fontSize: 'clamp(11px, 2.7vw, 12px)',
-              fontWeight: 700,
-              fontFamily: T.font.display,
-              letterSpacing: '0.5px',
-              transition: 'all 0.2s ease',
-            }}
-          >
-            Unequip
-          </button>
-        ) : isOwned ? (
-          <button
-            onClick={onEquip}
-            disabled={loadoutFull}
-            style={{
-              width: '100%',
-              padding: 'clamp(6px, 1.5vw, 8px)',
-              background: loadoutFull ? 'rgba(255, 255, 255, 0.05)' : `${T.accent.cyan}26`,
-              color: loadoutFull ? T.text.tertiary : T.accent.cyan,
-              border: `1px solid ${loadoutFull ? 'rgba(255, 255, 255, 0.1)' : `${T.accent.cyan}66`}`,
-              borderRadius: `${T.radius.sm}px`,
-              cursor: loadoutFull ? 'not-allowed' : 'pointer',
-              fontSize: 'clamp(11px, 2.7vw, 12px)',
-              fontWeight: 700,
-              fontFamily: T.font.display,
-              letterSpacing: '0.5px',
-              transition: 'all 0.2s ease',
-            }}
-          >
-            {loadoutFull ? 'Loadout Full' : 'Equip'}
-          </button>
-        ) : canAfford ? (
-          <button
-            onClick={onBuy}
-            disabled={isBuying}
-            style={{
-              width: '100%',
-              padding: 'clamp(6px, 1.5vw, 8px)',
-              background: `${T.accent.yellow}26`,
-              color: T.accent.yellow,
-              border: `1px solid ${T.accent.yellow}66`,
-              borderRadius: `${T.radius.sm}px`,
-              cursor: isBuying ? 'wait' : 'pointer',
-              fontSize: 'clamp(11px, 2.7vw, 12px)',
-              fontWeight: 700,
-              fontFamily: T.font.display,
-              letterSpacing: '0.5px',
-              transition: 'all 0.2s ease',
-            }}
-          >
-            {isBuying ? 'Buying...' : `Buy (${unlockCost} coins)`}
-          </button>
-        ) : (
-          <button
-            disabled
-            style={{
-              width: '100%',
-              padding: 'clamp(6px, 1.5vw, 8px)',
-              background: 'rgba(255, 255, 255, 0.03)',
-              color: T.text.tertiary,
-              border: '1px solid rgba(255, 255, 255, 0.08)',
-              borderRadius: `${T.radius.sm}px`,
-              cursor: 'not-allowed',
-              fontSize: 'clamp(11px, 2.7vw, 12px)',
-              fontWeight: 700,
-              fontFamily: T.font.display,
-              letterSpacing: '0.5px',
-            }}
-          >
-            Need {coinsNeeded} more
-          </button>
-        )}
-      </div>
+      {isEquipped ? (
+        <button
+          onClick={onUnequip}
+          style={{
+            width: '100%',
+            padding: '6px 0',
+            background: `${accentColor}11`,
+            border: `1px solid ${accentColor}44`,
+            borderRadius: `${T.radius.sm}px`,
+            color: accentColor,
+            fontFamily: T.font.display,
+            fontSize: 8,
+            fontWeight: 700,
+            letterSpacing: 2,
+            cursor: 'pointer',
+          }}
+        >
+          EQUIPPED
+        </button>
+      ) : isOwned ? (
+        <button
+          onClick={onEquip}
+          disabled={loadoutFull}
+          style={{
+            width: '100%',
+            padding: '6px 0',
+            background: loadoutFull ? T.bg.button : T.bg.button,
+            border: `1px solid ${loadoutFull ? T.border.subtle : T.border.subtle}`,
+            borderRadius: `${T.radius.sm}px`,
+            color: loadoutFull ? T.text.tertiary : T.text.secondary,
+            fontFamily: T.font.display,
+            fontSize: 8,
+            fontWeight: 700,
+            letterSpacing: 2,
+            cursor: loadoutFull ? 'not-allowed' : 'pointer',
+          }}
+        >
+          {loadoutFull ? 'LOADOUT FULL' : 'EQUIP'}
+        </button>
+      ) : canAfford ? (
+        <button
+          onClick={onBuy}
+          disabled={isBuying}
+          style={{
+            width: '100%',
+            padding: '6px 0',
+            background: T.bg.button,
+            border: `1px solid ${T.accent.yellow}44`,
+            borderRadius: `${T.radius.sm}px`,
+            color: T.accent.yellow,
+            fontFamily: T.font.display,
+            fontSize: 8,
+            fontWeight: 700,
+            letterSpacing: 2,
+            cursor: isBuying ? 'wait' : 'pointer',
+          }}
+        >
+          {isBuying ? 'BUYING...' : `BUY (${unlockCost} COINS)`}
+        </button>
+      ) : (
+        <button
+          disabled
+          style={{
+            width: '100%',
+            padding: '6px 0',
+            background: T.bg.button,
+            border: `1px solid ${T.border.subtle}`,
+            borderRadius: `${T.radius.sm}px`,
+            color: T.text.tertiary,
+            fontFamily: T.font.display,
+            fontSize: 8,
+            fontWeight: 700,
+            letterSpacing: 2,
+            cursor: 'not-allowed',
+          }}
+        >
+          NEED {coinsNeeded} MORE
+        </button>
+      )}
     </div>
   );
 }

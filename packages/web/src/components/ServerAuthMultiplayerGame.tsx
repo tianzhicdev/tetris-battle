@@ -36,6 +36,7 @@ import { OpponentPreview } from './game/OpponentPreview';
 import { AbilityDock } from './game/AbilityDock';
 import { GameTouchControls } from './game/GameTouchControls';
 import { MobileGameLayout } from './game/MobileGameLayout';
+import { Icon } from './ui/Icon';
 
 interface ServerAuthMultiplayerGameProps {
   roomId: string;
@@ -3160,18 +3161,13 @@ export function ServerAuthMultiplayerGame({
                 textAlign: 'center',
               }}
             >
-              <span
-                style={{
-                  fontFamily: '"Noto Sans SC", sans-serif',
-                  fontSize: '22px',
-                  fontWeight: 700,
-                  lineHeight: 1,
-                  color: 'rgba(255,255,255,0.8)',
-                  whiteSpace: 'nowrap',
-                }}
-              >
-                {ability.shortName}
-              </span>
+              <Icon
+                type="ability"
+                name={ability.type}
+                color={isDebuffAbility(ability) ? '#ff7aa9' : '#7de3ff'}
+                size={28}
+                active={isAffordable}
+              />
               <span
                 style={{
                   fontSize: '8px',
@@ -3181,7 +3177,7 @@ export function ServerAuthMultiplayerGame({
                   lineHeight: 1,
                 }}
               >
-                {ability.cost}
+                ★{ability.cost}
               </span>
             </motion.button>
           );
@@ -3228,7 +3224,7 @@ export function ServerAuthMultiplayerGame({
             backdropFilter: 'blur(10px)',
           }}
         >
-          <span style={{ fontSize: 'clamp(18px, 4.5vw, 28px)', lineHeight: 1 }}>◀</span>
+          <Icon type="control" name="left" color="rgba(255,255,255,0.4)" size={24} />
         </motion.button>
 
         {/* Hard Drop */}
@@ -3259,7 +3255,7 @@ export function ServerAuthMultiplayerGame({
             backdropFilter: 'blur(10px)',
           }}
         >
-          <span style={{ fontSize: 'clamp(18px, 4.5vw, 28px)', lineHeight: 1 }}>⏬</span>
+          <Icon type="control" name="drop" color="rgba(255,255,255,0.4)" size={24} />
         </motion.button>
 
         {/* Soft Drop */}
@@ -3288,7 +3284,7 @@ export function ServerAuthMultiplayerGame({
             backdropFilter: 'blur(10px)',
           }}
         >
-          <span style={{ fontSize: 'clamp(18px, 4.5vw, 28px)', lineHeight: 1 }}>▼</span>
+          <Icon type="control" name="down" color="rgba(255,255,255,0.4)" size={24} />
         </motion.button>
 
         {/* Rotate */}
@@ -3317,7 +3313,7 @@ export function ServerAuthMultiplayerGame({
             backdropFilter: 'blur(10px)',
           }}
         >
-          <span style={{ fontSize: 'clamp(18px, 4.5vw, 28px)', lineHeight: 1 }}>↻</span>
+          <Icon type="control" name="rotate" color="rgba(255,255,255,0.4)" size={24} />
         </motion.button>
 
         {/* Move Right */}
@@ -3346,7 +3342,7 @@ export function ServerAuthMultiplayerGame({
             backdropFilter: 'blur(10px)',
           }}
         >
-          <span style={{ fontSize: 'clamp(18px, 4.5vw, 28px)', lineHeight: 1 }}>▶</span>
+          <Icon type="control" name="right" color="rgba(255,255,255,0.4)" size={24} />
         </motion.button>
       </motion.div>
         </>
