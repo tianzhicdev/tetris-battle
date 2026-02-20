@@ -68,7 +68,7 @@ export function AbilityCard({
         >
           {ability.shortName}
         </span>
-        <span style={{ color: T.text.primary, fontSize: 'clamp(13px, 3.2vw, 14px)', fontWeight: 700, flex: 1 }}>
+        <span style={{ color: T.text.primary, fontSize: 'clamp(13px, 3.2vw, 14px)', fontWeight: 700, fontFamily: T.font.display, letterSpacing: '0.5px', flex: 1 }}>
           {ability.name}
         </span>
         <span style={{ color: T.text.secondary, fontSize: '11px', flexShrink: 0 }}>
@@ -80,6 +80,7 @@ export function AbilityCard({
       <div style={{
         fontSize: 'clamp(11px, 2.7vw, 12px)',
         color: T.text.secondary,
+        fontFamily: T.font.body,
         lineHeight: 1.4,
       }}>
         {ability.description}
@@ -100,6 +101,8 @@ export function AbilityCard({
               cursor: 'pointer',
               fontSize: 'clamp(11px, 2.7vw, 12px)',
               fontWeight: 700,
+              fontFamily: T.font.display,
+              letterSpacing: '0.5px',
               transition: 'all 0.2s ease',
             }}
           >
@@ -119,6 +122,8 @@ export function AbilityCard({
               cursor: loadoutFull ? 'not-allowed' : 'pointer',
               fontSize: 'clamp(11px, 2.7vw, 12px)',
               fontWeight: 700,
+              fontFamily: T.font.display,
+              letterSpacing: '0.5px',
               transition: 'all 0.2s ease',
             }}
           >
@@ -138,6 +143,8 @@ export function AbilityCard({
               cursor: isBuying ? 'wait' : 'pointer',
               fontSize: 'clamp(11px, 2.7vw, 12px)',
               fontWeight: 700,
+              fontFamily: T.font.display,
+              letterSpacing: '0.5px',
               transition: 'all 0.2s ease',
             }}
           >
@@ -156,6 +163,8 @@ export function AbilityCard({
               cursor: 'not-allowed',
               fontSize: 'clamp(11px, 2.7vw, 12px)',
               fontWeight: 700,
+              fontFamily: T.font.display,
+              letterSpacing: '0.5px',
             }}
           >
             Need {coinsNeeded} more

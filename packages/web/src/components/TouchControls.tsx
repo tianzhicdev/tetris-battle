@@ -1,4 +1,5 @@
 import type { Theme } from '../themes';
+import { T } from '../design-tokens';
 
 interface TouchControlsProps {
   onMoveLeft: () => void;
@@ -20,10 +21,11 @@ export function TouchControls({
   const buttonStyle = {
     padding: '10px',
     fontSize: '20px',
-    fontWeight: 'bold' as const,
-    color: '#ffffff',
+    fontWeight: 700,
+    fontFamily: T.font.display,
+    color: T.text.primary,
     border: 'none',
-    borderRadius: '8px',
+    borderRadius: `${T.radius.md}px`,
     cursor: 'pointer',
     userSelect: 'none' as const,
     touchAction: 'manipulation' as const,

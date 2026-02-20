@@ -140,11 +140,11 @@ export function FriendList({ profile, onClose, onChallenge }: FriendListProps) {
       paddingRight: 'clamp(10px, 3vw, 20px)',
     }}>
       <div style={{
-        background: 'rgba(10, 10, 30, 0.95)',
+        background: T.bg.panel,
         backdropFilter: 'blur(30px)',
-        border: '1px solid rgba(0, 212, 255, 0.3)',
-        borderRadius: 'clamp(12px, 3vw, 16px)',
-        boxShadow: '0 8px 32px rgba(0, 0, 0, 0.6), inset 0 1px 0 rgba(255, 255, 255, 0.1)',
+        border: `1px solid ${T.border.accent}`,
+        borderRadius: `${T.radius.xl}px`,
+        boxShadow: T.panelGlow,
         width: '100%',
         maxWidth: '500px',
         maxHeight: 'min(84vh, 760px)',
@@ -158,15 +158,16 @@ export function FriendList({ profile, onClose, onChallenge }: FriendListProps) {
           justifyContent: 'space-between',
           alignItems: 'center',
           padding: 'clamp(15px, 4vw, 20px)',
-          borderBottom: '1px solid rgba(255, 255, 255, 0.1)',
+          borderBottom: `1px solid ${T.border.accent}`,
         }}>
           <h2 style={{
             margin: 0,
             fontSize: 'clamp(20px, 5vw, 24px)',
             color: T.accent.cyan,
-            fontFamily: T.font.mono,
-            fontWeight: 'bold',
-            textShadow: '0 0 15px rgba(0, 212, 255, 0.6)',
+            fontFamily: T.font.display,
+            fontWeight: 700,
+            letterSpacing: '2px',
+            textShadow: T.glow(T.accent.cyan, 1),
           }}>
             FRIENDS
           </h2>
@@ -188,7 +189,7 @@ export function FriendList({ profile, onClose, onChallenge }: FriendListProps) {
         {/* Tabs */}
         <div style={{
           display: 'flex',
-          borderBottom: '1px solid rgba(255, 255, 255, 0.1)',
+          borderBottom: `1px solid ${T.border.subtle}`,
         }}>
           {([
             { id: 'friends' as Tab, label: 'Friends', count: friends.length },
@@ -465,10 +466,10 @@ export function FriendList({ profile, onClose, onChallenge }: FriendListProps) {
                     style={{
                       flex: 1,
                       padding: '10px 14px',
-                      background: 'rgba(0, 0, 0, 0.4)',
-                      border: '1px solid rgba(0, 212, 255, 0.3)',
-                      borderRadius: '8px',
-                      color: '#fff',
+                      background: T.bg.input,
+                      border: `1px solid ${T.border.input}`,
+                      borderRadius: `${T.radius.md}px`,
+                      color: T.text.primary,
                       fontFamily: T.font.mono,
                       fontSize: '14px',
                       outline: 'none',
@@ -516,10 +517,10 @@ export function FriendList({ profile, onClose, onChallenge }: FriendListProps) {
                   style={{
                     width: '100%',
                     padding: '10px 14px',
-                    background: 'rgba(0, 0, 0, 0.4)',
-                    border: '1px solid rgba(0, 212, 255, 0.3)',
-                    borderRadius: '8px',
-                    color: '#fff',
+                    background: T.bg.input,
+                    border: `1px solid ${T.border.input}`,
+                    borderRadius: `${T.radius.md}px`,
+                    color: T.text.primary,
                     fontFamily: T.font.mono,
                     fontSize: '14px',
                     outline: 'none',

@@ -110,7 +110,8 @@ export function ChallengeNotification({ userId, onNavigate }: ChallengeNotificat
               fontSize: 'clamp(18px, 5vw, 24px)',
               color: T.text.primary,
               fontFamily: T.font.display,
-              fontWeight: 'bold',
+              fontWeight: 700,
+              letterSpacing: '1px',
               marginBottom: '8px',
               textAlign: 'center',
             }}>
@@ -149,12 +150,14 @@ export function ChallengeNotification({ userId, onNavigate }: ChallengeNotificat
                   border: `1px solid ${T.accent.green}4d`,
                   borderRadius: `${T.radius.md}px`,
                   cursor: pendingAccept ? 'wait' : 'pointer',
-                  fontFamily: T.font.mono,
-                  fontWeight: 'bold',
+                  fontFamily: T.font.display,
+                  fontWeight: 700,
+                  letterSpacing: '1px',
                   opacity: pendingAccept ? 0.5 : 1,
                   transition: 'all 0.2s ease',
                   backdropFilter: 'blur(10px)',
                   boxShadow: T.glow(T.accent.green, 0.4),
+                  textShadow: T.glow(T.accent.green, 0.8),
                 }}
                 onMouseEnter={(e) => {
                   if (!pendingAccept) {
@@ -181,12 +184,14 @@ export function ChallengeNotification({ userId, onNavigate }: ChallengeNotificat
                   border: `1px solid ${T.accent.pink}4d`,
                   borderRadius: `${T.radius.md}px`,
                   cursor: pendingAccept ? 'wait' : 'pointer',
-                  fontFamily: T.font.mono,
-                  fontWeight: 'bold',
+                  fontFamily: T.font.display,
+                  fontWeight: 700,
+                  letterSpacing: '1px',
                   opacity: pendingAccept ? 0.5 : 1,
                   transition: 'all 0.2s ease',
                   backdropFilter: 'blur(10px)',
                   boxShadow: T.glow(T.accent.pink, 0.4),
+                  textShadow: T.glow(T.accent.pink, 0.8),
                 }}
                 onMouseEnter={(e) => {
                   if (!pendingAccept) {

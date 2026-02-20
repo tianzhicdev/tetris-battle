@@ -7,7 +7,6 @@ import { FriendList } from './FriendList';
 import { FloatingBackground } from './FloatingBackground';
 import { audioManager } from '../services/audioManager';
 import { useFriendStore } from '../stores/friendStore';
-import { glassSuccess, glassBlue, glassPurple, mergeGlass } from '../styles/glassUtils';
 import { T } from '../design-tokens';
 
 interface MainMenuProps {
@@ -60,13 +59,16 @@ export function MainMenu({ onSelectMode, theme, profile, onProfileUpdate, onChal
         display: 'flex',
         justifyContent: 'flex-end',
       }}>
-        <div style={mergeGlass(glassBlue(), {
+        <div style={{
           padding: '4px',
           borderRadius: '50%',
+          background: `${T.accent.cyan}11`,
+          border: `1px solid ${T.accent.cyan}33`,
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
-        })}>
+          boxShadow: T.glow(T.accent.cyan, 0.3),
+        }}>
           <UserButton
             appearance={{
               elements: {
@@ -108,21 +110,24 @@ export function MainMenu({ onSelectMode, theme, profile, onProfileUpdate, onChal
               audioManager.playSfx('button_click');
               onSelectMode('multiplayer');
             }}
-            className="glass-button"
-            style={mergeGlass(glassPurple(), {
+            style={{
               padding: '20px 50px',
               fontSize: 'clamp(20px, 6vw, 28px)',
-              color: '#ffffff',
+              color: T.accent.purple,
               cursor: 'pointer',
               fontFamily: T.font.display,
-              fontWeight: 'bold',
+              fontWeight: 700,
               letterSpacing: '3px',
               transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
               width: '100%',
               minHeight: '80px',
               borderRadius: `${T.radius.xl}px`,
+              background: T.bg.button,
+              border: `2px solid ${T.accent.purple}44`,
+              boxShadow: T.glow(T.accent.purple, 0.8),
               textShadow: T.glow(T.accent.purple, 1.5),
-            })}
+              backdropFilter: 'blur(20px)',
+            }}
             onMouseDown={(e) => e.currentTarget.style.transform = 'scale(0.95)'}
             onMouseUp={(e) => e.currentTarget.style.transform = 'scale(1)'}
             onMouseLeave={(e) => e.currentTarget.style.transform = 'scale(1)'}
@@ -148,21 +153,25 @@ export function MainMenu({ onSelectMode, theme, profile, onProfileUpdate, onChal
             audioManager.playSfx('button_click');
             setShowFriends(true);
           }}
-          style={mergeGlass(glassBlue(), {
+          style={{
             padding: '12px 20px',
             fontSize: '14px',
             color: T.accent.cyan,
             cursor: 'pointer',
             fontFamily: T.font.display,
-            fontWeight: 'bold',
+            fontWeight: 700,
             letterSpacing: '1px',
             minWidth: '90px',
             touchAction: 'manipulation',
             borderRadius: `${T.radius.md}px`,
-            textShadow: `0 0 10px ${T.accent.cyan}88`,
+            background: T.bg.button,
+            border: `1px solid ${T.accent.cyan}33`,
+            boxShadow: T.glow(T.accent.cyan, 0.5),
+            textShadow: T.glow(T.accent.cyan, 1),
+            backdropFilter: 'blur(20px)',
             transition: 'all 0.2s ease',
             position: 'relative' as const,
-          })}
+          }}
         >
           Friends
           {pendingRequests.length > 0 && (
@@ -175,9 +184,10 @@ export function MainMenu({ onSelectMode, theme, profile, onProfileUpdate, onChal
               borderRadius: '10px',
               padding: '1px 5px',
               fontSize: '10px',
-              fontWeight: 'bold',
+              fontWeight: 700,
               minWidth: '16px',
               textAlign: 'center',
+              boxShadow: T.glow(T.accent.pink, 0.8),
             }}>
               {pendingRequests.length}
             </span>
@@ -189,20 +199,24 @@ export function MainMenu({ onSelectMode, theme, profile, onProfileUpdate, onChal
             audioManager.playSfx('button_click');
             setShowProfile(true);
           }}
-          style={mergeGlass(glassBlue(), {
+          style={{
             padding: '12px 20px',
             fontSize: '14px',
             color: T.accent.cyan,
             cursor: 'pointer',
             fontFamily: T.font.display,
-            fontWeight: 'bold',
+            fontWeight: 700,
             letterSpacing: '1px',
             minWidth: '90px',
             touchAction: 'manipulation',
             borderRadius: `${T.radius.md}px`,
-            textShadow: `0 0 10px ${T.accent.cyan}88`,
+            background: T.bg.button,
+            border: `1px solid ${T.accent.cyan}33`,
+            boxShadow: T.glow(T.accent.cyan, 0.5),
+            textShadow: T.glow(T.accent.cyan, 1),
+            backdropFilter: 'blur(20px)',
             transition: 'all 0.2s ease',
-          })}
+          }}
         >
           Profile
         </button>
@@ -212,20 +226,24 @@ export function MainMenu({ onSelectMode, theme, profile, onProfileUpdate, onChal
             audioManager.playSfx('button_click');
             setShowAbilities(true);
           }}
-          style={mergeGlass(glassSuccess(), {
+          style={{
             padding: '12px 20px',
             fontSize: '14px',
             color: T.accent.green,
             cursor: 'pointer',
             fontFamily: T.font.display,
-            fontWeight: 'bold',
+            fontWeight: 700,
             letterSpacing: '1px',
             minWidth: '90px',
             touchAction: 'manipulation',
             borderRadius: `${T.radius.md}px`,
-            textShadow: `0 0 10px ${T.accent.green}88`,
+            background: T.bg.button,
+            border: `1px solid ${T.accent.green}33`,
+            boxShadow: T.glow(T.accent.green, 0.5),
+            textShadow: T.glow(T.accent.green, 1),
+            backdropFilter: 'blur(20px)',
             transition: 'all 0.2s ease',
-          })}
+          }}
         >
           Abilities
         </button>

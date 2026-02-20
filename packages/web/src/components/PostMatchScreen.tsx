@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import type { MatchRewards } from '../lib/rewards';
 import { T } from '../design-tokens';
+import { PrimaryButton } from './ui/PrimaryButton';
 
 interface PostMatchScreenProps {
   outcome: 'win' | 'loss';
@@ -27,17 +28,20 @@ export function PostMatchScreen({ outcome, rewards, onContinue }: PostMatchScree
       left: 0,
       right: 0,
       bottom: 0,
-      background: 'rgba(0, 0, 0, 0.95)',
+      background: T.bg.overlay,
+      backdropFilter: 'blur(10px)',
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'center',
       zIndex: 1000,
-      fontFamily: 'monospace',
+      fontFamily: T.font.body,
     }}>
       <div style={{
-        background: '#1a1a1a',
+        background: T.bg.panel,
+        backdropFilter: 'blur(30px)',
         border: `3px solid ${outcomeColor}`,
-        borderRadius: '12px',
+        borderRadius: `${T.radius.xl}px`,
+        boxShadow: T.panelGlow,
         padding: '40px',
         maxWidth: '600px',
         width: '90%',
@@ -46,9 +50,12 @@ export function PostMatchScreen({ outcome, rewards, onContinue }: PostMatchScree
         <h1 style={{
           margin: '0 0 30px 0',
           fontSize: '48px',
+          fontWeight: 700,
+          fontFamily: T.font.display,
+          letterSpacing: '3px',
           color: outcomeColor,
           textAlign: 'center',
-          textShadow: `0 0 20px ${outcomeColor}`,
+          textShadow: T.glow(outcomeColor, 1.5),
         }}>
           {outcomeText}
         </h1>
@@ -57,11 +64,15 @@ export function PostMatchScreen({ outcome, rewards, onContinue }: PostMatchScree
         {showRewards && (
           <div style={{ marginBottom: '30px' }}>
             <h2 style={{
-              color: T.accent.green,
+              color: T.accent.cyan,
               marginBottom: '20px',
               fontSize: '24px',
+              fontWeight: 700,
+              fontFamily: T.font.display,
+              letterSpacing: '2px',
+              textShadow: T.glow(T.accent.cyan, 1),
             }}>
-              Rewards Earned
+              REWARDS EARNED
             </h2>
 
             {/* Coins */}
@@ -102,23 +113,9 @@ export function PostMatchScreen({ outcome, rewards, onContinue }: PostMatchScree
         )}
 
         {/* Continue Button */}
-        <button
-          onClick={onContinue}
-          style={{
-            width: '100%',
-            padding: '15px',
-            fontSize: '20px',
-            background: outcomeColor,
-            color: '#000',
-            border: 'none',
-            borderRadius: '8px',
-            cursor: 'pointer',
-            fontWeight: 'bold',
-            fontFamily: 'monospace',
-          }}
-        >
-          Continue
-        </button>
+        <PrimaryButton onClick={onContinue} color={outcomeColor}>
+          CONTINUE
+        </PrimaryButton>
       </div>
 
       <style>{`

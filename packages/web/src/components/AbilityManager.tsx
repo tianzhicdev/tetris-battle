@@ -5,6 +5,7 @@ import type { UserProfile } from '@tetris-battle/game-core';
 import { progressionService } from '../lib/supabase';
 import { T } from '../design-tokens';
 import { AbilityCard } from './AbilityCard';
+import { CoinsBadge } from './ui/CoinsBadge';
 
 interface AbilityManagerProps {
   profile: UserProfile;
@@ -96,18 +97,7 @@ export function AbilityManager({ profile, onClose, onProfileUpdate }: AbilityMan
             ABILITIES
           </h2>
           <div style={{ display: 'flex', gap: 'clamp(10px, 2.5vw, 16px)', alignItems: 'center' }}>
-            <div style={{
-              background: `${T.accent.yellow}18`,
-              border: `1px solid ${T.accent.yellow}44`,
-              borderRadius: `${T.radius.md}px`,
-              padding: 'clamp(4px, 1vw, 6px) clamp(10px, 2.5vw, 14px)',
-              color: T.accent.yellow,
-              fontSize: 'clamp(14px, 3.5vw, 18px)',
-              fontWeight: 700,
-              fontFamily: T.font.mono,
-            }}>
-              {profile.coins} coins
-            </div>
+            <CoinsBadge amount={profile.coins} />
             <button
               onClick={onClose}
               style={{
