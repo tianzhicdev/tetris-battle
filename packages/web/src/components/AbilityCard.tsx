@@ -1,6 +1,7 @@
 import type { Ability } from '@tetris-battle/game-core';
 import { isDebuffAbility } from '@tetris-battle/game-core';
 import { T } from '../design-tokens';
+import { Icon } from './ui/Icon';
 
 interface AbilityCardProps {
   ability: Ability;
@@ -50,8 +51,15 @@ export function AbilityCard({
           : '0 2px 10px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.05)',
       }}
     >
-      {/* Header: badge + name + star cost */}
+      {/* Header: icon + badge + name + star cost */}
       <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+        <Icon
+          type="ability"
+          name={ability.type}
+          color={accentColor}
+          size={28}
+          glow={isEquipped}
+        />
         <span
           style={{
             padding: '2px 7px',

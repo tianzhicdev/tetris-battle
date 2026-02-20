@@ -1,6 +1,7 @@
 import { motion } from 'framer-motion';
 import type { CSSProperties } from 'react';
 import { buttonVariants, springs } from '../../utils/animations';
+import { Icon } from '../ui/Icon';
 
 interface GameTouchControlsProps {
   onMoveLeft: () => void;
@@ -43,7 +44,7 @@ export function GameTouchControls({ onMoveLeft, onMoveRight, onHardDrop, onSoftD
         onPointerDown={(e) => { e.preventDefault(); onMoveLeft(); }}
         style={{ ...baseButton, flex: 1, fontSize: 14 }}
       >
-        ◁
+        <Icon type="control" name="left" color="rgba(255,255,255,0.19)" size={20} />
       </motion.button>
 
       <motion.button
@@ -61,7 +62,7 @@ export function GameTouchControls({ onMoveLeft, onMoveRight, onHardDrop, onSoftD
           fontSize: 12,
         }}
       >
-        ▽▽
+        <Icon type="control" name="drop" color="rgba(255,255,255,0.19)" size={20} />
       </motion.button>
 
       <motion.button
@@ -71,7 +72,7 @@ export function GameTouchControls({ onMoveLeft, onMoveRight, onHardDrop, onSoftD
         onPointerDown={(e) => { e.preventDefault(); onSoftDrop(); }}
         style={{ ...baseButton, flex: 1, fontSize: 14 }}
       >
-        ▽
+        <Icon type="control" name="down" color="rgba(255,255,255,0.19)" size={20} />
       </motion.button>
 
       <motion.button
@@ -81,7 +82,7 @@ export function GameTouchControls({ onMoveLeft, onMoveRight, onHardDrop, onSoftD
         onPointerDown={(e) => { e.preventDefault(); onRotateCw(); }}
         style={{ ...baseButton, flex: 1, fontSize: 18 }}
       >
-        ↻
+        <Icon type="control" name="rotate" color="rgba(255,255,255,0.19)" size={20} />
       </motion.button>
 
       <motion.button
@@ -91,7 +92,7 @@ export function GameTouchControls({ onMoveLeft, onMoveRight, onHardDrop, onSoftD
         onPointerDown={(e) => { e.preventDefault(); onMoveRight(); }}
         style={{ ...baseButton, flex: 1, fontSize: 14 }}
       >
-        ▷
+        <Icon type="control" name="right" color="rgba(255,255,255,0.19)" size={20} />
       </motion.button>
     </div>
   );

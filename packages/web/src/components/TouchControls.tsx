@@ -1,5 +1,6 @@
 import type { Theme } from '../themes';
 import { T } from '../design-tokens';
+import { Icon } from './ui/Icon';
 
 interface TouchControlsProps {
   onMoveLeft: () => void;
@@ -64,7 +65,7 @@ export function TouchControls({
             maxWidth: '120px',
           }}
         >
-          ↻
+          <Icon type="control" name="rotate" color={T.text.primary} size={24} />
         </button>
         <button
           onTouchStart={(e) => {
@@ -78,7 +79,7 @@ export function TouchControls({
             maxWidth: '120px',
           }}
         >
-          ⬇⬇
+          <Icon type="control" name="drop" color={T.text.primary} size={24} />
         </button>
       </div>
 
@@ -94,7 +95,7 @@ export function TouchControls({
             backgroundColor: theme.colors.T,
           }}
         >
-          ←
+          <Icon type="control" name="left" color={T.text.primary} size={24} />
         </button>
         <button
           onTouchStart={(e) => {
@@ -106,7 +107,7 @@ export function TouchControls({
             backgroundColor: theme.colors.S,
           }}
         >
-          ↓
+          <Icon type="control" name="down" color={T.text.primary} size={24} />
         </button>
         <button
           onTouchStart={(e) => {
@@ -118,7 +119,7 @@ export function TouchControls({
             backgroundColor: theme.colors.T,
           }}
         >
-          →
+          <Icon type="control" name="right" color={T.text.primary} size={24} />
         </button>
       </div>
     </div>
