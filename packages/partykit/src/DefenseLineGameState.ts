@@ -319,37 +319,26 @@ export class DefenseLineGameState {
       return { clearedRows: [], clearedSegments: [], clearedCells: [], winner: this.winner };
     }
 
-    // Apply segment clears per-column so only the cleared segment columns shift.
-    const clearedRowsByColumn = new Map<number, Set<number>>();
-    for (const segment of clearableSegments) {
+    // Apply each segment exactly like Tetris row clear, but scoped to segment columns.
+    // A: only rows [0..segment.row] shift down in affected columns.
+    // B: only rows [segment.row..last] shift up in affected columns.
+    const ordered = player === 'a'
+      ? [...clearableSegments].sort((a, b) => a.row - b.row)
+      : [...clearableSegments].sort((a, b) => b.row - a.row);
+
+    for (const segment of ordered) {
       for (let col = segment.startCol; col <= segment.endCol; col++) {
-        let rows = clearedRowsByColumn.get(col);
-        if (!rows) {
-          rows = new Set<number>();
-          clearedRowsByColumn.set(col, rows);
+        if (player === 'a') {
+          for (let row = segment.row; row > 0; row--) {
+            this.board[row][col] = this.board[row - 1][col];
+          }
+          this.board[0][col] = '0';
+        } else {
+          for (let row = segment.row; row < DEFENSE_BOARD_ROWS - 1; row++) {
+            this.board[row][col] = this.board[row + 1][col];
+          }
+          this.board[DEFENSE_BOARD_ROWS - 1][col] = 'x';
         }
-        rows.add(segment.row);
-      }
-    }
-
-    for (const [col, clearedRows] of clearedRowsByColumn.entries()) {
-      if (clearedRows.size === 0) continue;
-
-      const survivors: DefenseLineCell[] = [];
-      for (let row = 0; row < DEFENSE_BOARD_ROWS; row++) {
-        if (!clearedRows.has(row)) {
-          survivors.push(this.board[row][col]);
-        }
-      }
-
-      const clearedCount = clearedRows.size;
-      const fillerCell: DefenseLineCell = player === 'a' ? '0' : 'x';
-      const nextColumn: DefenseLineCell[] = player === 'a'
-        ? [...Array.from({ length: clearedCount }, () => fillerCell), ...survivors]
-        : [...survivors, ...Array.from({ length: clearedCount }, () => fillerCell)];
-
-      for (let row = 0; row < DEFENSE_BOARD_ROWS; row++) {
-        this.board[row][col] = nextColumn[row];
       }
     }
 

@@ -4,6 +4,7 @@ import {
   DEFENSE_BOARD_COLS,
   DEFENSE_BOARD_ROWS,
   MIN_CONTIGUOUS_FOR_CLEAR,
+  type DefenseLineCell,
 } from '../DefenseLineGameState';
 
 function setEmptyBoardForA(state: DefenseLineGameState): void {
@@ -14,6 +15,16 @@ function setEmptyBoardForA(state: DefenseLineGameState): void {
     }
   }
   // Recompute active rows after direct board mutation.
+  (state as any).rebuildActiveRows();
+}
+
+function setEmptyBoardForB(state: DefenseLineGameState): void {
+  for (let row = 0; row < DEFENSE_BOARD_ROWS; row++) {
+    for (let col = 0; col < DEFENSE_BOARD_COLS; col++) {
+      // For player B, 'x' is empty and '0' is solid.
+      state.board[row][col] = 'x';
+    }
+  }
   (state as any).rebuildActiveRows();
 }
 
@@ -91,6 +102,100 @@ describe('DefenseLineGameState contiguous clear rule', () => {
     expect(state.board[row][4]).toBe('b');
     expect(state.board[row][5]).toBe('0');
     expect(state.board[row][6]).toBe('b');
+  });
+
+  it('for player A, only segment columns in rows 0..clearRow shift down', () => {
+    const state = new DefenseLineGameState(31);
+    setEmptyBoardForA(state);
+
+    const clearRow = 10;
+    const startCol = 1;
+    const endCol = 6;
+    const unaffectedCol = 7;
+
+    // Distinct patterns in affected and unaffected columns from rows 0..10.
+    const beforeAffected: DefenseLineCell[] = [];
+    const beforeUnaffected: DefenseLineCell[] = [];
+    for (let row = 0; row <= clearRow; row++) {
+      const affectedCell: DefenseLineCell = row % 2 === 0 ? 'a' : 'b';
+      const unaffectedCell: DefenseLineCell = row % 3 === 0 ? 'a' : '0';
+      state.board[row][startCol] = affectedCell;
+      state.board[row][unaffectedCol] = unaffectedCell;
+      beforeAffected.push(affectedCell);
+      beforeUnaffected.push(unaffectedCell);
+    }
+
+    // Make row 10 clearable only on cols 1..6.
+    for (let col = startCol; col <= endCol; col++) {
+      state.board[clearRow][col] = 'a';
+    }
+
+    // Row below clear row should not move.
+    state.board[clearRow + 1][startCol] = 'b';
+    state.board[clearRow + 1][unaffectedCol] = 'a';
+
+    (state as any).rebuildActiveRows();
+    (state as any).resolveAfterLock('a');
+
+    // Affected column: row 0 becomes filler, rows 1..10 shift from old rows 0..9.
+    expect(state.board[0][startCol]).toBe('0');
+    for (let row = 1; row <= clearRow; row++) {
+      expect(state.board[row][startCol]).toBe(beforeAffected[row - 1]);
+    }
+
+    // Unaffected column should be unchanged.
+    for (let row = 0; row <= clearRow; row++) {
+      expect(state.board[row][unaffectedCol]).toBe(beforeUnaffected[row]);
+    }
+    expect(state.board[clearRow + 1][startCol]).toBe('b');
+    expect(state.board[clearRow + 1][unaffectedCol]).toBe('a');
+  });
+
+  it('for player B, only segment columns in rows clearRow..last shift up', () => {
+    const state = new DefenseLineGameState(32);
+    setEmptyBoardForB(state);
+
+    const clearRow = 9;
+    const startCol = 2;
+    const endCol = 6;
+    const unaffectedCol = 1;
+
+    const beforeAffected: DefenseLineCell[] = [];
+    const beforeUnaffected: DefenseLineCell[] = [];
+    for (let row = clearRow; row < DEFENSE_BOARD_ROWS; row++) {
+      const affectedCell: DefenseLineCell = row % 2 === 0 ? 'b' : 'a';
+      const unaffectedCell: DefenseLineCell = row % 3 === 0 ? 'b' : 'x';
+      state.board[row][startCol] = affectedCell;
+      state.board[row][unaffectedCol] = unaffectedCell;
+      beforeAffected.push(affectedCell);
+      beforeUnaffected.push(unaffectedCell);
+    }
+
+    for (let col = startCol; col <= endCol; col++) {
+      state.board[clearRow][col] = 'b';
+    }
+    // Keep unaffected column outside the clear run at clearRow.
+    state.board[clearRow][unaffectedCol] = 'x';
+    beforeUnaffected[0] = 'x';
+
+    state.board[clearRow - 1][startCol] = 'a';
+    state.board[clearRow - 1][unaffectedCol] = 'b';
+
+    (state as any).rebuildActiveRows();
+    (state as any).resolveAfterLock('b');
+
+    // Affected column: rows clearRow..last-1 shift from old clearRow+1..last, last becomes filler.
+    for (let row = clearRow; row < DEFENSE_BOARD_ROWS - 1; row++) {
+      expect(state.board[row][startCol]).toBe(beforeAffected[row - clearRow + 1]);
+    }
+    expect(state.board[DEFENSE_BOARD_ROWS - 1][startCol]).toBe('x');
+
+    // Unaffected column should be unchanged.
+    for (let row = clearRow; row < DEFENSE_BOARD_ROWS; row++) {
+      expect(state.board[row][unaffectedCol]).toBe(beforeUnaffected[row - clearRow]);
+    }
+    expect(state.board[clearRow - 1][startCol]).toBe('a');
+    expect(state.board[clearRow - 1][unaffectedCol]).toBe('b');
   });
 
   it('allows clearing on the bottom row', () => {

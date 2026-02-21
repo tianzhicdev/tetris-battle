@@ -365,6 +365,11 @@ export default class DefenseLineServer implements Party.Server {
     this.gameState.startGame();
     this.broadcastState();
 
+    if (this.gameState.winner) {
+      this.finishGame(this.gameState.winner);
+      return;
+    }
+
     if (this.gameLoop) {
       clearInterval(this.gameLoop);
     }
