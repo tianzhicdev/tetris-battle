@@ -51,6 +51,7 @@ function GameApp({ profile: initialProfile }: { profile: UserProfile }) {
   const [gameMatch, setGameMatch] = useState<GameMatch | null>(null);
   const [defenseLineSide, setDefenseLineSide] = useState<'a' | 'b'>('a');
   const [profile, setProfile] = useState<UserProfile>(initialProfile);
+  const [matchmakingMode, setMatchmakingMode] = useState<'normal' | 'defense'>('normal');
   const presenceRef = useRef<PartykitPresence | null>(null);
 
   const {
@@ -186,15 +187,23 @@ function GameApp({ profile: initialProfile }: { profile: UserProfile }) {
     if (selectedMode === 'solo') {
       setMode('solo');
     } else if (selectedMode === 'defense-line') {
-      setMode('defense-line-matchmaking');
+      // Defense mode uses unified matchmaking
+      setMatchmakingMode('defense');
+      setMode('matchmaking');
     } else {
+      // Normal multiplayer
+      setMatchmakingMode('normal');
       setMode('matchmaking');
     }
   };
 
-  const handleMatchFound = useCallback((roomId: string, player1Id: string, player2Id: string, aiOpponent?: any) => {
+  const handleMatchFound = useCallback((roomId: string, player1Id: string, player2Id: string, gameMode?: 'normal' | 'defense', aiOpponent?: any) => {
     setGameMatch({ roomId, player1Id, player2Id, aiOpponent });
-    setMode('multiplayer');
+    if (gameMode === 'defense') {
+      setMode('defense-line');
+    } else {
+      setMode('multiplayer');
+    }
   }, []);
 
   const handleExitGame = useCallback(() => {
@@ -277,6 +286,7 @@ function GameApp({ profile: initialProfile }: { profile: UserProfile }) {
         <Matchmaking
           playerId={playerId}
           rank={profile.matchmakingRating}
+          mode={matchmakingMode}
           onMatchFound={handleMatchFound}
           onCancel={handleCancelMatchmaking}
           theme={currentTheme}

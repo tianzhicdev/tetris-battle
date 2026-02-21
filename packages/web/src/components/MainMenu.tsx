@@ -21,6 +21,7 @@ export function MainMenu({ onSelectMode, theme, profile, onProfileUpdate, onChal
   const [showAbilities, setShowAbilities] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
   const [showFriends, setShowFriends] = useState(false);
+  const [defenseMode, setDefenseMode] = useState(false);
   const pendingRequests = useFriendStore(state => state.pendingRequests);
 
   // Play menu music on mount
@@ -105,15 +106,64 @@ export function MainMenu({ onSelectMode, theme, profile, onProfileUpdate, onChal
 
         {/* Main Actions */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '15px', width: '100%', maxWidth: '400px' }}>
+          {/* Defense Mode Toggle */}
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: '12px',
+            padding: '8px',
+          }}>
+            <span style={{
+              fontSize: 'clamp(14px, 3.5vw, 16px)',
+              color: defenseMode ? T.accent.cyan : T.text.secondary,
+              fontFamily: T.font.display,
+              fontWeight: 600,
+              transition: 'color 0.3s ease',
+            }}>
+              Defense Line
+            </span>
+            <button
+              onClick={() => {
+                audioManager.playSfx('button_click');
+                setDefenseMode(!defenseMode);
+              }}
+              style={{
+                width: '56px',
+                height: '30px',
+                borderRadius: '15px',
+                background: defenseMode ? T.accent.cyan : 'rgba(255, 255, 255, 0.15)',
+                border: defenseMode ? `2px solid ${T.accent.cyan}` : '2px solid rgba(255, 255, 255, 0.3)',
+                cursor: 'pointer',
+                position: 'relative',
+                transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+                boxShadow: defenseMode ? T.glow(T.accent.cyan, 0.6) : 'none',
+                padding: 0,
+              }}
+            >
+              <div style={{
+                position: 'absolute',
+                top: '2px',
+                left: defenseMode ? 'calc(100% - 24px - 2px)' : '2px',
+                width: '24px',
+                height: '24px',
+                borderRadius: '50%',
+                background: defenseMode ? '#fff' : 'rgba(255, 255, 255, 0.6)',
+                transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+                boxShadow: '0 2px 4px rgba(0, 0, 0, 0.2)',
+              }} />
+            </button>
+          </div>
+
           <button
             onClick={() => {
               audioManager.playSfx('button_click');
-              onSelectMode('multiplayer');
+              onSelectMode(defenseMode ? 'defense-line' : 'multiplayer');
             }}
             style={{
               padding: '20px 50px',
               fontSize: 'clamp(20px, 6vw, 28px)',
-              color: T.accent.purple,
+              color: defenseMode ? T.accent.cyan : T.accent.purple,
               cursor: 'pointer',
               fontFamily: T.font.display,
               fontWeight: 700,
@@ -123,9 +173,9 @@ export function MainMenu({ onSelectMode, theme, profile, onProfileUpdate, onChal
               minHeight: '80px',
               borderRadius: `${T.radius.xl}px`,
               background: T.bg.button,
-              border: `2px solid ${T.accent.purple}44`,
-              boxShadow: T.glow(T.accent.purple, 0.8),
-              textShadow: T.glow(T.accent.purple, 1.5),
+              border: defenseMode ? `2px solid ${T.accent.cyan}44` : `2px solid ${T.accent.purple}44`,
+              boxShadow: defenseMode ? T.glow(T.accent.cyan, 0.8) : T.glow(T.accent.purple, 0.8),
+              textShadow: defenseMode ? T.glow(T.accent.cyan, 1.5) : T.glow(T.accent.purple, 1.5),
               backdropFilter: 'blur(20px)',
             }}
             onMouseDown={(e) => e.currentTarget.style.transform = 'scale(0.95)'}
@@ -135,34 +185,6 @@ export function MainMenu({ onSelectMode, theme, profile, onProfileUpdate, onChal
             onTouchEnd={(e) => e.currentTarget.style.transform = 'scale(1)'}
           >
             PLAY NOW
-          </button>
-
-          <button
-            onClick={() => {
-              audioManager.playSfx('button_click');
-              onSelectMode('defense-line');
-            }}
-            className="glass-button"
-            style={mergeGlass(glassBlue(), {
-              padding: '16px 42px',
-              fontSize: 'clamp(18px, 5vw, 24px)',
-              color: '#ffffff',
-              cursor: 'pointer',
-              fontFamily: 'monospace',
-              fontWeight: 'bold',
-              transition: 'all 0.25s ease',
-              width: '100%',
-              minHeight: '68px',
-              borderRadius: '14px',
-              textShadow: '0 0 14px rgba(0, 212, 255, 0.65)',
-            })}
-            onMouseDown={(e) => e.currentTarget.style.transform = 'scale(0.97)'}
-            onMouseUp={(e) => e.currentTarget.style.transform = 'scale(1)'}
-            onMouseLeave={(e) => e.currentTarget.style.transform = 'scale(1)'}
-            onTouchStart={(e) => e.currentTarget.style.transform = 'scale(0.97)'}
-            onTouchEnd={(e) => e.currentTarget.style.transform = 'scale(1)'}
-          >
-            DEFENSE LINE
           </button>
         </div>
       </div>

@@ -5,6 +5,7 @@ interface QueuedPlayer {
   id: string;
   connectionId: string;
   rank?: number; // Player rank for AI difficulty matching
+  mode?: 'normal' | 'defense'; // Game mode
   aiFallbackTimer: ReturnType<typeof setTimeout> | null;
 }
 
@@ -30,13 +31,15 @@ export default class MatchmakingServer implements Party.Server {
     }
 
     if (data.type === 'join_queue') {
-      this.handleJoinQueue(data.playerId, data.rank, sender);
+      this.handleJoinQueue(data.playerId, data.rank, data.mode, sender);
     } else if (data.type === 'leave_queue') {
       this.handleLeaveQueue(data.playerId);
     }
   }
 
-  handleJoinQueue(playerId: string, rank: number | undefined, conn: Party.Connection) {
+  handleJoinQueue(playerId: string, rank: number | undefined, mode: 'normal' | 'defense' | undefined, conn: Party.Connection) {
+    const gameMode = mode || 'normal';
+
     // Check if already in queue
     if (this.queue.find(p => p.id === playerId)) {
       conn.send(JSON.stringify({ type: 'already_in_queue' }));
@@ -52,13 +55,15 @@ export default class MatchmakingServer implements Party.Server {
       id: playerId,
       connectionId: conn.id,
       rank,
+      mode: gameMode,
       aiFallbackTimer,
     });
 
-    // Send queue position
+    // Send queue position (count only same mode)
+    const sameModeCount = this.queue.filter(p => p.mode === gameMode).length;
     conn.send(JSON.stringify({
       type: 'queue_joined',
-      position: this.queue.length,
+      position: sameModeCount,
     }));
 
     // Try immediate human match first.
@@ -70,18 +75,31 @@ export default class MatchmakingServer implements Party.Server {
   }
 
   tryMatch() {
-    // Need at least 2 players
-    if (this.queue.length < 2) {
-      return;
+    // Group players by mode
+    const normalPlayers = this.queue.filter(p => p.mode === 'normal' || !p.mode);
+    const defensePlayers = this.queue.filter(p => p.mode === 'defense');
+
+    // Try to match normal players
+    if (normalPlayers.length >= 2) {
+      this.matchPlayers(normalPlayers[0], normalPlayers[1], 'normal');
     }
 
-    const player1 = this.queue.shift()!;
-    const player2 = this.queue.shift()!;
+    // Try to match defense players
+    if (defensePlayers.length >= 2) {
+      this.matchPlayers(defensePlayers[0], defensePlayers[1], 'defense');
+    }
+  }
+
+  private matchPlayers(player1: QueuedPlayer, player2: QueuedPlayer, mode: 'normal' | 'defense'): void {
+    // Remove from queue
+    this.queue = this.queue.filter(p => p.id !== player1.id && p.id !== player2.id);
     this.clearPlayerTimer(player1);
     this.clearPlayerTimer(player2);
 
     // Generate room ID
-    const roomId = `game_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    const roomId = mode === 'defense'
+      ? `defenseline_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+      : `game_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 
     // Create match message
     const matchMessage = JSON.stringify({
@@ -89,6 +107,7 @@ export default class MatchmakingServer implements Party.Server {
       roomId,
       player1: player1.id,
       player2: player2.id,
+      mode,
     });
 
     // Send to both players
@@ -116,8 +135,11 @@ export default class MatchmakingServer implements Party.Server {
     this.clearPlayerTimer(player);
 
     try {
-      const aiPersona = generateAIPersona(player.rank);
-      const roomId = `game_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+      const mode = player.mode || 'normal';
+      const aiPersona = mode === 'normal' ? generateAIPersona(player.rank) : null;
+      const roomId = mode === 'defense'
+        ? `defenseline_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+        : `game_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
       const conn = this.getConnection(player.connectionId);
       if (!conn) {
         console.warn(`[MATCHMAKING] Connection not found for AI fallback player ${player.id}`);
@@ -128,8 +150,9 @@ export default class MatchmakingServer implements Party.Server {
         type: 'match_found',
         roomId,
         player1: player.id,
-        player2: aiPersona.id,
-        aiOpponent: aiPersona,
+        player2: mode === 'normal' ? aiPersona!.id : `ai_defense_${Date.now()}`,
+        mode,
+        aiOpponent: mode === 'normal' ? aiPersona : undefined,
       }));
     } catch (error) {
       console.error('[MATCHMAKING] AI fallback failed:', error);

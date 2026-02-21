@@ -2,14 +2,14 @@ import {
   TETROMINO_SHAPES,
   type TetrominoType,
 } from '@tetris-battle/game-core';
-import type {
-  DefenseLinePlayer,
-  DefenseLineCell,
-  DefenseLinePiece,
+import {
+  DEFENSE_DEFENSE_BOARD_ROWS,
+  DEFENSE_DEFENSE_BOARD_COLS,
+  MIN_CONTIGUOUS_FOR_CLEAR,
+  type DefenseLinePlayer,
+  type DefenseLineCell,
+  type DefenseLinePiece,
 } from './DefenseLineGameState';
-
-const BOARD_ROWS = 30;
-const BOARD_COLS = 10;
 
 interface AIPlacement {
   rotation: number;
@@ -71,7 +71,7 @@ export class DefenseLineAI {
       const shape = shapes[rotation];
       const shapeWidth = shape[0].length;
 
-      for (let col = -(shapeWidth - 1); col < BOARD_COLS; col++) {
+      for (let col = -(shapeWidth - 1); col < DEFENSE_BOARD_COLS; col++) {
         // Check if this rotation+col is valid at spawn row
         const testPiece: DefenseLinePiece = {
           type: piece.type,
@@ -127,7 +127,7 @@ export class DefenseLineAI {
     const cells = this.getPieceCells(piece);
 
     for (const [row, col] of cells) {
-      if (row >= 0 && row < BOARD_ROWS && col >= 0 && col < BOARD_COLS) {
+      if (row >= 0 && row < DEFENSE_BOARD_ROWS && col >= 0 && col < DEFENSE_BOARD_COLS) {
         boardCopy[row][col] = player;
       }
     }
@@ -147,7 +147,7 @@ export class DefenseLineAI {
       score += pieceCenterRow * 2;
     } else {
       // B wants to place closer to row 0
-      score += (BOARD_ROWS - 1 - pieceCenterRow) * 2;
+      score += (DEFENSE_BOARD_ROWS - 1 - pieceCenterRow) * 2;
     }
 
     // 3. Penalize holes (empty passable cells with solid above/below)
@@ -165,7 +165,7 @@ export class DefenseLineAI {
       }
     } else {
       for (const [row] of cells) {
-        if (row > BOARD_ROWS - 4) score -= 20;
+        if (row > DEFENSE_BOARD_ROWS - 4) score -= 20;
       }
     }
 
@@ -174,30 +174,29 @@ export class DefenseLineAI {
 
   private countClearableRows(board: DefenseLineCell[][], player: DefenseLinePlayer): number {
     let count = 0;
-    for (let row = 0; row < BOARD_ROWS; row++) {
+    for (let row = 0; row < DEFENSE_BOARD_ROWS; row++) {
+      let maxRun = 0;
+      let currentRun = 0;
       let hasPlayerPiece = false;
-      let allFilled = true;
 
-      for (let col = 0; col < BOARD_COLS; col++) {
+      for (let col = 0; col < DEFENSE_BOARD_COLS; col++) {
         const cell = board[row][col];
-        if (cell === player) {
-          hasPlayerPiece = true;
-        }
 
-        if (player === 'a') {
-          if (cell !== 'a' && cell !== 'x') {
-            allFilled = false;
-            break;
-          }
+        if (cell === player) hasPlayerPiece = true;
+
+        const filled = player === 'a'
+          ? (cell === 'a' || cell === 'x')
+          : (cell === 'b' || cell === '0');
+
+        if (filled) {
+          currentRun++;
+          if (currentRun > maxRun) maxRun = currentRun;
         } else {
-          if (cell !== 'b' && cell !== '0') {
-            allFilled = false;
-            break;
-          }
+          currentRun = 0;
         }
       }
 
-      if (allFilled && hasPlayerPiece) {
+      if (hasPlayerPiece && maxRun >= MIN_CONTIGUOUS_FOR_CLEAR) {
         count++;
       }
     }
@@ -209,9 +208,9 @@ export class DefenseLineAI {
 
     if (player === 'a') {
       // A drops downward: scan from top, count empty-for-A cells below solid-for-A cells
-      for (let col = 0; col < BOARD_COLS; col++) {
+      for (let col = 0; col < DEFENSE_BOARD_COLS; col++) {
         let solidFound = false;
-        for (let row = 0; row < BOARD_ROWS; row++) {
+        for (let row = 0; row < DEFENSE_BOARD_ROWS; row++) {
           const cell = board[row][col];
           const isSolid = cell === 'a' || cell === 'x';
           if (isSolid) {
@@ -223,9 +222,9 @@ export class DefenseLineAI {
       }
     } else {
       // B drops upward: scan from bottom
-      for (let col = 0; col < BOARD_COLS; col++) {
+      for (let col = 0; col < DEFENSE_BOARD_COLS; col++) {
         let solidFound = false;
-        for (let row = BOARD_ROWS - 1; row >= 0; row--) {
+        for (let row = DEFENSE_BOARD_ROWS - 1; row >= 0; row--) {
           const cell = board[row][col];
           const isSolid = cell === 'b' || cell === '0';
           if (isSolid) {
@@ -243,21 +242,21 @@ export class DefenseLineAI {
   private getBumpiness(board: DefenseLineCell[][], player: DefenseLinePlayer): number {
     const heights: number[] = [];
 
-    for (let col = 0; col < BOARD_COLS; col++) {
+    for (let col = 0; col < DEFENSE_BOARD_COLS; col++) {
       let height = 0;
 
       if (player === 'a') {
         // Height from top: first solid-for-A cell
-        for (let row = 0; row < BOARD_ROWS; row++) {
+        for (let row = 0; row < DEFENSE_BOARD_ROWS; row++) {
           const cell = board[row][col];
           if (cell === 'a') {
-            height = BOARD_ROWS - row;
+            height = DEFENSE_BOARD_ROWS - row;
             break;
           }
         }
       } else {
         // Height from bottom: first solid-for-B cell
-        for (let row = BOARD_ROWS - 1; row >= 0; row--) {
+        for (let row = DEFENSE_BOARD_ROWS - 1; row >= 0; row--) {
           const cell = board[row][col];
           if (cell === 'b') {
             height = row + 1;
@@ -285,7 +284,7 @@ export class DefenseLineAI {
     const cells = this.getPieceCells(piece);
 
     for (const [row, col] of cells) {
-      if (col < 0 || col >= BOARD_COLS || row < 0 || row >= BOARD_ROWS) {
+      if (col < 0 || col >= DEFENSE_BOARD_COLS || row < 0 || row >= DEFENSE_BOARD_ROWS) {
         return false;
       }
       const cell = board[row][col];

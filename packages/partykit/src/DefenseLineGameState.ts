@@ -40,9 +40,10 @@ interface InputResult extends ResolutionResult {
   changed: boolean;
 }
 
-const BOARD_ROWS = 30;
-const BOARD_COLS = 10;
-const CLEAR_TARGET = 10;
+export const DEFENSE_DEFENSE_BOARD_ROWS = 40;
+export const DEFENSE_DEFENSE_BOARD_COLS = 10;
+const DIVIDER_ROW = 20; // rows 0-19 = '0' zone, rows 20-39 = 'x' zone
+export const MIN_CONTIGUOUS_FOR_CLEAR = 5; // 5+ contiguous filled cells clears the row
 
 export class DefenseLineGameState {
   board: DefenseLineCell[][];
@@ -56,9 +57,9 @@ export class DefenseLineGameState {
 
   constructor(seed: number = Date.now()) {
     this.rng = new SeededRandom(seed);
-    // Initialize board with '0' background (rows 0-14) and 'x' background (rows 15-29)
-    this.board = Array.from({ length: BOARD_ROWS }, (_, row) =>
-      Array.from({ length: BOARD_COLS }, () => (row < 15 ? '0' : 'x'))
+    // Initialize board: rows 0-19 = '0', rows 20-39 = 'x'
+    this.board = Array.from({ length: DEFENSE_DEFENSE_BOARD_ROWS }, (_, row) =>
+      Array.from({ length: DEFENSE_DEFENSE_BOARD_COLS }, () => (row < DIVIDER_ROW ? '0' : 'x'))
     );
     this.activeRows = new Set<number>();
     this.playerA = this.createPlayerState();
@@ -290,24 +291,24 @@ export class DefenseLineGameState {
       if (player === 'a') {
         // A clears: shift rows 0..row-1 down by 1, row 0 becomes all '0'
         for (let r = row; r > 0; r--) {
-          for (let col = 0; col < BOARD_COLS; col++) {
+          for (let col = 0; col < DEFENSE_BOARD_COLS; col++) {
             this.board[r][col] = this.board[r - 1][col];
           }
         }
         // New row 0 = all '0'
-        for (let col = 0; col < BOARD_COLS; col++) {
+        for (let col = 0; col < DEFENSE_BOARD_COLS; col++) {
           this.board[0][col] = '0';
         }
       } else {
         // B clears: shift rows row+1..29 up by 1, row 29 becomes all 'x'
-        for (let r = row; r < BOARD_ROWS - 1; r++) {
-          for (let col = 0; col < BOARD_COLS; col++) {
+        for (let r = row; r < DEFENSE_BOARD_ROWS - 1; r++) {
+          for (let col = 0; col < DEFENSE_BOARD_COLS; col++) {
             this.board[r][col] = this.board[r + 1][col];
           }
         }
         // New row 29 = all 'x'
-        for (let col = 0; col < BOARD_COLS; col++) {
-          this.board[BOARD_ROWS - 1][col] = 'x';
+        for (let col = 0; col < DEFENSE_BOARD_COLS; col++) {
+          this.board[DEFENSE_BOARD_ROWS - 1][col] = 'x';
         }
       }
     }
@@ -326,7 +327,7 @@ export class DefenseLineGameState {
   private lockPiece(player: DefenseLinePlayer, piece: DefenseLinePiece): void {
     const cells = this.getPieceCells(piece);
     for (const [row, col] of cells) {
-      if (row < 0 || row >= BOARD_ROWS || col < 0 || col >= BOARD_COLS) {
+      if (row < 0 || row >= DEFENSE_BOARD_ROWS || col < 0 || col >= DEFENSE_BOARD_COLS) {
         continue;
       }
       this.board[row][col] = player;
@@ -334,24 +335,37 @@ export class DefenseLineGameState {
     }
   }
 
+  /**
+   * A row is clearable if it has at least MIN_CONTIGUOUS_FOR_CLEAR contiguous
+   * "filled" cells for the given player. The row must also contain at least one
+   * placed piece ('a' or 'b') — pure background rows don't clear.
+   */
   private getClearableRows(player: DefenseLinePlayer): number[] {
     const rows = Array.from(this.activeRows).sort((a, b) => a - b);
 
     return rows.filter((row) => {
-      for (let col = 0; col < BOARD_COLS; col++) {
+      let maxRun = 0;
+      let currentRun = 0;
+      let hasPlayerPiece = false;
+
+      for (let col = 0; col < DEFENSE_BOARD_COLS; col++) {
         const cell = this.board[row][col];
 
-        if (player === 'a') {
-          // For A: row is filled if all cells are 'a' or 'x'
-          if (cell === 'a' || cell === 'x') continue;
-          return false; // any 'b' or '0' = not filled
+        if (cell === player) hasPlayerPiece = true;
+
+        const filled = player === 'a'
+          ? (cell === 'a' || cell === 'x')
+          : (cell === 'b' || cell === '0');
+
+        if (filled) {
+          currentRun++;
+          if (currentRun > maxRun) maxRun = currentRun;
         } else {
-          // For B: row is filled if all cells are 'b' or '0'
-          if (cell === 'b' || cell === '0') continue;
-          return false; // any 'a' or 'x' = not filled
+          currentRun = 0;
         }
       }
-      return true;
+
+      return hasPlayerPiece && maxRun >= MIN_CONTIGUOUS_FOR_CLEAR;
     });
   }
 
@@ -359,7 +373,7 @@ export class DefenseLineGameState {
     const cells = this.getPieceCells(piece);
 
     for (const [row, col] of cells) {
-      if (col < 0 || col >= BOARD_COLS || row < 0 || row >= BOARD_ROWS) {
+      if (col < 0 || col >= DEFENSE_BOARD_COLS || row < 0 || row >= DEFENSE_BOARD_ROWS) {
         return false;
       }
       if (this.isSolidForPlayer(player, row, col)) {
@@ -401,8 +415,8 @@ export class DefenseLineGameState {
 
   private createSpawnPiece(player: DefenseLinePlayer, type: TetrominoType): DefenseLinePiece {
     const shape = TETROMINO_SHAPES[type][0];
-    const spawnCol = Math.floor((BOARD_COLS - shape[0].length) / 2);
-    const spawnRow = player === 'a' ? 0 : BOARD_ROWS - shape.length;
+    const spawnCol = Math.floor((DEFENSE_BOARD_COLS - shape[0].length) / 2);
+    const spawnRow = player === 'a' ? 0 : DEFENSE_BOARD_ROWS - shape.length;
 
     return {
       type,
@@ -440,8 +454,8 @@ export class DefenseLineGameState {
 
   private rebuildActiveRows(): void {
     this.activeRows.clear();
-    for (let row = 0; row < BOARD_ROWS; row++) {
-      for (let col = 0; col < BOARD_COLS; col++) {
+    for (let row = 0; row < DEFENSE_BOARD_ROWS; row++) {
+      for (let col = 0; col < DEFENSE_BOARD_COLS; col++) {
         const cell = this.board[row][col];
         // Row is active if it has any 'a' or 'b' piece
         if (cell === 'a' || cell === 'b') {

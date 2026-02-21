@@ -5,7 +5,8 @@ import { normalizePartykitHost } from '../services/partykit/host';
 interface MatchmakingProps {
   playerId: string;
   rank: number;
-  onMatchFound: (roomId: string, player1Id: string, player2Id: string, aiOpponent?: any) => void;
+  mode?: 'normal' | 'defense';
+  onMatchFound: (roomId: string, player1Id: string, player2Id: string, mode?: 'normal' | 'defense', aiOpponent?: any) => void;
   onCancel: () => void;
   theme: any;
 }
@@ -16,7 +17,7 @@ interface WebSocketEvent {
   data: any;
 }
 
-export function Matchmaking({ playerId, rank, onMatchFound, onCancel, theme }: MatchmakingProps) {
+export function Matchmaking({ playerId, rank, mode = 'normal', onMatchFound, onCancel, theme }: MatchmakingProps) {
   const [queuePosition, setQueuePosition] = useState<number>(-1);
   const [queueDuration, setQueueDuration] = useState<number>(0);
   const [dots, setDots] = useState('');
@@ -45,7 +46,7 @@ export function Matchmaking({ playerId, rank, onMatchFound, onCancel, theme }: M
   // Initialize matchmaking service
   if (!matchmakingRef.current) {
     const host = normalizePartykitHost(import.meta.env.VITE_PARTYKIT_HOST);
-    matchmakingRef.current = new PartykitMatchmaking(playerId, host, rank, addWsEvent);
+    matchmakingRef.current = new PartykitMatchmaking(playerId, host, rank, mode, addWsEvent);
   }
   const matchmaking = matchmakingRef.current;
 
@@ -70,9 +71,9 @@ export function Matchmaking({ playerId, rank, onMatchFound, onCancel, theme }: M
 
   useEffect(() => {
     matchmaking.connect(
-      (roomId, player1, player2, aiOpponent) => {
-        console.log('Match found:', roomId, player1, player2, aiOpponent ? '(AI Match)' : '');
-        onMatchFoundRef.current(roomId, player1, player2, aiOpponent);
+      (roomId, player1, player2, mode, aiOpponent) => {
+        console.log('Match found:', roomId, player1, player2, mode || 'normal', aiOpponent ? '(AI Match)' : '');
+        onMatchFoundRef.current(roomId, player1, player2, mode, aiOpponent);
       },
       (position) => {
         setQueuePosition(position);

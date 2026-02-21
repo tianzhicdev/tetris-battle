@@ -34,8 +34,9 @@ interface DefenseLineRendererProps {
   clearedRows?: { player: DefenseLinePlayer; rows: number[] } | null;
 }
 
-const BOARD_ROWS = 30;
+const BOARD_ROWS = 40;
 const BOARD_COLS = 10;
+const DIVIDER_ROW = 20; // rows 0-19 = '0' zone, rows 20-39 = 'x' zone
 
 function getPieceCells(piece: DefenseLinePiece): Array<[number, number]> {
   const shapes = TETROMINO_SHAPES[piece.type];
@@ -94,9 +95,9 @@ export function DefenseLineRenderer({ state, viewAs }: DefenseLineRendererProps)
       const [row, col] = mapToActual(visualRow, visualCol, viewAs);
       const key = `${row}:${col}`;
 
-      const onDivider = row === 14;
+      const onDivider = row === DIVIDER_ROW - 1;
 
-      const cell = state.board[row]?.[col] || (row < 15 ? '0' : 'x');
+      const cell = state.board[row]?.[col] || (row < DIVIDER_ROW ? '0' : 'x');
       const hasA = aActive.has(key);
       const hasB = bActive.has(key);
 

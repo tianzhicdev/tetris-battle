@@ -5,17 +5,19 @@ export class PartykitMatchmaking {
   private playerId: string;
   private host: string;
   private rank: number;
+  private mode: 'normal' | 'defense';
   private onDebugEvent?: (type: 'sent' | 'received' | 'status', data: any) => void;
 
-  constructor(playerId: string, host: string, rank: number, onDebugEvent?: (type: 'sent' | 'received' | 'status', data: any) => void) {
+  constructor(playerId: string, host: string, rank: number, mode: 'normal' | 'defense' = 'normal', onDebugEvent?: (type: 'sent' | 'received' | 'status', data: any) => void) {
     this.playerId = playerId;
     this.host = host;
     this.rank = rank;
+    this.mode = mode;
     this.onDebugEvent = onDebugEvent;
   }
 
   connect(
-    onMatchFound: (roomId: string, player1: string, player2: string, aiOpponent?: any) => void,
+    onMatchFound: (roomId: string, player1: string, player2: string, mode?: 'normal' | 'defense', aiOpponent?: any) => void,
     onQueueUpdate?: (position: number) => void,
     onStatusChange?: (status: 'connecting' | 'connected' | 'disconnected') => void
   ): void {
@@ -56,7 +58,7 @@ export class PartykitMatchmaking {
           break;
 
         case 'match_found':
-          onMatchFound(data.roomId, data.player1, data.player2, data.aiOpponent);
+          onMatchFound(data.roomId, data.player1, data.player2, data.mode, data.aiOpponent);
           this.disconnect();
           break;
 
@@ -97,11 +99,12 @@ export class PartykitMatchmaking {
 
   joinQueue(): void {
     if (this.socket && this.socket.readyState === WebSocket.OPEN) {
-      console.log('[MATCHMAKING] Sending join_queue with rank:', this.rank);
+      console.log('[MATCHMAKING] Sending join_queue with rank:', this.rank, 'mode:', this.mode);
       const message = {
         type: 'join_queue',
         playerId: this.playerId,
         rank: this.rank,
+        mode: this.mode,
       };
       this.onDebugEvent?.('sent', message);
       this.socket.send(JSON.stringify(message));
