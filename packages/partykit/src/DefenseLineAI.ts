@@ -9,7 +9,7 @@ import type {
 } from './DefenseLineGameState';
 
 const BOARD_ROWS = 30;
-const BOARD_COLS = 5;
+const BOARD_COLS = 10;
 
 interface AIPlacement {
   rotation: number;

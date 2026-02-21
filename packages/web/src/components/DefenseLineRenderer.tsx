@@ -35,7 +35,7 @@ interface DefenseLineRendererProps {
 }
 
 const BOARD_ROWS = 30;
-const BOARD_COLS = 5;
+const BOARD_COLS = 10;
 
 function getPieceCells(piece: DefenseLinePiece): Array<[number, number]> {
   const shapes = TETROMINO_SHAPES[piece.type];

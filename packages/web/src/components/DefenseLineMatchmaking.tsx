@@ -10,7 +10,7 @@ interface DefenseLineMatchmakingProps {
   onMatchReady: (player: DefenseLinePlayer) => void;
 }
 
-const ROOM_ID = 'global-v4';
+const ROOM_ID = 'global-v5';
 
 export function DefenseLineMatchmaking({ playerId, theme, onCancel, onMatchReady }: DefenseLineMatchmakingProps) {
   const [connected, setConnected] = useState(false);

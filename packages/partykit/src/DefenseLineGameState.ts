@@ -41,7 +41,7 @@ interface InputResult extends ResolutionResult {
 }
 
 const BOARD_ROWS = 30;
-const BOARD_COLS = 5;
+const BOARD_COLS = 10;
 const CLEAR_TARGET = 10;
 
 export class DefenseLineGameState {
