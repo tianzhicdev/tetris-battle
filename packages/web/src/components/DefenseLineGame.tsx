@@ -5,6 +5,8 @@ import { normalizePartykitHost } from '../services/partykit/host';
 import { NextPiecePanel } from './NextPiecePanel';
 import { FloatingBackground } from './FloatingBackground';
 import { audioManager } from '../services/audioManager';
+import { useElementSize } from '../hooks/useElementSize';
+import { computeBoardDisplaySize } from './game/boardDisplaySizing';
 
 type DefenseLinePlayer = 'a' | 'b';
 type DefenseLineCell = '0' | 'x' | 'a' | 'b';
@@ -42,10 +44,6 @@ interface DefenseLineGameProps {
 const BOARD_ROWS = 20;
 const BOARD_COLS = 10;
 const DIVIDER_ROW = 10;
-const MAIN_CANVAS_WIDTH = 250;
-const MAIN_CANVAS_HEIGHT = 500;
-const OPPONENT_CANVAS_WIDTH = 80;
-const OPPONENT_CANVAS_HEIGHT = 160;
 const TICK_MS = 700;
 
 function getPieceCells(piece: DefenseLinePiece | null): Array<[number, number]> {
@@ -174,6 +172,7 @@ function playClearSound(clearedRows: number): void {
 }
 
 export function DefenseLineGame({ playerId, roomId, theme, onExit }: DefenseLineGameProps) {
+  const opponentMiniBoardWidth = 'clamp(72px, 18vw, 98px)';
   const [state, setState] = useState<DefenseLineGameState | null>(null);
   const [playerSide, setPlayerSide] = useState<DefenseLinePlayer | null>(null);
   const [countdown, setCountdown] = useState<number | null>(null);
@@ -189,8 +188,17 @@ export function DefenseLineGame({ playerId, roomId, theme, onExit }: DefenseLine
   const selfKickTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const layoutBlastTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  const topInfoZoneRef = useRef<HTMLDivElement>(null);
+  const leftInfoZoneRef = useRef<HTMLDivElement>(null);
+  const playerBoardZoneRef = useRef<HTMLDivElement>(null);
+  const rightInfoZoneRef = useRef<HTMLDivElement>(null);
+  const actionZoneRef = useRef<HTMLDivElement>(null);
+  const opponentBoardViewportRef = useRef<HTMLDivElement>(null);
   const mainCanvasRef = useRef<HTMLCanvasElement>(null);
   const opponentCanvasRef = useRef<HTMLCanvasElement>(null);
+  const playerBoardZoneSize = useElementSize(playerBoardZoneRef);
+  const rightInfoZoneSize = useElementSize(rightInfoZoneRef);
+  const opponentBoardViewportSize = useElementSize(opponentBoardViewportRef);
 
   const yourState = useMemo(() => {
     if (!state || !playerSide) return null;
@@ -223,6 +231,40 @@ export function DefenseLineGame({ playerId, roomId, theme, onExit }: DefenseLine
     if (syncAgeMs < TICK_MS * 2) return '#fbbf24';
     return '#fb923c';
   }, [isConnected, syncAgeMs]);
+  const defenseBoardWidth = state?.board?.[0]?.length ?? BOARD_COLS;
+  const defenseBoardHeight = state?.board?.length ?? BOARD_ROWS;
+
+  const mainBoardDisplay = useMemo(
+    () =>
+      computeBoardDisplaySize({
+        availableWidth: playerBoardZoneSize.width,
+        availableHeight: playerBoardZoneSize.height,
+        boardWidth: defenseBoardWidth,
+        boardHeight: defenseBoardHeight,
+        baseWidthColumns: 10,
+        minCellSize: 4,
+      }),
+    [defenseBoardHeight, defenseBoardWidth, playerBoardZoneSize.height, playerBoardZoneSize.width]
+  );
+
+  const opponentBoardDisplay = useMemo(
+    () =>
+      computeBoardDisplaySize({
+        availableWidth: opponentBoardViewportSize.width,
+        availableHeight: opponentBoardViewportSize.height,
+        boardWidth: defenseBoardWidth,
+        boardHeight: defenseBoardHeight,
+        baseWidthColumns: 10,
+        minCellSize: 2,
+      }),
+    [defenseBoardHeight, defenseBoardWidth, opponentBoardViewportSize.height, opponentBoardViewportSize.width]
+  );
+
+  const rightInfoPanelsMaxHeight = useMemo(() => {
+    if (rightInfoZoneSize.height <= 0) return 140;
+    const reservedForBoard = opponentBoardDisplay.pixelHeight + 40;
+    return Math.max(60, rightInfoZoneSize.height - reservedForBoard);
+  }, [opponentBoardDisplay.pixelHeight, rightInfoZoneSize.height]);
 
   const triggerClearBlast = useCallback((clearedBySelf: boolean) => {
     if (layoutBlastTimeoutRef.current) {
@@ -357,7 +399,16 @@ export function DefenseLineGame({ playerId, roomId, theme, onExit }: DefenseLine
     drawDefenseBoard(mainCanvasRef.current, state, playerSide, theme);
     const opponentSide: DefenseLinePlayer = playerSide === 'a' ? 'b' : 'a';
     drawDefenseBoard(opponentCanvasRef.current, state, opponentSide, theme);
-  }, [state, playerSide, theme, selfBoardKick]);
+  }, [
+    mainBoardDisplay.pixelHeight,
+    mainBoardDisplay.pixelWidth,
+    opponentBoardDisplay.pixelHeight,
+    opponentBoardDisplay.pixelWidth,
+    playerSide,
+    selfBoardKick,
+    state,
+    theme,
+  ]);
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -421,12 +472,15 @@ export function DefenseLineGame({ playerId, roomId, theme, onExit }: DefenseLine
       <FloatingBackground />
 
       <div
+        ref={topInfoZoneRef}
+        data-zone="top-info-zone"
         style={{
           position: 'relative',
           zIndex: 7,
           paddingTop: 'max(12px, calc(env(safe-area-inset-top) + 8px))',
           paddingLeft: 'clamp(8px, 2vw, 14px)',
           paddingRight: 'clamp(8px, 2vw, 14px)',
+          paddingBottom: 'clamp(4px, 0.7vh, 8px)',
           pointerEvents: 'none',
         }}
       >
@@ -533,30 +587,13 @@ export function DefenseLineGame({ playerId, roomId, theme, onExit }: DefenseLine
             {syncAgeMs !== null ? `${Math.round(syncAgeMs)}ms` : '--'}
           </span>
         </button>
-
-        <div
-          style={{
-            position: 'absolute',
-            top: 'calc(max(12px, calc(env(safe-area-inset-top) + 8px)) + 2px)',
-            left: 'clamp(8px, 2vw, 14px)',
-            borderRadius: '6px',
-            border: '1px solid rgba(255,255,255,0.14)',
-            background: 'rgba(8, 12, 20, 0.74)',
-            padding: '4px 8px',
-            fontSize: '11px',
-            fontWeight: 800,
-            letterSpacing: '0.6px',
-            color: winner ? '#7dffb0' : countdown !== null && countdown > 0 ? '#ffd166' : 'rgba(255,255,255,0.82)',
-            textTransform: 'uppercase',
-          }}
-        >
-          {statusText}
-        </div>
       </div>
 
       <div
+        data-zone="middle-play-zone"
         style={{
-          display: 'flex',
+          display: 'grid',
+          gridTemplateColumns: 'auto minmax(0, 1fr) auto',
           minHeight: 0,
           overflow: 'hidden',
           padding: 'clamp(4px, 0.8vh, 8px) clamp(4px, 0.8vw, 8px) clamp(6px, 1vh, 10px)',
@@ -565,55 +602,74 @@ export function DefenseLineGame({ playerId, roomId, theme, onExit }: DefenseLine
           transition: 'transform 180ms ease-out',
         }}
       >
-        <div style={{ flex: 1, display: 'flex', minWidth: 0, minHeight: 0, justifyContent: 'center', alignItems: 'flex-start' }}>
-          <div style={{ display: 'flex', alignItems: 'flex-start', gap: '4px', maxHeight: '100%' }}>
-            {nextPieces.length > 0 && <NextPiecePanel nextPieces={nextPieces} />}
+        <div
+          ref={leftInfoZoneRef}
+          data-zone="left-info-zone"
+          style={{
+            minWidth: 0,
+            minHeight: 0,
+            display: 'flex',
+            alignItems: 'flex-start',
+            justifyContent: 'center',
+          }}
+        >
+          {nextPieces.length > 0 && <NextPiecePanel nextPieces={nextPieces} />}
+        </div>
+
+        <div
+          ref={playerBoardZoneRef}
+          data-zone="player-board-zone"
+          style={{
+            minWidth: 0,
+            minHeight: 0,
+            display: 'flex',
+            alignItems: 'flex-start',
+            justifyContent: 'center',
+          }}
+        >
+          <div
+            style={{
+              position: 'relative',
+              background: 'rgba(5, 5, 20, 0.75)',
+              backdropFilter: 'blur(4px)',
+              WebkitBackdropFilter: 'blur(4px)',
+              borderRadius: 'clamp(6px, 1.5vw, 10px)',
+              transform: selfBoardKick ? 'translateY(-4px)' : 'translateY(0)',
+              transition: 'transform 160ms ease-out',
+            }}
+          >
+            <canvas
+              ref={mainCanvasRef}
+              width={mainBoardDisplay.pixelWidth}
+              height={mainBoardDisplay.pixelHeight}
+              style={{
+                display: 'block',
+                border: '1px solid rgba(0, 240, 240, 0.15)',
+                backgroundColor: 'transparent',
+                width: `${mainBoardDisplay.pixelWidth}px`,
+                height: `${mainBoardDisplay.pixelHeight}px`,
+                borderRadius: 'clamp(6px, 1.5vw, 10px)',
+                boxShadow: '0 0 20px rgba(0, 240, 240, 0.08), 0 0 60px rgba(0, 240, 240, 0.03)',
+              }}
+            />
             <div
               style={{
-                position: 'relative',
-                maxHeight: '100%',
-                height: '100%',
-                background: 'rgba(5, 5, 20, 0.75)',
-                backdropFilter: 'blur(4px)',
-                WebkitBackdropFilter: 'blur(4px)',
+                position: 'absolute',
+                inset: 0,
                 borderRadius: 'clamp(6px, 1.5vw, 10px)',
-                transform: selfBoardKick ? 'translateY(-4px)' : 'translateY(0)',
-                transition: 'transform 160ms ease-out',
+                pointerEvents: 'none',
+                background: 'radial-gradient(ellipse at center, transparent 40%, rgba(10,10,24,0.6) 100%)',
               }}
-            >
-              <canvas
-                ref={mainCanvasRef}
-                width={MAIN_CANVAS_WIDTH}
-                height={MAIN_CANVAS_HEIGHT}
-                style={{
-                  display: 'block',
-                  border: '1px solid rgba(0, 240, 240, 0.15)',
-                  backgroundColor: 'transparent',
-                  maxHeight: '100%',
-                  height: '100%',
-                  width: 'auto',
-                  maxWidth: '100%',
-                  objectFit: 'contain',
-                  borderRadius: 'clamp(6px, 1.5vw, 10px)',
-                  boxShadow: '0 0 20px rgba(0, 240, 240, 0.08), 0 0 60px rgba(0, 240, 240, 0.03)',
-                }}
-              />
-              <div
-                style={{
-                  position: 'absolute',
-                  inset: 0,
-                  borderRadius: 'clamp(6px, 1.5vw, 10px)',
-                  pointerEvents: 'none',
-                  background: 'radial-gradient(ellipse at center, transparent 40%, rgba(10,10,24,0.6) 100%)',
-                }}
-              />
-            </div>
+            />
           </div>
         </div>
 
         <div
+          ref={rightInfoZoneRef}
+          data-zone="right-info-zone"
           style={{
             width: 'clamp(85px, 22vw, 110px)',
+            minHeight: 0,
             display: 'flex',
             flexDirection: 'column',
             gap: 'clamp(4px, 1vh, 8px)',
@@ -631,22 +687,26 @@ export function DefenseLineGame({ playerId, roomId, theme, onExit }: DefenseLine
             }}
           >
             <div
+              ref={opponentBoardViewportRef}
               style={{
                 position: 'relative',
-                width: 'clamp(65px, 17vw, 80px)',
-                height: 'clamp(90px, 23vw, 130px)',
+                width: opponentMiniBoardWidth,
+                height: 'clamp(130px, 34vw, 160px)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
               }}
             >
               <canvas
                 ref={opponentCanvasRef}
-                width={OPPONENT_CANVAS_WIDTH}
-                height={OPPONENT_CANVAS_HEIGHT}
+                width={opponentBoardDisplay.pixelWidth}
+                height={opponentBoardDisplay.pixelHeight}
                 style={{
                   display: 'block',
                   border: '1px solid rgba(255, 255, 255, 0.1)',
                   backgroundColor: 'rgba(5, 5, 20, 0.72)',
-                  width: '100%',
-                  height: '100%',
+                  width: `${opponentBoardDisplay.pixelWidth}px`,
+                  height: `${opponentBoardDisplay.pixelHeight}px`,
                   borderRadius: 'clamp(4px, 1vw, 6px)',
                   boxShadow: '0 0 8px rgba(255, 255, 255, 0.08)',
                 }}
@@ -678,9 +738,10 @@ export function DefenseLineGame({ playerId, roomId, theme, onExit }: DefenseLine
               display: 'flex',
               flexDirection: 'column',
               gap: '4px',
-              width: 'clamp(65px, 17vw, 80px)',
-              maxWidth: 'clamp(65px, 17vw, 80px)',
+              width: opponentMiniBoardWidth,
+              maxWidth: opponentMiniBoardWidth,
               alignSelf: 'center',
+              maxHeight: `${rightInfoPanelsMaxHeight}px`,
               overflowY: 'auto',
             }}
           >
@@ -734,13 +795,15 @@ export function DefenseLineGame({ playerId, roomId, theme, onExit }: DefenseLine
                 textAlign: 'center',
               }}
             >
-              SYNC {syncAgeMs !== null ? `${Math.round(syncAgeMs)}ms` : '--'}
+              {statusText}
             </div>
           </div>
         </div>
       </div>
 
       <div
+        ref={actionZoneRef}
+        data-zone="action-zone"
         style={{
           height: 'clamp(60px, 12vh, 80px)',
           display: 'flex',

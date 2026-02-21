@@ -8,6 +8,8 @@ export interface GameStateUpdate {
   timestamp: number;
   yourState: {
     board: any[][];
+    boardWidth: number;
+    boardHeight: number;
     currentPiece: any;
     magnetGhost?: any | null;
     nextPieces: string[];
@@ -22,6 +24,8 @@ export interface GameStateUpdate {
   };
   opponentState: {
     board: any[][];
+    boardWidth: number;
+    boardHeight: number;
     currentPiece: any;
     magnetGhost?: any | null;
     nextPieces: string[];

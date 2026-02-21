@@ -1228,6 +1228,8 @@ export class ServerGameState {
 
     return {
       board: this.gameState.board.grid,
+      boardWidth: this.gameState.board.width,
+      boardHeight: this.gameState.board.height,
       currentPiece: this.gameState.currentPiece,
       magnetGhost,
       nextPieces: this.gameState.nextPieces.slice(0, 5),
