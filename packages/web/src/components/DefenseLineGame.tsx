@@ -644,37 +644,43 @@ export function DefenseLineGame({ playerId, roomId, theme, onExit, aiOpponent }:
     ensureOverlayLoop();
   }, [ensureOverlayLoop, theme]);
 
-  const sendInput = useCallback((payload: unknown) => {
+  const canSendGameplayInput = useMemo(() => {
+    return !!playerSide && isConnected && state?.status === 'playing' && !winner;
+  }, [isConnected, playerSide, state?.status, winner]);
+
+  const sendGameplayInput = useCallback((payload: unknown): boolean => {
+    if (!canSendGameplayInput) return false;
     const socket = socketRef.current;
-    if (!socket || socket.readyState !== WebSocket.OPEN) return;
+    if (!socket || socket.readyState !== WebSocket.OPEN) return false;
     socket.send(JSON.stringify(payload));
-  }, []);
+    return true;
+  }, [canSendGameplayInput]);
 
   const handleMoveLeft = useCallback(() => {
+    if (!sendGameplayInput({ type: 'move', direction: 'left' })) return;
     audioManager.playSfx('piece_move_left', 0.3);
-    sendInput({ type: 'move', direction: 'left' });
-  }, [sendInput]);
+  }, [sendGameplayInput]);
 
   const handleMoveRight = useCallback(() => {
+    if (!sendGameplayInput({ type: 'move', direction: 'right' })) return;
     audioManager.playSfx('piece_move_right', 0.3);
-    sendInput({ type: 'move', direction: 'right' });
-  }, [sendInput]);
+  }, [sendGameplayInput]);
 
   const handleRotate = useCallback(() => {
+    if (!sendGameplayInput({ type: 'rotate', direction: 'cw' })) return;
     audioManager.playSfx('piece_rotate', 0.45);
-    sendInput({ type: 'rotate', direction: 'cw' });
-  }, [sendInput]);
+  }, [sendGameplayInput]);
 
   const handleSoftDrop = useCallback(() => {
+    if (!sendGameplayInput({ type: 'soft_drop' })) return;
     audioManager.playSfx('soft_drop', 0.4);
-    sendInput({ type: 'soft_drop' });
-  }, [sendInput]);
+  }, [sendGameplayInput]);
 
   const handleHardDrop = useCallback(() => {
+    if (!sendGameplayInput({ type: 'hard_drop' })) return;
     audioManager.playSfx('hard_drop', 0.65);
     triggerHardDropEffects();
-    sendInput({ type: 'hard_drop' });
-  }, [sendInput, triggerHardDropEffects]);
+  }, [sendGameplayInput, triggerHardDropEffects]);
 
   useEffect(() => {
     playerSideRef.current = playerSide;
@@ -701,6 +707,13 @@ export function DefenseLineGame({ playerId, roomId, theme, onExit, aiOpponent }:
   }, []);
 
   useEffect(() => {
+    setState(null);
+    setPlayerSide(null);
+    setCountdown(null);
+    setWinner(null);
+    setLastStateAtMs(null);
+    boardSnapshotRef.current = null;
+
     const socket: PartySocketLike = aiOpponent?.local
       ? createLocalPartySocket('defenseline', roomId)
       : new PartySocket({
@@ -731,6 +744,29 @@ export function DefenseLineGame({ playerId, roomId, theme, onExit, aiOpponent }:
       try {
         data = JSON.parse(event.data);
       } catch {
+        return;
+      }
+
+      if (data.type === 'room_state') {
+        if (data.winner === 'a' || data.winner === 'b') {
+          setWinner(data.winner);
+        }
+        if (data.status === 'playing') {
+          setCountdown(null);
+        }
+        if (data.status === 'waiting' || data.status === 'countdown' || data.status === 'playing' || data.status === 'finished') {
+          setState((previous) => {
+            if (!previous) return previous;
+            const nextWinner = data.winner === 'a' || data.winner === 'b'
+              ? data.winner
+              : previous.winner;
+            return {
+              ...previous,
+              status: data.status,
+              winner: nextWinner,
+            };
+          });
+        }
         return;
       }
 
@@ -786,13 +822,18 @@ export function DefenseLineGame({ playerId, roomId, theme, onExit, aiOpponent }:
         if (nextState.status === 'playing') {
           setCountdown(null);
         }
-        if (nextState.winner === 'a' || nextState.winner === 'b') {
-          setWinner(nextState.winner);
-        }
+        const resolvedWinner = nextState.winner === 'a' || nextState.winner === 'b'
+          ? nextState.winner
+          : null;
+        setWinner((prev) => {
+          if (resolvedWinner) return resolvedWinner;
+          if (nextState.status === 'finished') return prev;
+          return null;
+        });
         return;
       }
 
-      if (data.type === 'win' && (data.winner === 'a' || data.winner === 'b')) {
+      if ((data.type === 'win' || data.type === 'game_finished') && (data.winner === 'a' || data.winner === 'b')) {
         setWinner(data.winner);
       }
     });
@@ -902,9 +943,17 @@ export function DefenseLineGame({ playerId, roomId, theme, onExit, aiOpponent }:
     ? `START IN ${countdown}`
     : !isConnected
     ? 'CONNECTING'
+    : state?.status === 'finished'
+    ? 'MATCH OVER'
     : state?.status === 'playing'
     ? 'IN MATCH'
     : 'WAITING';
+
+  const showResultOverlay = !!winner || state?.status === 'finished';
+  const isWin = !!winner && playerSide === winner;
+  const resultHeadline = winner
+    ? (isWin ? 'VICTORY' : 'DEFEAT')
+    : 'MATCH OVER';
 
   return (
     <div
@@ -1303,17 +1352,21 @@ export function DefenseLineGame({ playerId, roomId, theme, onExit, aiOpponent }:
         ].map((control) => (
           <button
             key={control.key}
+            disabled={!canSendGameplayInput}
+            aria-disabled={!canSendGameplayInput}
             onPointerDown={(event) => {
               event.preventDefault();
+              if (!canSendGameplayInput) return;
               control.onPress();
             }}
             style={{
               flex: 1,
+              opacity: canSendGameplayInput ? 1 : 0.42,
               background: 'rgba(255, 255, 255, 0.04)',
               color: 'rgba(255, 255, 255, 0.4)',
               border: '1px solid rgba(255, 255, 255, 0.08)',
               borderRadius: 'clamp(8px, 2vw, 12px)',
-              cursor: 'pointer',
+              cursor: canSendGameplayInput ? 'pointer' : 'not-allowed',
               touchAction: 'manipulation',
               display: 'flex',
               alignItems: 'center',
@@ -1327,6 +1380,79 @@ export function DefenseLineGame({ playerId, roomId, theme, onExit, aiOpponent }:
           </button>
         ))}
       </div>
+
+      {showResultOverlay && (
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            zIndex: 60,
+            background: 'rgba(0, 0, 0, 0.74)',
+            backdropFilter: 'blur(8px)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '24px',
+          }}
+        >
+          <div
+            style={{
+              width: 'min(92vw, 420px)',
+              borderRadius: '16px',
+              border: `2px solid ${winner ? (isWin ? 'rgba(0,255,136,0.5)' : 'rgba(255,0,110,0.5)') : 'rgba(125, 227, 255, 0.4)'}`,
+              background: 'rgba(8, 10, 20, 0.94)',
+              boxShadow: winner
+                ? (isWin
+                    ? '0 0 32px rgba(0, 255, 136, 0.32)'
+                    : '0 0 32px rgba(255, 0, 110, 0.32)')
+                : '0 0 24px rgba(125, 227, 255, 0.2)',
+              padding: '22px 18px',
+              textAlign: 'center',
+            }}
+          >
+            <div
+              style={{
+                fontSize: 'clamp(24px, 7vw, 36px)',
+                fontWeight: 900,
+                letterSpacing: '1.4px',
+                color: winner ? (isWin ? '#7dffb0' : '#ff7aa9') : '#7de3ff',
+                textShadow: winner
+                  ? (isWin ? '0 0 16px rgba(125, 255, 176, 0.55)' : '0 0 16px rgba(255, 122, 169, 0.55)')
+                  : '0 0 14px rgba(125, 227, 255, 0.45)',
+              }}
+            >
+              {resultHeadline}
+            </div>
+            <div
+              style={{
+                marginTop: '10px',
+                fontSize: '12px',
+                color: 'rgba(255,255,255,0.74)',
+                letterSpacing: '0.35px',
+              }}
+            >
+              {winner ? (isWin ? 'You won the match.' : 'You lost the match.') : 'Result synced. Match has ended.'}
+            </div>
+            <button
+              onClick={onExit}
+              style={{
+                marginTop: '16px',
+                width: '100%',
+                border: '1px solid rgba(255,255,255,0.2)',
+                borderRadius: '10px',
+                padding: '10px 12px',
+                background: 'rgba(255,255,255,0.08)',
+                color: '#ffffff',
+                fontSize: '13px',
+                fontWeight: 700,
+                cursor: 'pointer',
+              }}
+            >
+              Back to Menu
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

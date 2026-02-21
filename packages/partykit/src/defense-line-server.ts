@@ -30,6 +30,7 @@ export default class DefenseLineServer implements Party.Server {
   private readonly sideToConnection = new Map<DefenseLinePlayer, Party.Connection>();
   private readonly sideToPlayerId = new Map<DefenseLinePlayer, string>();
   private readonly connectionToSide = new Map<string, DefenseLinePlayer>();
+  private readonly nonPlayingFeedbackAt = new Map<string, number>();
 
   private countdownTimer: ReturnType<typeof setInterval> | null = null;
   private countdownSafetyTimer: ReturnType<typeof setTimeout> | null = null;
@@ -59,6 +60,7 @@ export default class DefenseLineServer implements Party.Server {
     conn.send(JSON.stringify({
       type: 'room_state',
       status: this.gameState.status,
+      winner: this.gameState.winner,
       players: {
         a: this.sideToPlayerId.get('a') ?? null,
         b: this.sideToPlayerId.get('b') ?? null,
@@ -106,11 +108,15 @@ export default class DefenseLineServer implements Party.Server {
 
   onClose(conn: Party.Connection) {
     this.log('close', `conn=${conn.id}`);
+    this.nonPlayingFeedbackAt.delete(conn.id);
     const side = this.connectionToSide.get(conn.id);
     if (!side) {
       this.log('close', `conn=${conn.id} had_no_side`);
       return;
     }
+    const statusBeforeClose = this.gameState.status;
+    const opponentSide: DefenseLinePlayer = side === 'a' ? 'b' : 'a';
+    const opponentWasAssigned = this.sideToPlayerId.has(opponentSide);
 
     const mapped = this.sideToConnection.get(side);
     if (mapped?.id === conn.id) {
@@ -119,13 +125,40 @@ export default class DefenseLineServer implements Party.Server {
 
     this.connectionToSide.delete(conn.id);
     this.sideToPlayerId.delete(side);
+    this.cancelAIFallback();
 
-    if (this.gameState.status === 'playing' || this.gameState.status === 'countdown' || this.gameState.status === 'finished') {
-      this.stopAll();
-      this.resetGameState();
+    // Match disconnect handling follows the main game: disconnect during a live
+    // round/countdown is an immediate loss for the disconnected side.
+    if ((statusBeforeClose === 'playing' || statusBeforeClose === 'countdown') && opponentWasAssigned) {
+      this.gameState.setStatus('finished');
+      this.gameState.winner = opponentSide;
+      this.finishGame(opponentSide);
+      this.broadcastRoomState();
+      return;
     }
 
-    this.cancelAIFallback();
+    // Keep finished winner state visible to any remaining player. Only recycle
+    // room state once all human connections are gone.
+    if (this.gameState.status === 'finished') {
+      if (this.sideToConnection.size === 0) {
+        this.stopAll();
+        this.resetGameState();
+      }
+      this.broadcastRoomState();
+      this.broadcastState();
+      return;
+    }
+
+    if (this.sideToConnection.size === 0) {
+      if (this.gameState.status === 'playing' || this.gameState.status === 'countdown') {
+        this.stopAll();
+      }
+      if (this.gameState.status !== 'waiting') {
+        this.resetGameState();
+      }
+    } else if (this.sideToPlayerId.size === 1 && this.gameState.status === 'waiting') {
+      this.scheduleAIFallback();
+    }
 
     this.broadcastRoomState();
     this.broadcastState();
@@ -253,6 +286,7 @@ export default class DefenseLineServer implements Party.Server {
 
     if (this.gameState.status !== 'playing') {
       this.log('input_ignored', `reason=not_playing side=${side} status=${this.gameState.status} input=${JSON.stringify(input)}`);
+      this.sendNonPlayingFeedback(sender);
       return;
     }
 
@@ -548,6 +582,11 @@ export default class DefenseLineServer implements Party.Server {
       type: 'win',
       winner,
     });
+    this.broadcast({
+      type: 'game_finished',
+      winner,
+    });
+    this.broadcastRoomState();
     this.broadcastState();
   }
 
@@ -564,6 +603,7 @@ export default class DefenseLineServer implements Party.Server {
     this.broadcast({
       type: 'room_state',
       status: this.gameState.status,
+      winner: this.gameState.winner,
       players: {
         a: this.sideToPlayerId.get('a') ?? null,
         b: this.sideToPlayerId.get('b') ?? null,
@@ -681,5 +721,27 @@ export default class DefenseLineServer implements Party.Server {
 
   private log(event: string, message: string): void {
     console.log(`[DefenseLine][${event}] room=${this.room.id} ${message}`);
+  }
+
+  private sendNonPlayingFeedback(conn: Party.Connection): void {
+    const now = Date.now();
+    const lastSent = this.nonPlayingFeedbackAt.get(conn.id) ?? 0;
+    // Avoid flooding if client keeps pressing buttons after game end.
+    if (now - lastSent < 500) {
+      return;
+    }
+
+    this.nonPlayingFeedbackAt.set(conn.id, now);
+    conn.send(JSON.stringify({
+      type: 'state',
+      state: this.gameState.getPublicState(),
+    }));
+    if (this.gameState.winner) {
+      conn.send(JSON.stringify({
+        type: 'win',
+        winner: this.gameState.winner,
+      }));
+    }
+    this.log('input_feedback', `conn=${conn.id} status=${this.gameState.status} winner=${this.gameState.winner ?? 'none'}`);
   }
 }
