@@ -140,10 +140,10 @@ export function DefenseLineRenderer({ state, viewAs, ghostPiece }: DefenseLineRe
       style={{
         display: 'grid',
         gridTemplateColumns: `repeat(${BOARD_COLS}, minmax(0, 1fr))`,
-        gap: '2px',
-        width: 'min(280px, 75vw)',
-        padding: '8px',
-        borderRadius: '10px',
+        gap: '1px',
+        width: 'min(160px, 70vw)',
+        padding: '6px',
+        borderRadius: '8px',
         border: '1px solid rgba(255, 255, 255, 0.18)',
         background: 'rgba(0, 0, 0, 0.45)',
       }}

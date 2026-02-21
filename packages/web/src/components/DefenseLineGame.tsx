@@ -114,9 +114,6 @@ export function DefenseLineGame({ playerId, preferredSide, theme, onExit }: Defe
       } else if (event.key === 'ArrowUp') {
         event.preventDefault();
         sendInput({ type: 'rotate', direction: 'cw' });
-      } else if (event.key.toLowerCase() === 'z') {
-        event.preventDefault();
-        sendInput({ type: 'rotate', direction: 'ccw' });
       } else if (event.key === 'ArrowDown') {
         event.preventDefault();
         sendInput({ type: 'soft_drop' });
@@ -223,12 +220,36 @@ export function DefenseLineGame({ playerId, preferredSide, theme, onExit }: Defe
       )}
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: '8px', width: 'min(360px, 90vw)' }}>
-        <button onClick={() => sendInput({ type: 'move', direction: 'left' })}>Left</button>
-        <button onClick={() => sendInput({ type: 'rotate', direction: 'cw' })}>Rotate</button>
-        <button onClick={() => sendInput({ type: 'move', direction: 'right' })}>Right</button>
-        <button onClick={() => sendInput({ type: 'soft_drop' })}>Soft Drop</button>
-        <button onClick={() => sendInput({ type: 'rotate', direction: 'ccw' })}>CCW</button>
-        <button onClick={() => sendInput({ type: 'hard_drop' })}>Hard Drop</button>
+        <button
+          onClick={() => sendInput({ type: 'move', direction: 'left' })}
+          style={{ padding: '12px', fontSize: '14px', fontWeight: 600, background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.2)', borderRadius: '8px', cursor: 'pointer', color: '#fff' }}
+        >
+          ◀ Left
+        </button>
+        <button
+          onClick={() => sendInput({ type: 'soft_drop' })}
+          style={{ padding: '12px', fontSize: '14px', fontWeight: 600, background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.2)', borderRadius: '8px', cursor: 'pointer', color: '#fff' }}
+        >
+          ▼ Down
+        </button>
+        <button
+          onClick={() => sendInput({ type: 'move', direction: 'right' })}
+          style={{ padding: '12px', fontSize: '14px', fontWeight: 600, background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.2)', borderRadius: '8px', cursor: 'pointer', color: '#fff' }}
+        >
+          Right ▶
+        </button>
+        <button
+          onClick={() => sendInput({ type: 'rotate', direction: 'cw' })}
+          style={{ padding: '12px', fontSize: '14px', fontWeight: 600, background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.2)', borderRadius: '8px', cursor: 'pointer', color: '#fff', gridColumn: 'span 1' }}
+        >
+          ↻ Rotate
+        </button>
+        <button
+          onClick={() => sendInput({ type: 'hard_drop' })}
+          style={{ padding: '12px', fontSize: '14px', fontWeight: 600, background: 'rgba(0,212,255,0.2)', border: '1px solid rgba(0,212,255,0.4)', borderRadius: '8px', cursor: 'pointer', color: '#00d4ff', gridColumn: 'span 2' }}
+        >
+          ⏬ DROP
+        </button>
       </div>
     </div>
   );

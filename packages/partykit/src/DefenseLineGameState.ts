@@ -367,20 +367,17 @@ export class DefenseLineGameState {
     return rows.filter((row) => {
       for (let col = 0; col < BOARD_COLS; col++) {
         const cell = this.board[row][col];
+
         if (player === 'a') {
-          if (row >= 15) {
-            continue;
-          }
-          if (cell !== 'a') {
-            return false;
-          }
+          // For A: row is filled if all cells are 'a' or 'x' (null in x-zone)
+          if (cell === 'a') continue; // 'a' = filled for A
+          if (cell === null && row >= 15) continue; // null in x-zone = 'x' = filled for A
+          return false; // any other cell (b or null in 0-zone) = not filled
         } else {
-          if (row < 15) {
-            continue;
-          }
-          if (cell !== 'b') {
-            return false;
-          }
+          // For B: row is filled if all cells are 'b' or '0' (null in 0-zone)
+          if (cell === 'b') continue; // 'b' = filled for B
+          if (cell === null && row < 15) continue; // null in 0-zone = '0' = filled for B
+          return false; // any other cell (a or null in x-zone) = not filled
         }
       }
       return true;
