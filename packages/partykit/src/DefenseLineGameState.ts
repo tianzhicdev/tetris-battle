@@ -31,8 +31,21 @@ export interface DefenseLinePublicState {
   winner: DefenseLinePlayer | null;
 }
 
+export interface DefenseLineClearSegment {
+  row: number;
+  startCol: number;
+  endCol: number;
+}
+
+export interface DefenseLineClearCell {
+  row: number;
+  col: number;
+}
+
 interface ResolutionResult {
   clearedRows: number[];
+  clearedSegments: DefenseLineClearSegment[];
+  clearedCells: DefenseLineClearCell[];
   winner: DefenseLinePlayer | null;
 }
 
@@ -46,7 +59,7 @@ export const DEFENSE_BOARD_COLS = 10;
 export const DEFENSE_DEFENSE_BOARD_ROWS = DEFENSE_BOARD_ROWS;
 export const DEFENSE_DEFENSE_BOARD_COLS = DEFENSE_BOARD_COLS;
 const DIVIDER_ROW = 10; // rows 0-9 = '0' zone, rows 10-19 = 'x' zone
-export const MIN_CONTIGUOUS_FOR_CLEAR = 5; // 5+ contiguous filled cells clears the row
+export const MIN_CONTIGUOUS_FOR_CLEAR = 5; // 5+ contiguous filled cells clears that segment
 
 export class DefenseLineGameState {
   board: DefenseLineCell[][];
@@ -77,22 +90,34 @@ export class DefenseLineGameState {
     this.status = 'playing';
     if (!this.playerA.activePiece) {
       this.playerA.activePiece = this.createSpawnPiece('a', this.playerA.nextPiece);
+      if (!this.canPlacePiece('a', this.playerA.activePiece)) {
+        this.playerA.activePiece = null;
+        this.winner = 'b';
+        this.status = 'finished';
+        return;
+      }
       this.playerA.nextPiece = this.drawNextPiece(this.playerA);
     }
     if (!this.playerB.activePiece) {
       this.playerB.activePiece = this.createSpawnPiece('b', this.playerB.nextPiece);
+      if (!this.canPlacePiece('b', this.playerB.activePiece)) {
+        this.playerB.activePiece = null;
+        this.winner = 'a';
+        this.status = 'finished';
+        return;
+      }
       this.playerB.nextPiece = this.drawNextPiece(this.playerB);
     }
   }
 
   processInput(player: DefenseLinePlayer, input: 'move_left' | 'move_right' | 'rotate_cw' | 'rotate_ccw' | 'soft_drop' | 'hard_drop'): InputResult {
     if (this.status !== 'playing' || this.winner) {
-      return { changed: false, clearedRows: [], winner: this.winner };
+      return { changed: false, clearedRows: [], clearedSegments: [], clearedCells: [], winner: this.winner };
     }
 
     const state = this.getPlayerState(player);
     if (!state.activePiece) {
-      return { changed: false, clearedRows: [], winner: this.winner };
+      return { changed: false, clearedRows: [], clearedSegments: [], clearedCells: [], winner: this.winner };
     }
 
     switch (input) {
@@ -109,16 +134,16 @@ export class DefenseLineGameState {
       case 'hard_drop':
         return this.hardDrop(player);
       default:
-        return { changed: false, clearedRows: [], winner: this.winner };
+        return { changed: false, clearedRows: [], clearedSegments: [], clearedCells: [], winner: this.winner };
     }
   }
 
-  tick(): { changed: boolean; clearEvents: Array<{ player: DefenseLinePlayer; rows: number[] }>; winner: DefenseLinePlayer | null } {
+  tick(): { changed: boolean; clearEvents: Array<{ player: DefenseLinePlayer; rows: number[]; segments: DefenseLineClearSegment[]; cells: DefenseLineClearCell[] }>; winner: DefenseLinePlayer | null } {
     if (this.status !== 'playing' || this.winner) {
       return { changed: false, clearEvents: [], winner: this.winner };
     }
 
-    const clearEvents: Array<{ player: DefenseLinePlayer; rows: number[] }> = [];
+    const clearEvents: Array<{ player: DefenseLinePlayer; rows: number[]; segments: DefenseLineClearSegment[]; cells: DefenseLineClearCell[] }> = [];
     let changed = false;
 
     for (const player of ['a', 'b'] as const) {
@@ -127,7 +152,12 @@ export class DefenseLineGameState {
         changed = true;
       }
       if (tickResult.clearedRows.length > 0) {
-        clearEvents.push({ player, rows: tickResult.clearedRows });
+        clearEvents.push({
+          player,
+          rows: tickResult.clearedRows,
+          segments: tickResult.clearedSegments,
+          cells: tickResult.clearedCells,
+        });
       }
       if (tickResult.winner) {
         break;
@@ -178,7 +208,7 @@ export class DefenseLineGameState {
     const state = this.getPlayerState(player);
     const piece = state.activePiece;
     if (!piece) {
-      return { changed: false, clearedRows: [], winner: this.winner };
+      return { changed: false, clearedRows: [], clearedSegments: [], clearedCells: [], winner: this.winner };
     }
 
     const step = player === 'a' ? 1 : -1;
@@ -186,18 +216,21 @@ export class DefenseLineGameState {
 
     if (this.canPlacePiece(player, candidate)) {
       state.activePiece = candidate;
-      return { changed: true, clearedRows: [], winner: this.winner };
+      return { changed: true, clearedRows: [], clearedSegments: [], clearedCells: [], winner: this.winner };
     }
 
     this.lockPiece(player, piece);
     const resolution = this.resolveAfterLock(player);
-    state.activePiece = this.createSpawnPiece(player, state.nextPiece);
-    state.nextPiece = this.drawNextPiece(state);
+    if (!resolution.winner) {
+      this.spawnNextPiece(player, state);
+    }
 
     return {
       changed: true,
       clearedRows: resolution.clearedRows,
-      winner: resolution.winner,
+      clearedSegments: resolution.clearedSegments,
+      clearedCells: resolution.clearedCells,
+      winner: this.winner,
     };
   }
 
@@ -205,7 +238,7 @@ export class DefenseLineGameState {
     const state = this.getPlayerState(player);
     const piece = state.activePiece;
     if (!piece) {
-      return { changed: false, clearedRows: [], winner: this.winner };
+      return { changed: false, clearedRows: [], clearedSegments: [], clearedCells: [], winner: this.winner };
     }
 
     const step = player === 'a' ? 1 : -1;
@@ -221,19 +254,22 @@ export class DefenseLineGameState {
 
     this.lockPiece(player, dropped);
     const resolution = this.resolveAfterLock(player);
-    state.activePiece = this.createSpawnPiece(player, state.nextPiece);
-    state.nextPiece = this.drawNextPiece(state);
+    if (!resolution.winner) {
+      this.spawnNextPiece(player, state);
+    }
 
     return {
       changed: true,
       clearedRows: resolution.clearedRows,
-      winner: resolution.winner,
+      clearedSegments: resolution.clearedSegments,
+      clearedCells: resolution.clearedCells,
+      winner: this.winner,
     };
   }
 
-  private tryMove(player: DefenseLinePlayer, state: DefenseLinePlayerState, deltaRow: number, deltaCol: number): { changed: boolean; clearedRows: number[] } {
+  private tryMove(player: DefenseLinePlayer, state: DefenseLinePlayerState, deltaRow: number, deltaCol: number): { changed: boolean; clearedRows: number[]; clearedSegments: DefenseLineClearSegment[]; clearedCells: DefenseLineClearCell[] } {
     if (!state.activePiece) {
-      return { changed: false, clearedRows: [] };
+      return { changed: false, clearedRows: [], clearedSegments: [], clearedCells: [] };
     }
 
     const candidate = {
@@ -243,16 +279,16 @@ export class DefenseLineGameState {
     };
 
     if (!this.canPlacePiece(player, candidate)) {
-      return { changed: false, clearedRows: [] };
+      return { changed: false, clearedRows: [], clearedSegments: [], clearedCells: [] };
     }
 
     state.activePiece = candidate;
-    return { changed: true, clearedRows: [] };
+    return { changed: true, clearedRows: [], clearedSegments: [], clearedCells: [] };
   }
 
-  private tryRotate(player: DefenseLinePlayer, state: DefenseLinePlayerState, delta: number): { changed: boolean; clearedRows: number[] } {
+  private tryRotate(player: DefenseLinePlayer, state: DefenseLinePlayerState, delta: number): { changed: boolean; clearedRows: number[]; clearedSegments: DefenseLineClearSegment[]; clearedCells: DefenseLineClearCell[] } {
     if (!state.activePiece) {
-      return { changed: false, clearedRows: [] };
+      return { changed: false, clearedRows: [], clearedSegments: [], clearedCells: [] };
     }
 
     const rotations = TETROMINO_SHAPES[state.activePiece.type].length;
@@ -263,66 +299,77 @@ export class DefenseLineGameState {
 
     if (this.canPlacePiece(player, candidate)) {
       state.activePiece = candidate;
-      return { changed: true, clearedRows: [] };
+      return { changed: true, clearedRows: [], clearedSegments: [], clearedCells: [] };
     }
 
     for (const kick of [-1, 1, -2, 2]) {
       const kicked = { ...candidate, col: candidate.col + kick };
       if (this.canPlacePiece(player, kicked)) {
         state.activePiece = kicked;
-        return { changed: true, clearedRows: [] };
+        return { changed: true, clearedRows: [], clearedSegments: [], clearedCells: [] };
       }
     }
 
-    return { changed: false, clearedRows: [] };
+    return { changed: false, clearedRows: [], clearedSegments: [], clearedCells: [] };
   }
 
   private resolveAfterLock(player: DefenseLinePlayer): ResolutionResult {
-    const clearableRows = this.getClearableRows(player);
-    if (clearableRows.length === 0) {
-      return { clearedRows: [], winner: this.winner };
+    const clearableSegments = this.getClearableSegments(player);
+    if (clearableSegments.length === 0) {
+      return { clearedRows: [], clearedSegments: [], clearedCells: [], winner: this.winner };
     }
 
-    // Sort rows so we process them correctly when shifting
-    // A clears (shifts rows above DOWN): process LOWEST first so higher rows stay in place
-    // B clears (shifts rows below UP): process HIGHEST first so lower rows stay in place
-    const sorted = player === 'a'
-      ? [...clearableRows].sort((a, b) => a - b)
-      : [...clearableRows].sort((a, b) => b - a);
+    // Apply segment clears per-column so only the cleared segment columns shift.
+    const clearedRowsByColumn = new Map<number, Set<number>>();
+    for (const segment of clearableSegments) {
+      for (let col = segment.startCol; col <= segment.endCol; col++) {
+        let rows = clearedRowsByColumn.get(col);
+        if (!rows) {
+          rows = new Set<number>();
+          clearedRowsByColumn.set(col, rows);
+        }
+        rows.add(segment.row);
+      }
+    }
 
-    for (const row of sorted) {
-      if (player === 'a') {
-        // A clears: shift rows 0..row-1 down by 1, row 0 becomes all '0'
-        for (let r = row; r > 0; r--) {
-          for (let col = 0; col < DEFENSE_BOARD_COLS; col++) {
-            this.board[r][col] = this.board[r - 1][col];
-          }
+    for (const [col, clearedRows] of clearedRowsByColumn.entries()) {
+      if (clearedRows.size === 0) continue;
+
+      const survivors: DefenseLineCell[] = [];
+      for (let row = 0; row < DEFENSE_BOARD_ROWS; row++) {
+        if (!clearedRows.has(row)) {
+          survivors.push(this.board[row][col]);
         }
-        // New row 0 = all '0'
-        for (let col = 0; col < DEFENSE_BOARD_COLS; col++) {
-          this.board[0][col] = '0';
-        }
-      } else {
-        // B clears: shift rows row+1..(last row) up by 1, last row becomes all 'x'
-        for (let r = row; r < DEFENSE_BOARD_ROWS - 1; r++) {
-          for (let col = 0; col < DEFENSE_BOARD_COLS; col++) {
-            this.board[r][col] = this.board[r + 1][col];
-          }
-        }
-        // New row 29 = all 'x'
-        for (let col = 0; col < DEFENSE_BOARD_COLS; col++) {
-          this.board[DEFENSE_BOARD_ROWS - 1][col] = 'x';
-        }
+      }
+
+      const clearedCount = clearedRows.size;
+      const fillerCell: DefenseLineCell = player === 'a' ? '0' : 'x';
+      const nextColumn: DefenseLineCell[] = player === 'a'
+        ? [...Array.from({ length: clearedCount }, () => fillerCell), ...survivors]
+        : [...survivors, ...Array.from({ length: clearedCount }, () => fillerCell)];
+
+      for (let row = 0; row < DEFENSE_BOARD_ROWS; row++) {
+        this.board[row][col] = nextColumn[row];
       }
     }
 
     this.rebuildActiveRows();
 
     const state = this.getPlayerState(player);
-    state.rowsCleared += clearableRows.length;
+    state.rowsCleared += clearableSegments.length;
+
+    const clearedRows = Array.from(new Set(clearableSegments.map((segment) => segment.row))).sort((a, b) => a - b);
+    const clearedCells: DefenseLineClearCell[] = [];
+    for (const segment of clearableSegments) {
+      for (let col = segment.startCol; col <= segment.endCol; col++) {
+        clearedCells.push({ row: segment.row, col });
+      }
+    }
 
     return {
-      clearedRows: clearableRows,
+      clearedRows,
+      clearedSegments: clearableSegments,
+      clearedCells,
       winner: this.winner,
     };
   }
@@ -339,37 +386,52 @@ export class DefenseLineGameState {
   }
 
   /**
-   * A row is clearable if it has at least MIN_CONTIGUOUS_FOR_CLEAR contiguous
+   * A segment is clearable if it has at least MIN_CONTIGUOUS_FOR_CLEAR contiguous
    * "filled" cells for the given player. The row must also contain at least one
-   * placed piece ('a' or 'b') — pure background rows don't clear.
+   * placed piece for that player ('a' for A, 'b' for B) — pure background rows don't clear.
    */
-  private getClearableRows(player: DefenseLinePlayer): number[] {
+  private getClearableSegments(player: DefenseLinePlayer): DefenseLineClearSegment[] {
     const rows = Array.from(this.activeRows).sort((a, b) => a - b);
+    const segments: DefenseLineClearSegment[] = [];
 
-    return rows.filter((row) => {
-      let maxRun = 0;
-      let currentRun = 0;
-      let hasPlayerPiece = false;
-
-      for (let col = 0; col < DEFENSE_BOARD_COLS; col++) {
-        const cell = this.board[row][col];
-
-        if (cell === player) hasPlayerPiece = true;
-
-        const filled = player === 'a'
-          ? (cell === 'a' || cell === 'x')
-          : (cell === 'b' || cell === '0');
-
-        if (filled) {
-          currentRun++;
-          if (currentRun > maxRun) maxRun = currentRun;
-        } else {
-          currentRun = 0;
-        }
+    for (const row of rows) {
+      const hasPlayerPiece = this.board[row].some((cell) => cell === player);
+      if (!hasPlayerPiece) {
+        continue;
       }
 
-      return hasPlayerPiece && maxRun >= MIN_CONTIGUOUS_FOR_CLEAR;
-    });
+      let runStart: number | null = null;
+
+      for (let col = 0; col <= DEFENSE_BOARD_COLS; col++) {
+        const inBounds = col < DEFENSE_BOARD_COLS;
+        const cell = inBounds ? this.board[row][col] : null;
+
+        const filled = inBounds
+          ? player === 'a'
+            ? (cell === 'a' || cell === 'x')
+            : (cell === 'b' || cell === '0')
+          : false;
+
+        if (filled) {
+          if (runStart === null) {
+            runStart = col;
+          }
+          continue;
+        }
+
+        if (runStart === null) {
+          continue;
+        }
+
+        const runEnd = col - 1;
+        if (hasPlayerPiece && runEnd - runStart + 1 >= MIN_CONTIGUOUS_FOR_CLEAR) {
+          segments.push({ row, startCol: runStart, endCol: runEnd });
+        }
+        runStart = null;
+      }
+    }
+
+    return segments;
   }
 
   private canPlacePiece(player: DefenseLinePlayer, piece: DefenseLinePiece): boolean {
@@ -471,5 +533,22 @@ export class DefenseLineGameState {
 
   private getPlayerState(player: DefenseLinePlayer): DefenseLinePlayerState {
     return player === 'a' ? this.playerA : this.playerB;
+  }
+
+  private spawnNextPiece(player: DefenseLinePlayer, state: DefenseLinePlayerState): void {
+    const spawnPiece = this.createSpawnPiece(player, state.nextPiece);
+    if (!this.canPlacePiece(player, spawnPiece)) {
+      state.activePiece = null;
+      this.winner = this.getOpponent(player);
+      this.status = 'finished';
+      return;
+    }
+
+    state.activePiece = spawnPiece;
+    state.nextPiece = this.drawNextPiece(state);
+  }
+
+  private getOpponent(player: DefenseLinePlayer): DefenseLinePlayer {
+    return player === 'a' ? 'b' : 'a';
   }
 }

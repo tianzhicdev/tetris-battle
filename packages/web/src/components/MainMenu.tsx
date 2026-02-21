@@ -40,7 +40,7 @@ export function MainMenu({ onSelectMode, theme, profile, onProfileUpdate, onChal
         minHeight: '100vh',
         height: '100dvh',
         display: 'grid',
-        gridTemplateRows: 'auto minmax(0, 1fr) auto',
+        gridTemplateRows: 'auto minmax(0, 1fr)',
         overflow: 'hidden',
         paddingTop: 'max(10px, env(safe-area-inset-top))',
         paddingBottom: 'max(10px, env(safe-area-inset-bottom))',
@@ -89,9 +89,9 @@ export function MainMenu({ onSelectMode, theme, profile, onProfileUpdate, onChal
           overflowY: 'auto',
           display: 'grid',
           justifyItems: 'center',
-          alignContent: 'center',
-          gap: 'clamp(14px, 3vh, 24px)',
-          padding: 'clamp(8px, 2vh, 18px) 0',
+          alignContent: 'start',
+          gap: 'clamp(8px, 1.6vh, 14px)',
+          padding: 'clamp(4px, 1.2vh, 12px) 0',
         }}
       >
         <img
@@ -103,34 +103,21 @@ export function MainMenu({ onSelectMode, theme, profile, onProfileUpdate, onChal
             height: 'auto',
             objectFit: 'contain',
             filter: `drop-shadow(0 0 18px ${theme.colors.I}33)`,
+            marginTop: '-8px',
             userSelect: 'none',
             pointerEvents: 'none',
           }}
         />
 
-        <h1
-          style={{
-            margin: 0,
-            fontSize: 'clamp(1.15rem, 3.5vw, 1.8rem)',
-            letterSpacing: '0.2em',
-            textTransform: 'uppercase',
-            color: T.text.secondary,
-            textAlign: 'center',
-            textShadow: `0 0 14px ${theme.colors.I}40`,
-          }}
-        >
-          Tetris Battle
-        </h1>
-
         {/* Main Actions */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '15px', width: '100%', maxWidth: '400px' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', width: '100%', maxWidth: '400px' }}>
           {/* Defense Mode Toggle */}
           <div style={{
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
             gap: '12px',
-            padding: '8px',
+            padding: '4px',
           }}>
             <span style={{
               fontSize: 'clamp(14px, 3.5vw, 16px)',
@@ -178,7 +165,7 @@ export function MainMenu({ onSelectMode, theme, profile, onProfileUpdate, onChal
             alignItems: 'center',
             justifyContent: 'center',
             gap: '12px',
-            padding: '8px',
+            padding: '4px',
           }}>
             <span style={{
               fontSize: 'clamp(14px, 3.5vw, 16px)',
@@ -230,8 +217,8 @@ export function MainMenu({ onSelectMode, theme, profile, onProfileUpdate, onChal
               });
             }}
             style={{
-              padding: '20px 50px',
-              fontSize: 'clamp(20px, 6vw, 28px)',
+              padding: '16px 36px',
+              fontSize: 'clamp(18px, 5.4vw, 26px)',
               color: defenseMode ? T.accent.cyan : T.accent.purple,
               cursor: 'pointer',
               fontFamily: T.font.display,
@@ -239,7 +226,7 @@ export function MainMenu({ onSelectMode, theme, profile, onProfileUpdate, onChal
               letterSpacing: '3px',
               transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
               width: '100%',
-              minHeight: '80px',
+              minHeight: '70px',
               borderRadius: `${T.radius.xl}px`,
               background: T.bg.button,
               border: defenseMode ? `2px solid ${T.accent.cyan}44` : `2px solid ${T.accent.purple}44`,
@@ -255,117 +242,107 @@ export function MainMenu({ onSelectMode, theme, profile, onProfileUpdate, onChal
           >
             PLAY NOW
           </button>
-        </div>
-      </div>
+          <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', justifyContent: 'center', width: '100%' }}>
+            <button
+              onClick={() => {
+                audioManager.playSfx('button_click');
+                setShowFriends(true);
+              }}
+              style={{
+                padding: '10px 18px',
+                fontSize: '13px',
+                color: T.accent.cyan,
+                cursor: 'pointer',
+                fontFamily: T.font.display,
+                fontWeight: 700,
+                letterSpacing: '1px',
+                minWidth: '88px',
+                touchAction: 'manipulation',
+                borderRadius: `${T.radius.md}px`,
+                background: T.bg.button,
+                border: `1px solid ${T.accent.cyan}33`,
+                boxShadow: T.glow(T.accent.cyan, 0.5),
+                textShadow: T.glow(T.accent.cyan, 1),
+                backdropFilter: 'blur(20px)',
+                transition: 'all 0.2s ease',
+                position: 'relative' as const,
+              }}
+            >
+              Friends
+              {pendingRequests.length > 0 && (
+                <span style={{
+                  position: 'absolute',
+                  top: '-4px',
+                  right: '-4px',
+                  background: T.accent.pink,
+                  color: '#fff',
+                  borderRadius: '10px',
+                  padding: '1px 5px',
+                  fontSize: '10px',
+                  fontWeight: 700,
+                  minWidth: '16px',
+                  textAlign: 'center',
+                  boxShadow: T.glow(T.accent.pink, 0.8),
+                }}>
+                  {pendingRequests.length}
+                </span>
+              )}
+            </button>
 
-      {/* Progression Buttons */}
-      <div style={{
-        position: 'relative',
-        zIndex: 2,
-        display: 'flex',
-        justifyContent: 'center',
-        paddingTop: 'clamp(8px, 1.8vh, 14px)',
-      }}>
-        <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', justifyContent: 'center', width: '100%', maxWidth: '560px' }}>
-        <button
-          onClick={() => {
-            audioManager.playSfx('button_click');
-            setShowFriends(true);
-          }}
-          style={{
-            padding: '12px 20px',
-            fontSize: '14px',
-            color: T.accent.cyan,
-            cursor: 'pointer',
-            fontFamily: T.font.display,
-            fontWeight: 700,
-            letterSpacing: '1px',
-            minWidth: '90px',
-            touchAction: 'manipulation',
-            borderRadius: `${T.radius.md}px`,
-            background: T.bg.button,
-            border: `1px solid ${T.accent.cyan}33`,
-            boxShadow: T.glow(T.accent.cyan, 0.5),
-            textShadow: T.glow(T.accent.cyan, 1),
-            backdropFilter: 'blur(20px)',
-            transition: 'all 0.2s ease',
-            position: 'relative' as const,
-          }}
-        >
-          Friends
-          {pendingRequests.length > 0 && (
-            <span style={{
-              position: 'absolute',
-              top: '-4px',
-              right: '-4px',
-              background: T.accent.pink,
-              color: '#fff',
-              borderRadius: '10px',
-              padding: '1px 5px',
-              fontSize: '10px',
-              fontWeight: 700,
-              minWidth: '16px',
-              textAlign: 'center',
-              boxShadow: T.glow(T.accent.pink, 0.8),
-            }}>
-              {pendingRequests.length}
-            </span>
-          )}
-        </button>
+            <button
+              onClick={() => {
+                audioManager.playSfx('button_click');
+                setShowProfile(true);
+              }}
+              style={{
+                padding: '10px 18px',
+                fontSize: '13px',
+                color: T.accent.cyan,
+                cursor: 'pointer',
+                fontFamily: T.font.display,
+                fontWeight: 700,
+                letterSpacing: '1px',
+                minWidth: '88px',
+                touchAction: 'manipulation',
+                borderRadius: `${T.radius.md}px`,
+                background: T.bg.button,
+                border: `1px solid ${T.accent.cyan}33`,
+                boxShadow: T.glow(T.accent.cyan, 0.5),
+                textShadow: T.glow(T.accent.cyan, 1),
+                backdropFilter: 'blur(20px)',
+                transition: 'all 0.2s ease',
+              }}
+            >
+              Profile
+            </button>
 
-        <button
-          onClick={() => {
-            audioManager.playSfx('button_click');
-            setShowProfile(true);
-          }}
-          style={{
-            padding: '12px 20px',
-            fontSize: '14px',
-            color: T.accent.cyan,
-            cursor: 'pointer',
-            fontFamily: T.font.display,
-            fontWeight: 700,
-            letterSpacing: '1px',
-            minWidth: '90px',
-            touchAction: 'manipulation',
-            borderRadius: `${T.radius.md}px`,
-            background: T.bg.button,
-            border: `1px solid ${T.accent.cyan}33`,
-            boxShadow: T.glow(T.accent.cyan, 0.5),
-            textShadow: T.glow(T.accent.cyan, 1),
-            backdropFilter: 'blur(20px)',
-            transition: 'all 0.2s ease',
-          }}
-        >
-          Profile
-        </button>
-
-        <button
-          onClick={() => {
-            audioManager.playSfx('button_click');
-            setShowAbilities(true);
-          }}
-          style={{
-            padding: '12px 20px',
-            fontSize: '14px',
-            color: T.accent.green,
-            cursor: 'pointer',
-            fontFamily: T.font.display,
-            fontWeight: 700,
-            letterSpacing: '1px',
-            minWidth: '90px',
-            touchAction: 'manipulation',
-            borderRadius: `${T.radius.md}px`,
-            background: T.bg.button,
-            border: `1px solid ${T.accent.green}33`,
-            boxShadow: T.glow(T.accent.green, 0.5),
-            textShadow: T.glow(T.accent.green, 1),
-            backdropFilter: 'blur(20px)',
-            transition: 'all 0.2s ease',
-          }}
-        >
-          Abilities
-        </button>
+            <button
+              onClick={() => {
+                audioManager.playSfx('button_click');
+                setShowAbilities(true);
+              }}
+              style={{
+                padding: '10px 18px',
+                fontSize: '13px',
+                color: T.accent.green,
+                cursor: 'pointer',
+                fontFamily: T.font.display,
+                fontWeight: 700,
+                letterSpacing: '1px',
+                minWidth: '88px',
+                touchAction: 'manipulation',
+                borderRadius: `${T.radius.md}px`,
+                background: T.bg.button,
+                border: `1px solid ${T.accent.green}33`,
+                boxShadow: T.glow(T.accent.green, 0.5),
+                textShadow: T.glow(T.accent.green, 1),
+                backdropFilter: 'blur(20px)',
+                transition: 'all 0.2s ease',
+              }}
+            >
+              Abilities
+            </button>
+          </div>
         </div>
       </div>
 

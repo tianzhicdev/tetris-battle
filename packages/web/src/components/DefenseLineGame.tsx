@@ -35,6 +35,17 @@ interface DefenseLineGameState {
   winner: DefenseLinePlayer | null;
 }
 
+interface DefenseLineClearCell {
+  row: number;
+  col: number;
+}
+
+interface DefenseLineClearSegment {
+  row: number;
+  startCol: number;
+  endCol: number;
+}
+
 interface DefenseLineGameProps {
   playerId: string;
   roomId: string;
@@ -50,6 +61,43 @@ const BOARD_ROWS = 20;
 const BOARD_COLS = 10;
 const DIVIDER_ROW = 10;
 const TICK_MS = 700;
+const CLEAR_FLASH_MS = 260;
+const DROP_TRAIL_MS = 150;
+
+type OverlayParticle = {
+  x: number;
+  y: number;
+  vx: number;
+  vy: number;
+  gravity: number;
+  size: number;
+  life: number;
+  decay: number;
+  color: string;
+  rotation: number;
+  rotationVelocity: number;
+};
+
+type OverlayFlashCell = {
+  row: number;
+  col: number;
+  color: string;
+  expiresAt: number;
+};
+
+type OverlayTrail = {
+  col: number;
+  startRow: number;
+  endRow: number;
+  color: string;
+  expiresAt: number;
+};
+
+type OverlayFxState = {
+  flashes: OverlayFlashCell[];
+  trails: OverlayTrail[];
+  particles: OverlayParticle[];
+};
 
 function getPieceCells(piece: DefenseLinePiece | null): Array<[number, number]> {
   if (!piece) return [];
@@ -84,6 +132,15 @@ function mapToActual(visualRow: number, visualCol: number, viewAs: DefenseLinePl
   return [BOARD_ROWS - 1 - visualRow, BOARD_COLS - 1 - visualCol];
 }
 
+function mapToVisual(actualRow: number, actualCol: number, viewAs: DefenseLinePlayer): [number, number] {
+  if (viewAs === 'a') return [actualRow, actualCol];
+  return [BOARD_ROWS - 1 - actualRow, BOARD_COLS - 1 - actualCol];
+}
+
+function cloneBoard(board: DefenseLineCell[][]): DefenseLineCell[][] {
+  return board.map((row) => [...row]);
+}
+
 function isFilledForViewer(cell: DefenseLineCell, viewAs: DefenseLinePlayer): boolean {
   return viewAs === 'a'
     ? cell === 'a' || cell === 'x'
@@ -95,6 +152,53 @@ function blockTypeForCell(cell: DefenseLineCell, viewAs: DefenseLinePlayer): Tet
     return cell === 'a' ? 'I' : 'J';
   }
   return cell === 'b' ? 'Z' : 'L';
+}
+
+function isSolidForPlayer(board: DefenseLineCell[][], player: DefenseLinePlayer, row: number, col: number): boolean {
+  const cell = board[row]?.[col];
+  if (player === 'a') {
+    return cell === 'a' || cell === 'x';
+  }
+  return cell === 'b' || cell === '0';
+}
+
+function canPlacePieceOnBoard(board: DefenseLineCell[][], player: DefenseLinePlayer, piece: DefenseLinePiece): boolean {
+  for (const [row, col] of getPieceCells(piece)) {
+    if (row < 0 || row >= BOARD_ROWS || col < 0 || col >= BOARD_COLS) {
+      return false;
+    }
+    if (isSolidForPlayer(board, player, row, col)) {
+      return false;
+    }
+  }
+  return true;
+}
+
+function computeHardDropPiece(board: DefenseLineCell[][], player: DefenseLinePlayer, piece: DefenseLinePiece): DefenseLinePiece {
+  const step = player === 'a' ? 1 : -1;
+  let dropped = { ...piece };
+
+  while (true) {
+    const candidate = { ...dropped, row: dropped.row + step };
+    if (!canPlacePieceOnBoard(board, player, candidate)) {
+      break;
+    }
+    dropped = candidate;
+  }
+
+  return dropped;
+}
+
+function themeColorForCell(cell: DefenseLineCell, viewAs: DefenseLinePlayer, theme: any): string {
+  const blockType = blockTypeForCell(cell, viewAs);
+  const color = theme?.colors?.[blockType];
+  if (typeof color === 'string') {
+    return color;
+  }
+  if (viewAs === 'a') {
+    return cell === 'a' ? '#67eaff' : '#7aa8ff';
+  }
+  return cell === 'b' ? '#ff78a5' : '#ffd37a';
 }
 
 function drawDefenseBoard(
@@ -200,7 +304,17 @@ export function DefenseLineGame({ playerId, roomId, theme, onExit, aiOpponent }:
   const actionZoneRef = useRef<HTMLDivElement>(null);
   const opponentBoardViewportRef = useRef<HTMLDivElement>(null);
   const mainCanvasRef = useRef<HTMLCanvasElement>(null);
+  const mainOverlayCanvasRef = useRef<HTMLCanvasElement>(null);
   const opponentCanvasRef = useRef<HTMLCanvasElement>(null);
+  const opponentOverlayCanvasRef = useRef<HTMLCanvasElement>(null);
+  const boardSnapshotRef = useRef<DefenseLineCell[][] | null>(null);
+  const prevActivePiecesRef = useRef<{ a: DefenseLinePiece | null; b: DefenseLinePiece | null }>({
+    a: null,
+    b: null,
+  });
+  const mainFxRef = useRef<OverlayFxState>({ flashes: [], trails: [], particles: [] });
+  const opponentFxRef = useRef<OverlayFxState>({ flashes: [], trails: [], particles: [] });
+  const fxRafRef = useRef<number | null>(null);
   const playerBoardZoneSize = useElementSize(playerBoardZoneRef);
   const rightInfoZoneSize = useElementSize(rightInfoZoneRef);
   const opponentBoardViewportSize = useElementSize(opponentBoardViewportRef);
@@ -289,6 +403,247 @@ export function DefenseLineGame({ playerId, roomId, theme, onExit, aiOpponent }:
     }
   }, []);
 
+  const drawOverlayCanvas = useCallback((canvas: HTMLCanvasElement | null, fx: OverlayFxState, now: number): boolean => {
+    if (!canvas) return false;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return false;
+
+    const cellWidth = canvas.width / BOARD_COLS;
+    const cellHeight = canvas.height / BOARD_ROWS;
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    fx.trails = fx.trails.filter((trail) => trail.expiresAt > now);
+    for (const trail of fx.trails) {
+      const alpha = Math.max(0, Math.min(1, (trail.expiresAt - now) / DROP_TRAIL_MS));
+      const start = Math.min(trail.startRow, trail.endRow);
+      const end = Math.max(trail.startRow, trail.endRow);
+      for (let row = start; row <= end; row++) {
+        const x = trail.col * cellWidth + Math.max(1, cellWidth * 0.14);
+        const y = row * cellHeight + Math.max(1, cellHeight * 0.14);
+        const w = Math.max(1, cellWidth - Math.max(2, cellWidth * 0.28));
+        const h = Math.max(1, cellHeight - Math.max(2, cellHeight * 0.28));
+
+        ctx.save();
+        ctx.shadowBlur = 8;
+        ctx.shadowColor = trail.color;
+        ctx.fillStyle = `rgba(255, 255, 255, ${0.06 * alpha})`;
+        ctx.fillRect(x, y, w, h);
+        ctx.fillStyle = trail.color;
+        ctx.globalAlpha = 0.18 * alpha;
+        ctx.fillRect(x, y, w, h);
+        ctx.restore();
+      }
+    }
+
+    fx.flashes = fx.flashes.filter((flash) => flash.expiresAt > now);
+    for (const flash of fx.flashes) {
+      const progress = Math.max(0, Math.min(1, 1 - ((flash.expiresAt - now) / CLEAR_FLASH_MS)));
+      const alpha = Math.sin(progress * Math.PI) * 0.86;
+      const x = flash.col * cellWidth;
+      const y = flash.row * cellHeight;
+
+      ctx.save();
+      ctx.globalAlpha = alpha;
+      ctx.fillStyle = flash.color;
+      ctx.shadowBlur = 14;
+      ctx.shadowColor = flash.color;
+      ctx.fillRect(x, y, cellWidth, cellHeight);
+      ctx.restore();
+    }
+
+    const nextParticles: OverlayParticle[] = [];
+    for (const particle of fx.particles) {
+      particle.vy += particle.gravity;
+      particle.x += particle.vx;
+      particle.y += particle.vy;
+      particle.rotation += particle.rotationVelocity;
+      particle.life -= particle.decay;
+      if (particle.life <= 0) continue;
+
+      ctx.save();
+      ctx.translate(particle.x, particle.y);
+      ctx.rotate(particle.rotation);
+      ctx.globalAlpha = particle.life;
+      ctx.shadowBlur = 8;
+      ctx.shadowColor = particle.color;
+      ctx.fillStyle = particle.color;
+      ctx.fillRect(-particle.size / 2, -particle.size / 2, particle.size, particle.size);
+      ctx.restore();
+
+      nextParticles.push(particle);
+    }
+    fx.particles = nextParticles;
+
+    return fx.trails.length > 0 || fx.flashes.length > 0 || fx.particles.length > 0;
+  }, []);
+
+  const runOverlayFrame = useCallback(() => {
+    const now = Date.now();
+    const mainActive = drawOverlayCanvas(mainOverlayCanvasRef.current, mainFxRef.current, now);
+    const opponentActive = drawOverlayCanvas(opponentOverlayCanvasRef.current, opponentFxRef.current, now);
+    if (mainActive || opponentActive) {
+      fxRafRef.current = requestAnimationFrame(runOverlayFrame);
+      return;
+    }
+    fxRafRef.current = null;
+  }, [drawOverlayCanvas]);
+
+  const ensureOverlayLoop = useCallback(() => {
+    if (fxRafRef.current !== null) return;
+    fxRafRef.current = requestAnimationFrame(runOverlayFrame);
+  }, [runOverlayFrame]);
+
+  const spawnParticlesAtCell = useCallback((
+    fx: OverlayFxState,
+    canvas: HTMLCanvasElement | null,
+    visualRow: number,
+    visualCol: number,
+    color: string,
+    count: number
+  ) => {
+    if (!canvas) return;
+    if (visualRow < 0 || visualRow >= BOARD_ROWS || visualCol < 0 || visualCol >= BOARD_COLS) return;
+
+    const cellWidth = canvas.width / BOARD_COLS;
+    const cellHeight = canvas.height / BOARD_ROWS;
+    const centerX = (visualCol + 0.5) * cellWidth;
+    const centerY = (visualRow + 0.5) * cellHeight;
+
+    for (let i = 0; i < count; i++) {
+      const angle = Math.random() * Math.PI * 2;
+      const speed = 0.4 + Math.random() * 2;
+      fx.particles.push({
+        x: centerX + (Math.random() - 0.5) * cellWidth * 0.25,
+        y: centerY + (Math.random() - 0.5) * cellHeight * 0.25,
+        vx: Math.cos(angle) * speed,
+        vy: Math.sin(angle) * speed - 0.35,
+        gravity: 0.06,
+        size: Math.max(2, Math.min(cellWidth, cellHeight) * (0.11 + Math.random() * 0.2)),
+        life: 1,
+        decay: 0.02 + Math.random() * 0.02,
+        color,
+        rotation: Math.random() * Math.PI * 2,
+        rotationVelocity: (Math.random() - 0.5) * 0.24,
+      });
+    }
+  }, []);
+
+  const triggerClearEffects = useCallback((cells: DefenseLineClearCell[]) => {
+    const mainView = playerSideRef.current;
+    if (!mainView || cells.length === 0) return;
+    const opponentView: DefenseLinePlayer = mainView === 'a' ? 'b' : 'a';
+    const now = Date.now();
+    const snapshot = boardSnapshotRef.current;
+
+    for (const cellPos of cells) {
+      const actualCell = snapshot?.[cellPos.row]?.[cellPos.col] ?? (cellPos.row < DIVIDER_ROW ? '0' : 'x');
+
+      const [mainRow, mainCol] = mapToVisual(cellPos.row, cellPos.col, mainView);
+      const mainColor = themeColorForCell(actualCell, mainView, theme);
+      mainFxRef.current.flashes.push({
+        row: mainRow,
+        col: mainCol,
+        color: mainColor,
+        expiresAt: now + CLEAR_FLASH_MS,
+      });
+      spawnParticlesAtCell(mainFxRef.current, mainOverlayCanvasRef.current, mainRow, mainCol, mainColor, 6);
+
+      const [oppRow, oppCol] = mapToVisual(cellPos.row, cellPos.col, opponentView);
+      const oppColor = themeColorForCell(actualCell, opponentView, theme);
+      opponentFxRef.current.flashes.push({
+        row: oppRow,
+        col: oppCol,
+        color: oppColor,
+        expiresAt: now + CLEAR_FLASH_MS,
+      });
+      spawnParticlesAtCell(opponentFxRef.current, opponentOverlayCanvasRef.current, oppRow, oppCol, oppColor, 4);
+    }
+
+    ensureOverlayLoop();
+  }, [ensureOverlayLoop, spawnParticlesAtCell, theme]);
+
+  const triggerHardDropEffects = useCallback(() => {
+    if (!state || !playerSide) return;
+    const stateForPlayer = playerSide === 'a' ? state.playerA : state.playerB;
+    const piece = stateForPlayer.activePiece;
+    if (!piece) return;
+
+    const dropped = computeHardDropPiece(state.board, playerSide, piece);
+    const startCells = getPieceCells(piece);
+    const endCells = getPieceCells(dropped);
+    if (startCells.length === 0 || endCells.length === 0) return;
+
+    const mainView: DefenseLinePlayer = playerSide;
+    const opponentView: DefenseLinePlayer = playerSide === 'a' ? 'b' : 'a';
+    const color = typeof theme?.colors?.[piece.type] === 'string' ? theme.colors[piece.type] : '#ffffff';
+    const now = Date.now();
+
+    for (let i = 0; i < Math.min(startCells.length, endCells.length); i++) {
+      const [startRow, startCol] = startCells[i];
+      const [endRow, endCol] = endCells[i];
+
+      const [mainStartRow, mainStartCol] = mapToVisual(startRow, startCol, mainView);
+      const [mainEndRow, mainEndCol] = mapToVisual(endRow, endCol, mainView);
+      if (mainStartCol === mainEndCol) {
+        mainFxRef.current.trails.push({
+          col: mainEndCol,
+          startRow: mainStartRow,
+          endRow: mainEndRow,
+          color,
+          expiresAt: now + DROP_TRAIL_MS,
+        });
+      }
+      spawnParticlesAtCell(mainFxRef.current, mainOverlayCanvasRef.current, mainEndRow, mainEndCol, color, 3);
+
+      const [oppStartRow, oppStartCol] = mapToVisual(startRow, startCol, opponentView);
+      const [oppEndRow, oppEndCol] = mapToVisual(endRow, endCol, opponentView);
+      if (oppStartCol === oppEndCol) {
+        opponentFxRef.current.trails.push({
+          col: oppEndCol,
+          startRow: oppStartRow,
+          endRow: oppEndRow,
+          color,
+          expiresAt: now + DROP_TRAIL_MS,
+        });
+      }
+      spawnParticlesAtCell(opponentFxRef.current, opponentOverlayCanvasRef.current, oppEndRow, oppEndCol, color, 2);
+    }
+
+    ensureOverlayLoop();
+  }, [ensureOverlayLoop, playerSide, spawnParticlesAtCell, state, theme]);
+
+  const triggerLockFlashEffects = useCallback((piece: DefenseLinePiece, owner: DefenseLinePlayer) => {
+    const mainView = playerSideRef.current;
+    if (!mainView) return;
+    const opponentView: DefenseLinePlayer = mainView === 'a' ? 'b' : 'a';
+    const ownerCell: DefenseLineCell = owner === 'a' ? 'a' : 'b';
+    const now = Date.now();
+
+    for (const [actualRow, actualCol] of getPieceCells(piece)) {
+      if (actualRow < 0 || actualRow >= BOARD_ROWS || actualCol < 0 || actualCol >= BOARD_COLS) continue;
+
+      const [mainRow, mainCol] = mapToVisual(actualRow, actualCol, mainView);
+      const mainColor = themeColorForCell(ownerCell, mainView, theme);
+      mainFxRef.current.flashes.push({
+        row: mainRow,
+        col: mainCol,
+        color: mainColor,
+        expiresAt: now + 130,
+      });
+
+      const [oppRow, oppCol] = mapToVisual(actualRow, actualCol, opponentView);
+      const oppColor = themeColorForCell(ownerCell, opponentView, theme);
+      opponentFxRef.current.flashes.push({
+        row: oppRow,
+        col: oppCol,
+        color: oppColor,
+        expiresAt: now + 130,
+      });
+    }
+
+    ensureOverlayLoop();
+  }, [ensureOverlayLoop, theme]);
+
   const sendInput = useCallback((payload: unknown) => {
     const socket = socketRef.current;
     if (!socket || socket.readyState !== WebSocket.OPEN) return;
@@ -317,11 +672,27 @@ export function DefenseLineGame({ playerId, roomId, theme, onExit, aiOpponent }:
 
   const handleHardDrop = useCallback(() => {
     audioManager.playSfx('hard_drop', 0.65);
+    triggerHardDropEffects();
     sendInput({ type: 'hard_drop' });
-  }, [sendInput]);
+  }, [sendInput, triggerHardDropEffects]);
 
   useEffect(() => {
     playerSideRef.current = playerSide;
+    if (fxRafRef.current !== null) {
+      cancelAnimationFrame(fxRafRef.current);
+      fxRafRef.current = null;
+    }
+    mainFxRef.current = { flashes: [], trails: [], particles: [] };
+    opponentFxRef.current = { flashes: [], trails: [], particles: [] };
+    prevActivePiecesRef.current = { a: null, b: null };
+
+    const clearOverlay = (canvas: HTMLCanvasElement | null) => {
+      const ctx = canvas?.getContext('2d');
+      if (!canvas || !ctx) return;
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+    };
+    clearOverlay(mainOverlayCanvasRef.current);
+    clearOverlay(opponentOverlayCanvasRef.current);
   }, [playerSide]);
 
   useEffect(() => {
@@ -375,21 +746,48 @@ export function DefenseLineGame({ playerId, roomId, theme, onExit, aiOpponent }:
 
       if (data.type === 'clear') {
         const rows = Array.isArray(data.rows) ? data.rows.length : 0;
+        const cells: DefenseLineClearCell[] = Array.isArray(data.cells)
+          ? data.cells
+              .filter((cell: any) =>
+                cell &&
+                Number.isInteger(cell.row) &&
+                Number.isInteger(cell.col) &&
+                cell.row >= 0 &&
+                cell.row < BOARD_ROWS &&
+                cell.col >= 0 &&
+                cell.col < BOARD_COLS
+              )
+              .map((cell: any) => ({ row: cell.row, col: cell.col }))
+          : [];
+        if (cells.length === 0 && Array.isArray(data.segments)) {
+          for (const segment of data.segments as DefenseLineClearSegment[]) {
+            if (!Number.isInteger(segment?.row) || !Number.isInteger(segment?.startCol) || !Number.isInteger(segment?.endCol)) {
+              continue;
+            }
+            for (let col = segment.startCol; col <= segment.endCol; col++) {
+              if (segment.row < 0 || segment.row >= BOARD_ROWS || col < 0 || col >= BOARD_COLS) continue;
+              cells.push({ row: segment.row, col });
+            }
+          }
+        }
         if (rows > 0) {
           playClearSound(rows);
           triggerClearBlast(playerSideRef.current !== null && data.player === playerSideRef.current);
+          triggerClearEffects(cells);
         }
         return;
       }
 
       if (data.type === 'state' && data.state) {
-        setState(data.state as DefenseLineGameState);
+        const nextState = data.state as DefenseLineGameState;
+        setState(nextState);
+        boardSnapshotRef.current = cloneBoard(nextState.board);
         setLastStateAtMs(Date.now());
-        if (data.state.status === 'playing') {
+        if (nextState.status === 'playing') {
           setCountdown(null);
         }
-        if (data.state.winner === 'a' || data.state.winner === 'b') {
-          setWinner(data.state.winner);
+        if (nextState.winner === 'a' || nextState.winner === 'b') {
+          setWinner(nextState.winner);
         }
         return;
       }
@@ -405,7 +803,7 @@ export function DefenseLineGame({ playerId, roomId, theme, onExit, aiOpponent }:
       socket.close();
       socketRef.current = null;
     };
-  }, [aiOpponent, playerId, roomId, triggerClearBlast]);
+  }, [aiOpponent, playerId, roomId, triggerClearBlast, triggerClearEffects]);
 
   useEffect(() => {
     if (!state || !playerSide) return;
@@ -422,6 +820,48 @@ export function DefenseLineGame({ playerId, roomId, theme, onExit, aiOpponent }:
     state,
     theme,
   ]);
+
+  useEffect(() => {
+    if (!state || !playerSide) return;
+
+    const previous = prevActivePiecesRef.current;
+    const current = {
+      a: state.playerA.activePiece ? { ...state.playerA.activePiece } : null,
+      b: state.playerB.activePiece ? { ...state.playerB.activePiece } : null,
+    };
+
+    for (const side of ['a', 'b'] as const) {
+      const prevPiece = previous[side];
+      const nextPiece = current[side];
+      if (!prevPiece || !nextPiece) continue;
+
+      const respawned = side === 'a'
+        ? nextPiece.row < prevPiece.row
+        : nextPiece.row > prevPiece.row;
+
+      if (respawned) {
+        triggerLockFlashEffects(prevPiece, side);
+      }
+    }
+
+    prevActivePiecesRef.current = current;
+  }, [playerSide, state, triggerLockFlashEffects]);
+
+  useEffect(() => () => {
+    if (fxRafRef.current !== null) {
+      cancelAnimationFrame(fxRafRef.current);
+      fxRafRef.current = null;
+    }
+    mainFxRef.current = { flashes: [], trails: [], particles: [] };
+    opponentFxRef.current = { flashes: [], trails: [], particles: [] };
+    const clearOverlay = (canvas: HTMLCanvasElement | null) => {
+      const ctx = canvas?.getContext('2d');
+      if (!canvas || !ctx) return;
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+    };
+    clearOverlay(mainOverlayCanvasRef.current);
+    clearOverlay(opponentOverlayCanvasRef.current);
+  }, []);
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -665,6 +1105,19 @@ export function DefenseLineGame({ playerId, roomId, theme, onExit, aiOpponent }:
                 boxShadow: '0 0 20px rgba(0, 240, 240, 0.08), 0 0 60px rgba(0, 240, 240, 0.03)',
               }}
             />
+            <canvas
+              ref={mainOverlayCanvasRef}
+              width={mainBoardDisplay.pixelWidth}
+              height={mainBoardDisplay.pixelHeight}
+              style={{
+                position: 'absolute',
+                inset: 0,
+                width: `${mainBoardDisplay.pixelWidth}px`,
+                height: `${mainBoardDisplay.pixelHeight}px`,
+                borderRadius: 'clamp(6px, 1.5vw, 10px)',
+                pointerEvents: 'none',
+              }}
+            />
             <div
               style={{
                 position: 'absolute',
@@ -722,6 +1175,19 @@ export function DefenseLineGame({ playerId, roomId, theme, onExit, aiOpponent }:
                   height: `${opponentBoardDisplay.pixelHeight}px`,
                   borderRadius: 'clamp(4px, 1vw, 6px)',
                   boxShadow: '0 0 8px rgba(255, 255, 255, 0.08)',
+                }}
+              />
+              <canvas
+                ref={opponentOverlayCanvasRef}
+                width={opponentBoardDisplay.pixelWidth}
+                height={opponentBoardDisplay.pixelHeight}
+                style={{
+                  position: 'absolute',
+                  inset: 0,
+                  width: `${opponentBoardDisplay.pixelWidth}px`,
+                  height: `${opponentBoardDisplay.pixelHeight}px`,
+                  borderRadius: 'clamp(4px, 1vw, 6px)',
+                  pointerEvents: 'none',
                 }}
               />
             </div>

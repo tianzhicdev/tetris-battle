@@ -82,7 +82,7 @@ const FLOATING_PIECES: FloatingPieceConfig[] = LANE_X.flatMap((x, laneIndex) => 
       rotation: -24 + (laneIndex % 7) * 8,
       driftX: primaryDrift,
       opacity: 0.62 + (laneIndex % 3) * 0.06,
-      blur: 0.6 + (laneIndex % 3) * 0.3,
+      blur: 0.2 + (laneIndex % 3) * 0.15,
     },
     {
       type: PIECE_TYPES[(laneIndex + 3) % PIECE_TYPES.length],
@@ -93,7 +93,7 @@ const FLOATING_PIECES: FloatingPieceConfig[] = LANE_X.flatMap((x, laneIndex) => 
       rotation: 18 - (laneIndex % 6) * 7,
       driftX: secondaryDrift,
       opacity: 0.58 + ((laneIndex + 1) % 3) * 0.06,
-      blur: 0.7 + ((laneIndex + 1) % 3) * 0.25,
+      blur: 0.22 + ((laneIndex + 1) % 3) * 0.12,
     },
   ];
 });
@@ -152,15 +152,11 @@ export function FloatingBackground() {
           2% {
             opacity: var(--piece-opacity);
           }
-          52% {
-            transform: translate3d(var(--drift-x), 8vh, 0) rotate(calc(var(--start-rotation) + 18deg));
-            opacity: var(--piece-opacity);
-          }
           98% {
             opacity: var(--piece-opacity);
           }
           100% {
-            transform: translate3d(calc(var(--drift-x) * -0.6), 150vh, 0) rotate(calc(var(--start-rotation) + 34deg));
+            transform: translate3d(var(--drift-x), 150vh, 0) rotate(calc(var(--start-rotation) + 34deg));
             opacity: 0;
           }
         }

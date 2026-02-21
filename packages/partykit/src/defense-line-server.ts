@@ -254,6 +254,8 @@ export default class DefenseLineServer implements Party.Server {
         type: 'clear',
         player: side,
         rows: result.clearedRows,
+        segments: result.clearedSegments,
+        cells: result.clearedCells,
       });
     }
 
@@ -378,6 +380,8 @@ export default class DefenseLineServer implements Party.Server {
           type: 'clear',
           player: clearEvent.player,
           rows: clearEvent.rows,
+          segments: clearEvent.segments,
+          cells: clearEvent.cells,
         });
       }
 
@@ -465,6 +469,8 @@ export default class DefenseLineServer implements Party.Server {
           type: 'clear',
           player: this.aiSide,
           rows: result.clearedRows,
+          segments: result.clearedSegments,
+          cells: result.clearedCells,
         });
       }
 

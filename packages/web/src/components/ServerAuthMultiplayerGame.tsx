@@ -160,6 +160,30 @@ function hexToRgbaColor(hex: string, alpha: number): string {
   return `rgba(${r}, ${g}, ${b}, ${alpha})`;
 }
 
+function withColorAlpha(color: string, alpha: number): string {
+  const clampedAlpha = Math.max(0, Math.min(1, alpha));
+  const normalized = color.trim();
+
+  const rgbMatch = normalized.match(
+    /^rgba?\(\s*([0-9]{1,3})\s*,\s*([0-9]{1,3})\s*,\s*([0-9]{1,3})(?:\s*,\s*[0-9]*\.?[0-9]+\s*)?\)$/i
+  );
+  if (rgbMatch) {
+    const [, r, g, b] = rgbMatch;
+    return `rgba(${r}, ${g}, ${b}, ${clampedAlpha})`;
+  }
+
+  const hexMatch = normalized.match(/^#([0-9a-f]{6})$/i);
+  if (hexMatch) {
+    const hex = hexMatch[1];
+    const r = parseInt(hex.slice(0, 2), 16);
+    const g = parseInt(hex.slice(2, 4), 16);
+    const b = parseInt(hex.slice(4, 6), 16);
+    return `rgba(${r}, ${g}, ${b}, ${clampedAlpha})`;
+  }
+
+  return color;
+}
+
 function extractClearedRowsFromPreviousBoard(previousGrid: any[][], linesCleared: number): ClearedRowSnapshot[] {
   if (!Array.isArray(previousGrid) || linesCleared <= 0) return [];
 
@@ -679,6 +703,18 @@ export function ServerAuthMultiplayerGame({
     if (effects.includes('shield')) return 'shield';
     return null;
   }, [opponentState?.activeEffects]);
+
+  const selfBoardTheme = useMemo(
+    () => ({
+      ...theme,
+      backgroundColor: withColorAlpha(theme.backgroundColor, 0.62),
+    }),
+    [theme]
+  );
+  const selfBoardShellBackground = useMemo(
+    () => withColorAlpha(theme.backgroundColor, 0.62),
+    [theme.backgroundColor]
+  );
 
   // Helper to queue notifications (max 2 visible, auto-dismiss after 2.5s)
   const queueNotification = useCallback((name: string, description: string, category: 'buff' | 'debuff') => {
@@ -1477,16 +1513,17 @@ export function ServerAuthMultiplayerGame({
   // Initialize renderers
   useEffect(() => {
     if (canvasRef.current) {
-      rendererRef.current = new TetrisRenderer(canvasRef.current, 25, theme);
+      rendererRef.current = new TetrisRenderer(canvasRef.current, 25, selfBoardTheme);
     }
     if (opponentCanvasRef.current) {
       opponentRendererRef.current = new TetrisRenderer(opponentCanvasRef.current, 8, theme);
     }
-  }, [theme]);
+  }, [selfBoardTheme, theme]);
 
   // Render own board from authoritative server state
   useEffect(() => {
     if (rendererRef.current && yourState) {
+      rendererRef.current.setTheme(selfBoardTheme);
       applyBoardDiffAnimations(
         rendererRef.current,
         'self',
@@ -1535,6 +1572,7 @@ export function ServerAuthMultiplayerGame({
     yourState,
     applyBoardDiffAnimations,
     triggerBoardAbilityVisual,
+    selfBoardTheme,
     yourBoardDisplay.cellSize,
     yourBoardHeight,
     yourBoardWidth,
@@ -1543,6 +1581,7 @@ export function ServerAuthMultiplayerGame({
   // Render opponent's board
   useEffect(() => {
     if (opponentRendererRef.current && opponentState) {
+      opponentRendererRef.current.setTheme(theme);
       applyBoardDiffAnimations(
         opponentRendererRef.current,
         'opponent',
@@ -1564,6 +1603,7 @@ export function ServerAuthMultiplayerGame({
   }, [
     opponentState,
     applyBoardDiffAnimations,
+    theme,
     opponentBoardDisplay.cellSize,
     opponentBoardHeight,
     opponentBoardWidth,
@@ -2237,7 +2277,7 @@ export function ServerAuthMultiplayerGame({
                   transform: getTiltAngle(yourState) ? `rotate(${getTiltAngle(yourState)}deg) scale(0.96)` : 'none',
                   transition: 'transform 200ms ease-out',
                   position: 'relative',
-                  background: 'rgba(5, 5, 22, 1)',
+                  background: selfBoardShellBackground,
                   backdropFilter: 'blur(6px)',
                   WebkitBackdropFilter: 'blur(6px)',
                   borderRadius: '9px',
@@ -2661,7 +2701,7 @@ export function ServerAuthMultiplayerGame({
                     ? `rotate(${getTiltAngle(yourState)}deg) scale(0.96)`
                     : 'none',
                   transition: 'transform 200ms ease-out',
-                  background: 'rgba(5, 5, 20, 0.75)',
+                  background: selfBoardShellBackground,
                   backdropFilter: 'blur(4px)',
                   WebkitBackdropFilter: 'blur(4px)',
                   borderRadius: 'clamp(6px, 1.5vw, 10px)',
