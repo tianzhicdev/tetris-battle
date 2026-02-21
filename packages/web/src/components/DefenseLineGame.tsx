@@ -14,7 +14,7 @@ interface DefenseLineGameProps {
   onExit: () => void;
 }
 
-const ROOM_ID = 'global';
+const ROOM_ID = 'global-v2';
 
 export function DefenseLineGame({ playerId, preferredSide, theme, onExit }: DefenseLineGameProps) {
   const [state, setState] = useState<DefenseLineGameState | null>(null);
