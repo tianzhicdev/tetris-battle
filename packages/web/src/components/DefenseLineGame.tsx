@@ -32,7 +32,7 @@ export function DefenseLineGame({ playerId, preferredSide, theme, onExit }: Defe
 
     const socket = new PartySocket({
       host,
-      party: 'defense-line',
+      party: 'defenseline',
       room: ROOM_ID,
     });
 

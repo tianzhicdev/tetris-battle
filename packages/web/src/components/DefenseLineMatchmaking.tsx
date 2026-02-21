@@ -36,7 +36,7 @@ export function DefenseLineMatchmaking({ playerId, theme, onCancel, onMatchReady
     const host = normalizePartykitHost(import.meta.env.VITE_PARTYKIT_HOST);
     const socket = new PartySocket({
       host,
-      party: 'defense-line',
+      party: 'defenseline',
       room: ROOM_ID,
     });
 

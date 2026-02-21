@@ -5,6 +5,6 @@
     "matchmaking": "src/matchmaking.ts",
     "game": "src/game.ts",
     "presence": "src/presence.ts",
-    "defense-line": "src/defense-line-server.ts"
+    "defenseline": "src/defense-line-server.ts"
   }
 }
