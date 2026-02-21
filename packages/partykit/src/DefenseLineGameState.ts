@@ -281,8 +281,8 @@ export class DefenseLineGameState {
 
     for (const row of clearableRows) {
       for (let col = 0; col < BOARD_COLS; col++) {
-        // Reset to background ('0' or 'x')
-        this.board[row][col] = row < 15 ? '0' : 'x';
+        // A clears → '0', B clears → 'x'
+        this.board[row][col] = player === 'a' ? '0' : 'x';
       }
       this.activeRows.delete(row);
     }

@@ -133,7 +133,7 @@ export default class DefenseLineServer implements Party.Server {
       return;
     }
 
-    const normalizedInput = this.normalizeInput(input);
+    const normalizedInput = this.normalizeInput(input, side);
     const result = this.gameState.processInput(side, normalizedInput);
     if (!result.changed) {
       return;
@@ -154,8 +154,12 @@ export default class DefenseLineServer implements Party.Server {
     }
   }
 
-  private normalizeInput(input: DefenseLineInput): 'move_left' | 'move_right' | 'rotate_cw' | 'rotate_ccw' | 'soft_drop' | 'hard_drop' {
+  private normalizeInput(input: DefenseLineInput, player: DefenseLinePlayer): 'move_left' | 'move_right' | 'rotate_cw' | 'rotate_ccw' | 'soft_drop' | 'hard_drop' {
     if (input.type === 'move') {
+      // Reverse left/right for player B (board is flipped 180°)
+      if (player === 'b') {
+        return input.direction === 'left' ? 'move_right' : 'move_left';
+      }
       return input.direction === 'left' ? 'move_left' : 'move_right';
     }
 
