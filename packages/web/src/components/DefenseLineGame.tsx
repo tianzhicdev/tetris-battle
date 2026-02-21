@@ -5,6 +5,7 @@ import { normalizePartykitHost } from '../services/partykit/host';
 import { NextPiecePanel } from './NextPiecePanel';
 import { FloatingBackground } from './FloatingBackground';
 import { audioManager } from '../services/audioManager';
+import { haptics } from '../utils/haptics';
 import { useElementSize } from '../hooks/useElementSize';
 import { computeBoardDisplaySize } from './game/boardDisplaySizing';
 
@@ -135,6 +136,7 @@ function drawDefenseBoard(
   viewAs: DefenseLinePlayer,
   theme: any,
   ghostPiece?: DefenseLinePiece | null,
+  flashRows?: { rows: number[]; player: DefenseLinePlayer } | null,
 ): void {
   if (!canvas) return;
   const ctx = canvas.getContext('2d');
@@ -214,6 +216,22 @@ function drawDefenseBoard(
   ctx.moveTo(0, dividerY);
   ctx.lineTo(canvas.width, dividerY);
   ctx.stroke();
+
+  // Draw row-clear flash overlay
+  if (flashRows && flashRows.rows.length > 0) {
+    for (const row of flashRows.rows) {
+      const visualRow = viewAs === 'a' ? row : BOARD_ROWS - 1 - row;
+      const fy = visualRow * cellSize;
+      const gradient = ctx.createLinearGradient(0, fy, canvas.width, fy);
+      gradient.addColorStop(0, 'rgba(0, 240, 255, 0.0)');
+      gradient.addColorStop(0.3, 'rgba(0, 240, 255, 0.45)');
+      gradient.addColorStop(0.5, 'rgba(255, 255, 255, 0.6)');
+      gradient.addColorStop(0.7, 'rgba(0, 240, 255, 0.45)');
+      gradient.addColorStop(1, 'rgba(0, 240, 255, 0.0)');
+      ctx.fillStyle = gradient;
+      ctx.fillRect(0, fy, canvas.width, cellSize);
+    }
+  }
 }
 
 function playClearSound(clearedRows: number): void {
@@ -241,11 +259,13 @@ export function DefenseLineGame({ playerId, roomId, theme, onExit, onPlayAgain }
   const [layoutBlast, setLayoutBlast] = useState(false);
 
   const [showPostMatch, setShowPostMatch] = useState(false);
+  const [flashRows, setFlashRows] = useState<{ rows: number[]; player: DefenseLinePlayer } | null>(null);
 
   const socketRef = useRef<PartySocket | null>(null);
   const playerSideRef = useRef<DefenseLinePlayer | null>(null);
   const selfKickTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const layoutBlastTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const flashRowsTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // DAS/ARR refs for auto-repeat
   const DAS_MS = 170;
@@ -362,26 +382,31 @@ export function DefenseLineGame({ playerId, roomId, theme, onExit, onPlayAgain }
 
   const handleMoveLeft = useCallback(() => {
     audioManager.playSfx('piece_move_left', 0.3);
+    haptics.light();
     sendInput({ type: 'move', direction: 'left' });
   }, [sendInput]);
 
   const handleMoveRight = useCallback(() => {
     audioManager.playSfx('piece_move_right', 0.3);
+    haptics.light();
     sendInput({ type: 'move', direction: 'right' });
   }, [sendInput]);
 
   const handleRotate = useCallback(() => {
     audioManager.playSfx('piece_rotate', 0.45);
+    haptics.medium();
     sendInput({ type: 'rotate', direction: 'cw' });
   }, [sendInput]);
 
   const handleSoftDrop = useCallback(() => {
     audioManager.playSfx('soft_drop', 0.4);
+    haptics.light();
     sendInput({ type: 'soft_drop' });
   }, [sendInput]);
 
   const handleHardDrop = useCallback(() => {
     audioManager.playSfx('hard_drop', 0.65);
+    haptics.heavy();
     sendInput({ type: 'hard_drop' });
   }, [sendInput]);
 
@@ -403,6 +428,30 @@ export function DefenseLineGame({ playerId, roomId, theme, onExit, onPlayAgain }
       arrIntervalRef.current = setInterval(action, ARR_MS);
     }, DAS_MS);
   }, [stopAutoRepeat]);
+
+  // Countdown beep sounds
+  useEffect(() => {
+    if (countdown === null) return;
+    if (countdown > 0) {
+      audioManager.playSfx('countdown_beep', 0.6);
+      haptics.light();
+    } else if (countdown === 0) {
+      audioManager.playSfx('countdown_go', 0.8);
+      haptics.medium();
+    }
+  }, [countdown]);
+
+  // Win/loss sound and haptics
+  useEffect(() => {
+    if (!winner || !playerSide) return;
+    if (playerSide === winner) {
+      audioManager.playSfx('star_earned', 0.8);
+      haptics.success();
+    } else {
+      audioManager.playSfx('game_over', 0.7);
+      haptics.error();
+    }
+  }, [winner, playerSide]);
 
   // Show post-match overlay shortly after winner is determined
   useEffect(() => {
@@ -457,10 +506,20 @@ export function DefenseLineGame({ playerId, roomId, theme, onExit, onPlayAgain }
       }
 
       if (data.type === 'clear') {
-        const rows = Array.isArray(data.rows) ? data.rows.length : 0;
-        if (rows > 0) {
-          playClearSound(rows);
-          triggerClearBlast(playerSideRef.current !== null && data.player === playerSideRef.current);
+        const rowIndices = Array.isArray(data.rows) ? data.rows : [];
+        if (rowIndices.length > 0) {
+          playClearSound(rowIndices.length);
+          const clearedBySelf = playerSideRef.current !== null && data.player === playerSideRef.current;
+          triggerClearBlast(clearedBySelf);
+          if (clearedBySelf) {
+            haptics.medium();
+          } else {
+            haptics.doubleTap();
+          }
+          // Flash cleared rows on canvas
+          if (flashRowsTimeoutRef.current) clearTimeout(flashRowsTimeoutRef.current);
+          setFlashRows({ rows: rowIndices, player: data.player });
+          flashRowsTimeoutRef.current = setTimeout(() => setFlashRows(null), 250);
         }
         return;
       }
@@ -485,6 +544,7 @@ export function DefenseLineGame({ playerId, roomId, theme, onExit, onPlayAgain }
     return () => {
       if (selfKickTimeoutRef.current) clearTimeout(selfKickTimeoutRef.current);
       if (layoutBlastTimeoutRef.current) clearTimeout(layoutBlastTimeoutRef.current);
+      if (flashRowsTimeoutRef.current) clearTimeout(flashRowsTimeoutRef.current);
       stopAutoRepeat();
       socket.close();
       socketRef.current = null;
@@ -493,10 +553,11 @@ export function DefenseLineGame({ playerId, roomId, theme, onExit, onPlayAgain }
 
   useEffect(() => {
     if (!state || !playerSide) return;
-    drawDefenseBoard(mainCanvasRef.current, state, playerSide, theme, ghostPiece);
+    drawDefenseBoard(mainCanvasRef.current, state, playerSide, theme, ghostPiece, flashRows);
     const opponentSide: DefenseLinePlayer = playerSide === 'a' ? 'b' : 'a';
-    drawDefenseBoard(opponentCanvasRef.current, state, opponentSide, theme);
+    drawDefenseBoard(opponentCanvasRef.current, state, opponentSide, theme, null, flashRows);
   }, [
+    flashRows,
     ghostPiece,
     mainBoardDisplay.pixelHeight,
     mainBoardDisplay.pixelWidth,
