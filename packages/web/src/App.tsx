@@ -3,6 +3,8 @@ import { MainMenu } from './components/MainMenu';
 import { TetrisGame } from './components/TetrisGame';
 import { Matchmaking } from './components/PartykitMatchmaking';
 import { ServerAuthMultiplayerGame } from './components/ServerAuthMultiplayerGame';
+import { DefenseLineMatchmaking } from './components/DefenseLineMatchmaking';
+import { DefenseLineGame } from './components/DefenseLineGame';
 import { audioManager } from './services/audioManager';
 import { ChallengeWaiting } from './components/ChallengeWaiting';
 import { ChallengeNotification } from './components/ChallengeNotification';
@@ -21,7 +23,13 @@ import { normalizePartykitHost } from './services/partykit/host';
 import { useFriendStore } from './stores/friendStore';
 import { ABILITY_IDS, type UserProfile } from '@tetris-battle/game-core';
 
-type GameMode = 'menu' | 'solo' | 'matchmaking' | 'multiplayer';
+type GameMode =
+  | 'menu'
+  | 'solo'
+  | 'matchmaking'
+  | 'multiplayer'
+  | 'defense-line-matchmaking'
+  | 'defense-line';
 
 interface GameMatch {
   roomId: string;
@@ -35,6 +43,7 @@ function GameApp({ profile: initialProfile }: { profile: UserProfile }) {
   const { theme } = useTheme();
   const currentTheme = toLegacyTheme(theme); // Convert to legacy format for existing components
   const [gameMatch, setGameMatch] = useState<GameMatch | null>(null);
+  const [defenseLineSide, setDefenseLineSide] = useState<'a' | 'b' | null>(null);
   const [profile, setProfile] = useState<UserProfile>(initialProfile);
   const presenceRef = useRef<PartykitPresence | null>(null);
 
@@ -167,9 +176,12 @@ function GameApp({ profile: initialProfile }: { profile: UserProfile }) {
     }
   };
 
-  const handleSelectMode = (selectedMode: 'solo' | 'multiplayer') => {
+  const handleSelectMode = (selectedMode: 'solo' | 'multiplayer' | 'defense-line') => {
     if (selectedMode === 'solo') {
       setMode('solo');
+    } else if (selectedMode === 'defense-line') {
+      setDefenseLineSide(null);
+      setMode('defense-line-matchmaking');
     } else {
       setMode('matchmaking');
     }
@@ -182,6 +194,16 @@ function GameApp({ profile: initialProfile }: { profile: UserProfile }) {
 
   const handleExitGame = useCallback(() => {
     setGameMatch(null);
+    setMode('menu');
+  }, []);
+
+  const handleDefenseLineReady = useCallback((side: 'a' | 'b') => {
+    setDefenseLineSide(side);
+    setMode('defense-line');
+  }, []);
+
+  const handleExitDefenseLine = useCallback(() => {
+    setDefenseLineSide(null);
     setMode('menu');
   }, []);
 
@@ -254,6 +276,24 @@ function GameApp({ profile: initialProfile }: { profile: UserProfile }) {
           onMatchFound={handleMatchFound}
           onCancel={handleCancelMatchmaking}
           theme={currentTheme}
+        />
+      )}
+
+      {mode === 'defense-line-matchmaking' && (
+        <DefenseLineMatchmaking
+          playerId={playerId}
+          theme={currentTheme}
+          onCancel={handleCancelMatchmaking}
+          onMatchReady={handleDefenseLineReady}
+        />
+      )}
+
+      {mode === 'defense-line' && (
+        <DefenseLineGame
+          playerId={playerId}
+          preferredSide={defenseLineSide}
+          theme={currentTheme}
+          onExit={handleExitDefenseLine}
         />
       )}
 

@@ -10,7 +10,7 @@ import { useFriendStore } from '../stores/friendStore';
 import { glassSuccess, glassBlue, glassPurple, mergeGlass } from '../styles/glassUtils';
 
 interface MainMenuProps {
-  onSelectMode: (mode: 'solo' | 'multiplayer') => void;
+  onSelectMode: (mode: 'solo' | 'multiplayer' | 'defense-line') => void;
   theme: any;
   profile: UserProfile;
   onProfileUpdate: (profile: UserProfile) => void;
@@ -128,6 +128,34 @@ export function MainMenu({ onSelectMode, theme, profile, onProfileUpdate, onChal
             onTouchEnd={(e) => e.currentTarget.style.transform = 'scale(1)'}
           >
             PLAY NOW
+          </button>
+
+          <button
+            onClick={() => {
+              audioManager.playSfx('button_click');
+              onSelectMode('defense-line');
+            }}
+            className="glass-button"
+            style={mergeGlass(glassBlue(), {
+              padding: '16px 42px',
+              fontSize: 'clamp(18px, 5vw, 24px)',
+              color: '#ffffff',
+              cursor: 'pointer',
+              fontFamily: 'monospace',
+              fontWeight: 'bold',
+              transition: 'all 0.25s ease',
+              width: '100%',
+              minHeight: '68px',
+              borderRadius: '14px',
+              textShadow: '0 0 14px rgba(0, 212, 255, 0.65)',
+            })}
+            onMouseDown={(e) => e.currentTarget.style.transform = 'scale(0.97)'}
+            onMouseUp={(e) => e.currentTarget.style.transform = 'scale(1)'}
+            onMouseLeave={(e) => e.currentTarget.style.transform = 'scale(1)'}
+            onTouchStart={(e) => e.currentTarget.style.transform = 'scale(0.97)'}
+            onTouchEnd={(e) => e.currentTarget.style.transform = 'scale(1)'}
+          >
+            DEFENSE LINE
           </button>
         </div>
       </div>

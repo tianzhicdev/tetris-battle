@@ -5,6 +5,7 @@
   "main": "./src/server.ts",
   "scripts": {
     "dev": "partykit dev",
+    "build": "tsc --noEmit",
     "deploy": "partykit deploy",
     "test": "vitest run"
   },
@@ -14,6 +15,7 @@
     "partykit": "^0.0.111"
   },
   "devDependencies": {
+    "@cloudflare/workers-types": "^4.20260227.0",
     "@types/node": "^20.10.0",
     "typescript": "^5.3.3",
     "vitest": "^4.0.18"

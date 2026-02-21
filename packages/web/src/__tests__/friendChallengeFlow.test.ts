@@ -1,4 +1,10 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+
+// Mock supabase to avoid env var requirement
+vi.mock('../lib/supabase', () => ({
+  supabase: { from: vi.fn() },
+}));
+
 import { useFriendStore } from '../stores/friendStore';
 import type { Challenge } from '../services/friendService';
 
