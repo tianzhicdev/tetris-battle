@@ -6,7 +6,7 @@ import {
 } from '@tetris-battle/game-core';
 
 export type DefenseLinePlayer = 'a' | 'b';
-export type DefenseLineCell = null | DefenseLinePlayer;
+export type DefenseLineCell = '0' | 'x' | 'a' | 'b';
 
 export interface DefenseLinePiece {
   type: TetrominoType;
@@ -56,7 +56,10 @@ export class DefenseLineGameState {
 
   constructor(seed: number = Date.now()) {
     this.rng = new SeededRandom(seed);
-    this.board = Array.from({ length: BOARD_ROWS }, () => Array.from({ length: BOARD_COLS }, () => null));
+    // Initialize board with '0' background (rows 0-14) and 'x' background (rows 15-29)
+    this.board = Array.from({ length: BOARD_ROWS }, (_, row) =>
+      Array.from({ length: BOARD_COLS }, () => (row < 15 ? '0' : 'x'))
+    );
     this.activeRows = new Set<number>();
     this.playerA = this.createPlayerState();
     this.playerB = this.createPlayerState();
@@ -278,7 +281,8 @@ export class DefenseLineGameState {
 
     for (const row of clearableRows) {
       for (let col = 0; col < BOARD_COLS; col++) {
-        this.board[row][col] = null;
+        // Reset to background ('0' or 'x')
+        this.board[row][col] = row < 15 ? '0' : 'x';
       }
       this.activeRows.delete(row);
     }
@@ -322,7 +326,7 @@ export class DefenseLineGameState {
           }
 
           this.board[targetRow][col] = 'a';
-          this.board[row][col] = null;
+          this.board[row][col] = row < 15 ? '0' : 'x'; // Reset to background
           changed = true;
         }
       }
@@ -343,7 +347,7 @@ export class DefenseLineGameState {
           }
 
           this.board[targetRow][col] = 'b';
-          this.board[row][col] = null;
+          this.board[row][col] = row < 15 ? '0' : 'x'; // Reset to background
           changed = true;
         }
       }
@@ -369,15 +373,13 @@ export class DefenseLineGameState {
         const cell = this.board[row][col];
 
         if (player === 'a') {
-          // For A: row is filled if all cells are 'a' or 'x' (null in x-zone)
-          if (cell === 'a') continue; // 'a' = filled for A
-          if (cell === null && row >= 15) continue; // null in x-zone = 'x' = filled for A
-          return false; // any other cell (b or null in 0-zone) = not filled
+          // For A: row is filled if all cells are 'a' or 'x'
+          if (cell === 'a' || cell === 'x') continue;
+          return false; // any 'b' or '0' = not filled
         } else {
-          // For B: row is filled if all cells are 'b' or '0' (null in 0-zone)
-          if (cell === 'b') continue; // 'b' = filled for B
-          if (cell === null && row < 15) continue; // null in 0-zone = '0' = filled for B
-          return false; // any other cell (a or null in x-zone) = not filled
+          // For B: row is filled if all cells are 'b' or '0'
+          if (cell === 'b' || cell === '0') continue;
+          return false; // any 'a' or 'x' = not filled
         }
       }
       return true;
@@ -403,22 +405,12 @@ export class DefenseLineGameState {
     const cell = this.board[row][col];
 
     if (player === 'a') {
-      if (cell === 'a') {
-        return true;
-      }
-      if (cell === 'b') {
-        return false;
-      }
-      return row >= 15;
+      // For A: 'a' and 'x' are solid (filled)
+      return cell === 'a' || cell === 'x';
+    } else {
+      // For B: 'b' and '0' are solid (filled)
+      return cell === 'b' || cell === '0';
     }
-
-    if (cell === 'b') {
-      return true;
-    }
-    if (cell === 'a') {
-      return false;
-    }
-    return row < 15;
   }
 
   private getPieceCells(piece: DefenseLinePiece): Array<[number, number]> {
@@ -481,7 +473,9 @@ export class DefenseLineGameState {
     this.activeRows.clear();
     for (let row = 0; row < BOARD_ROWS; row++) {
       for (let col = 0; col < BOARD_COLS; col++) {
-        if (this.board[row][col] !== null) {
+        const cell = this.board[row][col];
+        // Row is active if it has any 'a' or 'b' piece
+        if (cell === 'a' || cell === 'b') {
           this.activeRows.add(row);
           break;
         }

@@ -2,7 +2,7 @@ import type { ReactNode } from 'react';
 import { TETROMINO_SHAPES, type TetrominoType } from '@tetris-battle/game-core';
 
 export type DefenseLinePlayer = 'a' | 'b';
-export type DefenseLineCell = null | DefenseLinePlayer;
+export type DefenseLineCell = '0' | 'x' | 'a' | 'b';
 
 export interface DefenseLinePiece {
   type: TetrominoType;
@@ -92,7 +92,7 @@ export function DefenseLineRenderer({ state, viewAs, ghostPiece }: DefenseLineRe
       const onDivider = row === 14;
       const activeRow = activeRowSet.has(row);
 
-      const cell = state.board[row]?.[col] ?? null;
+      const cell = state.board[row]?.[col];
       const hasA = aActive.has(key);
       const hasB = bActive.has(key);
       const hasGhost = ghostCells.has(key);
@@ -168,17 +168,13 @@ export function canPlaceDefenseLinePiece(
     const boardCell = state.board[row][col];
 
     if (player === 'a') {
-      if (boardCell === 'a') {
-        return false;
-      }
-      if (boardCell === null && row >= 15) {
+      // For A: 'a' and 'x' are solid
+      if (boardCell === 'a' || boardCell === 'x') {
         return false;
       }
     } else {
-      if (boardCell === 'b') {
-        return false;
-      }
-      if (boardCell === null && row < 15) {
+      // For B: 'b' and '0' are solid
+      if (boardCell === 'b' || boardCell === '0') {
         return false;
       }
     }
