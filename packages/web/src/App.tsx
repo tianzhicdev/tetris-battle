@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, lazy, Suspense } from 'react';
 import { MainMenu } from './components/MainMenu';
 import { TetrisGame } from './components/TetrisGame';
 import { Matchmaking } from './components/PartykitMatchmaking';
@@ -10,9 +10,15 @@ import { AuthWrapper } from './components/AuthWrapper';
 import { useChallenges } from './hooks/useChallenges';
 import { useFriendRequests } from './hooks/useFriendRequests';
 import { supabase } from './lib/supabase';
-import { AbilityEffectsDemo } from './components/AbilityEffectsDemo';
-import { VisualEffectsDemo } from './components/VisualEffectsDemo';
 import { TetriminoBgPreviewAll } from './components/TetriminoBgPreview';
+
+// Lazy load heavy demo components
+const AbilityEffectsDemo = lazy(() =>
+  import('./components/AbilityEffectsDemo').then((m) => ({ default: m.AbilityEffectsDemo }))
+);
+const VisualEffectsDemo = lazy(() =>
+  import('./components/VisualEffectsDemo').then((m) => ({ default: m.VisualEffectsDemo }))
+);
 import { ThemeProvider, useTheme } from './contexts/ThemeContext';
 import { toLegacyTheme } from './themes/index';
 import { progressionService } from './lib/supabase';
@@ -348,11 +354,19 @@ function App() {
   const demoMode = params.get('demo');
 
   if (demoMode === 'abilities') {
-    return <AbilityEffectsDemo />;
+    return (
+      <Suspense fallback={<div style={{ color: '#fff', padding: '20px', textAlign: 'center' }}>Loading...</div>}>
+        <AbilityEffectsDemo />
+      </Suspense>
+    );
   }
 
   if (demoMode === 'effects') {
-    return <VisualEffectsDemo />;
+    return (
+      <Suspense fallback={<div style={{ color: '#fff', padding: '20px', textAlign: 'center' }}>Loading...</div>}>
+        <VisualEffectsDemo />
+      </Suspense>
+    );
   }
 
   if (demoMode === 'bg') {

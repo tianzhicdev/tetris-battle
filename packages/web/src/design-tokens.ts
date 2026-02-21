@@ -52,6 +52,44 @@ export const T = {
     lg: 12,
     xl: 16,
   },
+  space: {
+    xs: '4px',
+    sm: '8px',
+    md: '12px',
+    lg: '16px',
+    xl: '24px',
+    xxl: '32px',
+    xxxl: '48px',
+  },
+  // Responsive helpers
+  responsive: {
+    clampFont: (min: number, mid: number, max: number) =>
+      `clamp(${min}px, ${mid}vw, ${max}px)`,
+    clampSpace: (min: number, mid: number, max: number) =>
+      `clamp(${min}px, ${mid}vw, ${max}px)`,
+  },
+  // Opacity scale
+  opacity: {
+    disabled: 0.38,
+    secondary: 0.6,
+    hover: 0.8,
+    full: 1,
+    subtle: 0.04,
+    medium: 0.08,
+  },
+  // Transitions
+  transition: {
+    fast: 'all 0.15s ease',
+    normal: 'all 0.2s ease',
+    slow: 'all 0.3s ease',
+  },
+  // Shadows
+  shadow: {
+    sm: '0 2px 8px rgba(0, 0, 0, 0.1)',
+    md: '0 4px 16px rgba(0, 0, 0, 0.15)',
+    lg: '0 8px 32px rgba(0, 0, 0, 0.2)',
+    xl: '0 20px 60px rgba(0, 0, 0, 0.3)',
+  },
   // Effects
   glow: (color: string, intensity: number = 1) =>
     `0 0 ${12 * intensity}px ${color}44, 0 0 ${30 * intensity}px ${color}18`,
