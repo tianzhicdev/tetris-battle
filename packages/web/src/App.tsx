@@ -209,7 +209,14 @@ function GameApp({ profile: initialProfile }: { profile: UserProfile }) {
   }, []);
 
   const handleExitDefenseLine = useCallback(() => {
+    setGameMatch(null);
     setMode('menu');
+  }, []);
+
+  const handlePlayAgainDefenseLine = useCallback(() => {
+    setGameMatch(null);
+    setMatchmakingMode('defense');
+    setMode('matchmaking');
   }, []);
 
   const handleCancelMatchmaking = useCallback(() => {
@@ -291,6 +298,7 @@ function GameApp({ profile: initialProfile }: { profile: UserProfile }) {
           roomId={gameMatch.roomId}
           theme={currentTheme}
           onExit={handleExitDefenseLine}
+          onPlayAgain={handlePlayAgainDefenseLine}
         />
       )}
 

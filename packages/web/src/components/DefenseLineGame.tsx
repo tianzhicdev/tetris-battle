@@ -39,6 +39,7 @@ interface DefenseLineGameProps {
   roomId: string;
   theme: any;
   onExit: () => void;
+  onPlayAgain?: () => void;
 }
 
 const BOARD_ROWS = 20;
@@ -74,6 +75,42 @@ function buildPieceLookup(piece: DefenseLinePiece | null): Set<string> {
   return set;
 }
 
+function computeGhostPiece(
+  piece: DefenseLinePiece | null,
+  board: DefenseLineCell[][],
+  player: DefenseLinePlayer,
+): DefenseLinePiece | null {
+  if (!piece) return null;
+  const step = player === 'a' ? 1 : -1;
+  let ghost = { ...piece };
+
+  while (true) {
+    const candidate = { ...ghost, row: ghost.row + step };
+    const cells = getPieceCells(candidate);
+    let blocked = false;
+    for (const [row, col] of cells) {
+      if (col < 0 || col >= BOARD_COLS || row < 0 || row >= BOARD_ROWS) {
+        blocked = true;
+        break;
+      }
+      const cell = board[row]?.[col] ?? (row < DIVIDER_ROW ? '0' : 'x');
+      const solid = player === 'a'
+        ? (cell === 'a' || cell === 'x')
+        : (cell === 'b' || cell === '0');
+      if (solid) {
+        blocked = true;
+        break;
+      }
+    }
+    if (blocked) break;
+    ghost = candidate;
+  }
+
+  // Don't show ghost if it's in the same position as the active piece
+  if (ghost.row === piece.row && ghost.col === piece.col) return null;
+  return ghost;
+}
+
 function mapToActual(visualRow: number, visualCol: number, viewAs: DefenseLinePlayer): [number, number] {
   if (viewAs === 'a') return [visualRow, visualCol];
   return [BOARD_ROWS - 1 - visualRow, BOARD_COLS - 1 - visualCol];
@@ -96,7 +133,8 @@ function drawDefenseBoard(
   canvas: HTMLCanvasElement | null,
   state: DefenseLineGameState,
   viewAs: DefenseLinePlayer,
-  theme: any
+  theme: any,
+  ghostPiece?: DefenseLinePiece | null,
 ): void {
   if (!canvas) return;
   const ctx = canvas.getContext('2d');
@@ -105,10 +143,29 @@ function drawDefenseBoard(
   const cellSize = canvas.width / BOARD_COLS;
   const aActive = buildPieceLookup(state.playerA.activePiece);
   const bActive = buildPieceLookup(state.playerB.activePiece);
+  const ghostLookup = buildPieceLookup(ghostPiece ?? null);
 
   ctx.clearRect(0, 0, canvas.width, canvas.height);
   ctx.fillStyle = 'rgba(5, 5, 20, 0.75)';
   ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  // Draw ghost piece first (underneath active pieces)
+  for (let visualRow = 0; visualRow < BOARD_ROWS; visualRow++) {
+    for (let visualCol = 0; visualCol < BOARD_COLS; visualCol++) {
+      const [row, col] = mapToActual(visualRow, visualCol, viewAs);
+      const key = `${row}:${col}`;
+      if (!ghostLookup.has(key)) continue;
+      // Skip cells where the active piece already is
+      if (aActive.has(key) || bActive.has(key)) continue;
+
+      const x = visualCol * cellSize;
+      const y = visualRow * cellSize;
+      const inset = cellSize * 0.12;
+      ctx.strokeStyle = 'rgba(0, 240, 240, 0.35)';
+      ctx.lineWidth = Math.max(1, cellSize * 0.06);
+      ctx.strokeRect(x + inset, y + inset, cellSize - inset * 2, cellSize - inset * 2);
+    }
+  }
 
   for (let visualRow = 0; visualRow < BOARD_ROWS; visualRow++) {
     for (let visualCol = 0; visualCol < BOARD_COLS; visualCol++) {
@@ -171,7 +228,7 @@ function playClearSound(clearedRows: number): void {
   }
 }
 
-export function DefenseLineGame({ playerId, roomId, theme, onExit }: DefenseLineGameProps) {
+export function DefenseLineGame({ playerId, roomId, theme, onExit, onPlayAgain }: DefenseLineGameProps) {
   const opponentMiniBoardWidth = 'clamp(72px, 18vw, 98px)';
   const [state, setState] = useState<DefenseLineGameState | null>(null);
   const [playerSide, setPlayerSide] = useState<DefenseLinePlayer | null>(null);
@@ -183,10 +240,18 @@ export function DefenseLineGame({ playerId, roomId, theme, onExit }: DefenseLine
   const [selfBoardKick, setSelfBoardKick] = useState(false);
   const [layoutBlast, setLayoutBlast] = useState(false);
 
+  const [showPostMatch, setShowPostMatch] = useState(false);
+
   const socketRef = useRef<PartySocket | null>(null);
   const playerSideRef = useRef<DefenseLinePlayer | null>(null);
   const selfKickTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const layoutBlastTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // DAS/ARR refs for auto-repeat
+  const DAS_MS = 170;
+  const ARR_MS = 50;
+  const dasTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const arrIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const topInfoZoneRef = useRef<HTMLDivElement>(null);
   const leftInfoZoneRef = useRef<HTMLDivElement>(null);
@@ -214,6 +279,11 @@ export function DefenseLineGame({ playerId, roomId, theme, onExit }: DefenseLine
     if (!yourState) return [];
     return [yourState.nextPiece, ...yourState.queue.slice(0, 4)];
   }, [yourState]);
+
+  const ghostPiece = useMemo(() => {
+    if (!state || !playerSide || !yourState?.activePiece) return null;
+    return computeGhostPiece(yourState.activePiece, state.board, playerSide);
+  }, [state, playerSide, yourState]);
 
   const yourRowsCleared = yourState?.rowsCleared ?? 0;
   const opponentRowsCleared = opponentState?.rowsCleared ?? 0;
@@ -315,6 +385,32 @@ export function DefenseLineGame({ playerId, roomId, theme, onExit }: DefenseLine
     sendInput({ type: 'hard_drop' });
   }, [sendInput]);
 
+  const stopAutoRepeat = useCallback(() => {
+    if (dasTimeoutRef.current) {
+      clearTimeout(dasTimeoutRef.current);
+      dasTimeoutRef.current = null;
+    }
+    if (arrIntervalRef.current) {
+      clearInterval(arrIntervalRef.current);
+      arrIntervalRef.current = null;
+    }
+  }, []);
+
+  const startAutoRepeat = useCallback((action: () => void) => {
+    stopAutoRepeat();
+    action();
+    dasTimeoutRef.current = setTimeout(() => {
+      arrIntervalRef.current = setInterval(action, ARR_MS);
+    }, DAS_MS);
+  }, [stopAutoRepeat]);
+
+  // Show post-match overlay shortly after winner is determined
+  useEffect(() => {
+    if (!winner) return;
+    const timer = setTimeout(() => setShowPostMatch(true), 800);
+    return () => clearTimeout(timer);
+  }, [winner]);
+
   useEffect(() => {
     playerSideRef.current = playerSide;
   }, [playerSide]);
@@ -389,17 +485,19 @@ export function DefenseLineGame({ playerId, roomId, theme, onExit }: DefenseLine
     return () => {
       if (selfKickTimeoutRef.current) clearTimeout(selfKickTimeoutRef.current);
       if (layoutBlastTimeoutRef.current) clearTimeout(layoutBlastTimeoutRef.current);
+      stopAutoRepeat();
       socket.close();
       socketRef.current = null;
     };
-  }, [playerId, roomId, triggerClearBlast]);
+  }, [playerId, roomId, triggerClearBlast, stopAutoRepeat]);
 
   useEffect(() => {
     if (!state || !playerSide) return;
-    drawDefenseBoard(mainCanvasRef.current, state, playerSide, theme);
+    drawDefenseBoard(mainCanvasRef.current, state, playerSide, theme, ghostPiece);
     const opponentSide: DefenseLinePlayer = playerSide === 'a' ? 'b' : 'a';
     drawDefenseBoard(opponentCanvasRef.current, state, opponentSide, theme);
   }, [
+    ghostPiece,
     mainBoardDisplay.pixelHeight,
     mainBoardDisplay.pixelWidth,
     opponentBoardDisplay.pixelHeight,
@@ -816,18 +914,26 @@ export function DefenseLineGame({ playerId, roomId, theme, onExit }: DefenseLine
         }}
       >
         {[
-          { key: 'left', icon: '◀', onPress: handleMoveLeft },
-          { key: 'hard', icon: '⏬', onPress: handleHardDrop },
-          { key: 'down', icon: '▼', onPress: handleSoftDrop },
-          { key: 'rotate', icon: '↻', onPress: handleRotate },
-          { key: 'right', icon: '▶', onPress: handleMoveRight },
+          { key: 'left', icon: '◀', onPress: handleMoveLeft, repeatable: true },
+          { key: 'hard', icon: '⏬', onPress: handleHardDrop, repeatable: false },
+          { key: 'down', icon: '▼', onPress: handleSoftDrop, repeatable: true },
+          { key: 'rotate', icon: '↻', onPress: handleRotate, repeatable: false },
+          { key: 'right', icon: '▶', onPress: handleMoveRight, repeatable: true },
         ].map((control) => (
           <button
             key={control.key}
             onPointerDown={(event) => {
               event.preventDefault();
-              control.onPress();
+              if (control.repeatable) {
+                startAutoRepeat(control.onPress);
+              } else {
+                control.onPress();
+              }
             }}
+            onPointerUp={stopAutoRepeat}
+            onPointerLeave={stopAutoRepeat}
+            onPointerCancel={stopAutoRepeat}
+            onContextMenu={(e) => e.preventDefault()}
             style={{
               flex: 1,
               background: 'rgba(255, 255, 255, 0.04)',
@@ -842,12 +948,153 @@ export function DefenseLineGame({ playerId, roomId, theme, onExit }: DefenseLine
               backdropFilter: 'blur(10px)',
               fontSize: 'clamp(18px, 4.5vw, 28px)',
               lineHeight: 1,
+              userSelect: 'none',
+              WebkitUserSelect: 'none',
             }}
           >
             {control.icon}
           </button>
         ))}
       </div>
+
+      {/* Post-match overlay */}
+      {showPostMatch && winner && playerSide && (
+        <div
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            background: 'rgba(3, 3, 12, 0.85)',
+            backdropFilter: 'blur(10px)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 1000,
+            fontFamily: '"Orbitron", sans-serif',
+          }}
+        >
+          <div
+            style={{
+              background: 'rgba(8, 10, 24, 0.92)',
+              backdropFilter: 'blur(30px)',
+              border: `3px solid ${playerSide === winner ? '#00f08c' : '#ff3c50'}`,
+              borderRadius: '16px',
+              boxShadow: `0 0 40px ${playerSide === winner ? 'rgba(0, 240, 140, 0.15)' : 'rgba(255, 60, 80, 0.15)'}, inset 0 0 40px rgba(0, 240, 240, 0.02)`,
+              padding: 'clamp(24px, 6vw, 40px)',
+              maxWidth: '420px',
+              width: '88%',
+              textAlign: 'center',
+            }}
+          >
+            <h1
+              style={{
+                margin: '0 0 24px 0',
+                fontSize: 'clamp(36px, 10vw, 52px)',
+                fontWeight: 900,
+                letterSpacing: '4px',
+                color: playerSide === winner ? '#00f08c' : '#ff3c50',
+                textShadow: `0 0 18px ${playerSide === winner ? 'rgba(0, 240, 140, 0.6)' : 'rgba(255, 60, 80, 0.6)'}, 0 0 45px ${playerSide === winner ? 'rgba(0, 240, 140, 0.25)' : 'rgba(255, 60, 80, 0.25)'}`,
+              }}
+            >
+              {playerSide === winner ? 'VICTORY' : 'DEFEAT'}
+            </h1>
+
+            {/* Stats */}
+            <div
+              style={{
+                display: 'grid',
+                gridTemplateColumns: '1fr 1fr',
+                gap: '16px',
+                marginBottom: '28px',
+              }}
+            >
+              <div
+                style={{
+                  background: 'rgba(0, 240, 240, 0.06)',
+                  border: '1px solid rgba(0, 240, 240, 0.15)',
+                  borderRadius: '10px',
+                  padding: '12px 8px',
+                }}
+              >
+                <div style={{ fontSize: '10px', color: 'rgba(255,255,255,0.4)', letterSpacing: '2px', marginBottom: '6px' }}>
+                  YOUR ROWS
+                </div>
+                <div style={{ fontSize: 'clamp(28px, 7vw, 40px)', fontWeight: 900, color: '#67eaff', textShadow: '0 0 10px rgba(0, 212, 255, 0.6)' }}>
+                  {yourRowsCleared}
+                </div>
+              </div>
+              <div
+                style={{
+                  background: 'rgba(201, 66, 255, 0.06)',
+                  border: '1px solid rgba(201, 66, 255, 0.15)',
+                  borderRadius: '10px',
+                  padding: '12px 8px',
+                }}
+              >
+                <div style={{ fontSize: '10px', color: 'rgba(255,255,255,0.4)', letterSpacing: '2px', marginBottom: '6px' }}>
+                  OPP ROWS
+                </div>
+                <div style={{ fontSize: 'clamp(28px, 7vw, 40px)', fontWeight: 900, color: '#df82ff', textShadow: '0 0 10px rgba(201, 66, 255, 0.6)' }}>
+                  {opponentRowsCleared}
+                </div>
+              </div>
+            </div>
+
+            {/* Buttons */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+              {onPlayAgain && (
+                <button
+                  onClick={() => {
+                    audioManager.playSfx('button_click');
+                    onPlayAgain();
+                  }}
+                  style={{
+                    width: '100%',
+                    padding: '14px 0',
+                    fontSize: '14px',
+                    fontWeight: 700,
+                    fontFamily: '"Orbitron", sans-serif',
+                    letterSpacing: '2px',
+                    color: '#000',
+                    background: 'linear-gradient(135deg, #00f08c, #00d4ff)',
+                    border: 'none',
+                    borderRadius: '10px',
+                    cursor: 'pointer',
+                    boxShadow: '0 0 20px rgba(0, 240, 140, 0.3)',
+                    touchAction: 'manipulation',
+                  }}
+                >
+                  PLAY AGAIN
+                </button>
+              )}
+              <button
+                onClick={() => {
+                  audioManager.playSfx('button_click');
+                  onExit();
+                }}
+                style={{
+                  width: '100%',
+                  padding: '12px 0',
+                  fontSize: '12px',
+                  fontWeight: 700,
+                  fontFamily: '"Orbitron", sans-serif',
+                  letterSpacing: '2px',
+                  color: 'rgba(255, 255, 255, 0.5)',
+                  background: 'rgba(255, 255, 255, 0.04)',
+                  border: '1px solid rgba(255, 255, 255, 0.1)',
+                  borderRadius: '10px',
+                  cursor: 'pointer',
+                  touchAction: 'manipulation',
+                }}
+              >
+                EXIT TO MENU
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
