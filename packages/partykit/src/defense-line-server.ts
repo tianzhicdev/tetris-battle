@@ -35,6 +35,7 @@ export default class DefenseLineServer implements Party.Server {
   private countdownSafetyTimer: ReturnType<typeof setTimeout> | null = null;
   private countdownDeadlineAt: number | null = null;
   private gameLoop: ReturnType<typeof setInterval> | null = null;
+  private tickWatchdog: ReturnType<typeof setInterval> | null = null;
   private aiFallbackTimer: ReturnType<typeof setTimeout> | null = null;
   private aiMoveTimer: ReturnType<typeof setInterval> | null = null;
 
@@ -43,6 +44,9 @@ export default class DefenseLineServer implements Party.Server {
   private readonly ai = new DefenseLineAI();
   private aiMoveQueue: Array<'move_left' | 'move_right' | 'rotate_cw' | 'hard_drop'> = [];
   private aiMoveIntervalMs: number = DEFAULT_AI_MOVE_INTERVAL_MS;
+  private tickCounter = 0;
+  private inputCounter = 0;
+  private lastTickAt: number | null = null;
 
   constructor(room: Party.Room) {
     this.room = room;
@@ -51,6 +55,7 @@ export default class DefenseLineServer implements Party.Server {
   }
 
   onConnect(conn: Party.Connection) {
+    this.log('connect', `conn=${conn.id} ${this.summarizeState()}`);
     conn.send(JSON.stringify({
       type: 'room_state',
       status: this.gameState.status,
@@ -78,9 +83,11 @@ export default class DefenseLineServer implements Party.Server {
 
     switch (data.type) {
       case 'join':
+        this.log('message', `type=join conn=${sender.id} playerId=${String(data.playerId ?? 'unknown')}`);
         this.handleJoin(sender, data);
         return;
       case 'ready':
+        this.log('message', `type=ready conn=${sender.id}`);
         this.ensureCountdownStart();
         this.maybeStartCountdown();
         return;
@@ -88,6 +95,7 @@ export default class DefenseLineServer implements Party.Server {
       case 'rotate':
       case 'soft_drop':
       case 'hard_drop':
+        this.log('message', `type=${data.type} conn=${sender.id} payload=${JSON.stringify(data)}`);
         this.ensureCountdownStart();
         this.handleInput(sender, data as DefenseLineInput);
         return;
@@ -97,8 +105,10 @@ export default class DefenseLineServer implements Party.Server {
   }
 
   onClose(conn: Party.Connection) {
+    this.log('close', `conn=${conn.id}`);
     const side = this.connectionToSide.get(conn.id);
     if (!side) {
+      this.log('close', `conn=${conn.id} had_no_side`);
       return;
     }
 
@@ -136,6 +146,8 @@ export default class DefenseLineServer implements Party.Server {
       conn.send(JSON.stringify({ type: 'error', message: 'room_full' }));
       return;
     }
+
+    this.log('join', `conn=${conn.id} assigned=${assigned} playerId=${payload.playerId} ${this.summarizeState()}`);
 
     conn.send(JSON.stringify({
       type: 'join_ack',
@@ -240,16 +252,26 @@ export default class DefenseLineServer implements Party.Server {
     }
 
     if (this.gameState.status !== 'playing') {
+      this.log('input_ignored', `reason=not_playing side=${side} status=${this.gameState.status} input=${JSON.stringify(input)}`);
       return;
     }
 
     const normalizedInput = this.normalizeInput(input, side);
+    this.inputCounter += 1;
+    this.log('input', `n=${this.inputCounter} side=${side} raw=${JSON.stringify(input)} normalized=${normalizedInput} ${this.describePieces()}`);
     const result = this.gameState.processInput(side, normalizedInput);
     if (!result.changed) {
+      this.log('input_no_change', `n=${this.inputCounter} side=${side} normalized=${normalizedInput} ${this.describePieces()}`);
       return;
     }
 
+    this.log(
+      'input_result',
+      `n=${this.inputCounter} side=${side} changed=true clears=${result.clearedSegments.length} winner=${result.winner ?? 'none'} ${this.describePieces()}`
+    );
+
     if (result.clearedRows.length > 0) {
+      this.log('clear_event', `source=input side=${side} rows=${JSON.stringify(result.clearedRows)} segments=${JSON.stringify(result.clearedSegments)}`);
       this.broadcast({
         type: 'clear',
         player: side,
@@ -303,6 +325,7 @@ export default class DefenseLineServer implements Party.Server {
     this.gameState.setStatus('countdown');
     let seconds = 3;
     this.countdownDeadlineAt = Date.now() + (seconds * 1000);
+    this.log('countdown_start', `seconds=${seconds} ${this.summarizeState()}`);
 
     this.broadcast({ type: 'countdown', seconds });
     this.broadcastState();
@@ -316,6 +339,7 @@ export default class DefenseLineServer implements Party.Server {
         return;
       }
 
+      this.log('countdown_tick', `seconds=${seconds}`);
       this.broadcast({ type: 'countdown', seconds });
     }, 1000);
 
@@ -333,6 +357,7 @@ export default class DefenseLineServer implements Party.Server {
       return;
     }
     this.stopCountdown();
+    this.log('countdown_force_start', 'reason=safety_fallback');
     this.startGameSafely('countdown_safety_fallback');
   }
 
@@ -348,6 +373,7 @@ export default class DefenseLineServer implements Party.Server {
     try {
       this.startGame();
       console.log(`[DefenseLine] Game started (${trigger}) room=${this.room.id}`);
+      this.log('game_started', `trigger=${trigger} ${this.describePieces()}`);
     } catch (error) {
       console.error(`[DefenseLine] Failed to start game (${trigger}) room=${this.room.id}:`, error);
       this.broadcast({
@@ -366,6 +392,7 @@ export default class DefenseLineServer implements Party.Server {
     this.broadcastState();
 
     if (this.gameState.winner) {
+      this.log('game_end_immediate', `winner=${this.gameState.winner}`);
       this.finishGame(this.gameState.winner);
       return;
     }
@@ -374,13 +401,30 @@ export default class DefenseLineServer implements Party.Server {
       clearInterval(this.gameLoop);
     }
 
+    this.tickCounter = 0;
+    this.lastTickAt = Date.now();
+    this.startTickWatchdog();
+
     this.gameLoop = setInterval(() => {
+      const now = Date.now();
+      const gapMs = this.lastTickAt === null ? 0 : now - this.lastTickAt;
+      this.lastTickAt = now;
+      this.tickCounter += 1;
+      this.log('tick_start', `n=${this.tickCounter} gapMs=${gapMs} ${this.describePieces()}`);
+
       const tick = this.gameState.tick();
       if (!tick.changed && !tick.winner) {
+        this.log('tick_no_change', `n=${this.tickCounter}`);
         return;
       }
 
+      this.log(
+        'tick_result',
+        `n=${this.tickCounter} changed=${tick.changed} clearEvents=${tick.clearEvents.length} winner=${tick.winner ?? 'none'} ${this.describePieces()}`
+      );
+
       for (const clearEvent of tick.clearEvents) {
+        this.log('clear_event', `source=tick side=${clearEvent.player} rows=${JSON.stringify(clearEvent.rows)} segments=${JSON.stringify(clearEvent.segments)}`);
         this.broadcast({
           type: 'clear',
           player: clearEvent.player,
@@ -468,8 +512,10 @@ export default class DefenseLineServer implements Party.Server {
     if (!nextMove) return;
 
     const result = this.gameState.processInput(this.aiSide, nextMove);
+    this.log('ai_move', `side=${this.aiSide} move=${nextMove} changed=${result.changed} winner=${result.winner ?? 'none'} ${this.describePieces()}`);
     if (result.changed) {
       if (result.clearedRows.length > 0) {
+        this.log('clear_event', `source=ai side=${this.aiSide} rows=${JSON.stringify(result.clearedRows)} segments=${JSON.stringify(result.clearedSegments)}`);
         this.broadcast({
           type: 'clear',
           player: this.aiSide,
@@ -496,6 +542,7 @@ export default class DefenseLineServer implements Party.Server {
 
   private finishGame(winner: DefenseLinePlayer): void {
     this.stopAll();
+    this.log('game_finished', `winner=${winner} ${this.summarizeState()}`);
 
     this.broadcast({
       type: 'win',
@@ -566,6 +613,7 @@ export default class DefenseLineServer implements Party.Server {
       clearInterval(this.gameLoop);
       this.gameLoop = null;
     }
+    this.stopTickWatchdog();
   }
 
   private stopAIMoveLoop(): void {
@@ -580,6 +628,7 @@ export default class DefenseLineServer implements Party.Server {
     this.stopGameLoop();
     this.stopAIMoveLoop();
     this.cancelAIFallback();
+    this.stopTickWatchdog();
   }
 
   private resetGameState(): void {
@@ -595,5 +644,42 @@ export default class DefenseLineServer implements Party.Server {
       return DEFAULT_AI_MOVE_INTERVAL_MS;
     }
     return Math.max(60, Math.min(1200, Math.round(value)));
+  }
+
+  private startTickWatchdog(): void {
+    this.stopTickWatchdog();
+    this.tickWatchdog = setInterval(() => {
+      if (this.gameState.status !== 'playing' || !this.gameLoop) {
+        return;
+      }
+      const now = Date.now();
+      const gapMs = this.lastTickAt === null ? 0 : now - this.lastTickAt;
+      if (gapMs > TICK_MS * 2.5) {
+        this.log('tick_gap_warning', `gapMs=${gapMs} threshold=${Math.round(TICK_MS * 2.5)} ${this.describePieces()}`);
+      }
+    }, 1000);
+  }
+
+  private stopTickWatchdog(): void {
+    if (this.tickWatchdog) {
+      clearInterval(this.tickWatchdog);
+      this.tickWatchdog = null;
+    }
+  }
+
+  private summarizeState(): string {
+    return `status=${this.gameState.status} winner=${this.gameState.winner ?? 'none'} players=a:${this.sideToPlayerId.get('a') ?? 'none'},b:${this.sideToPlayerId.get('b') ?? 'none'}`;
+  }
+
+  private describePieces(): string {
+    const aPiece = this.gameState.playerA.activePiece;
+    const bPiece = this.gameState.playerB.activePiece;
+    const a = aPiece ? `${aPiece.type}@r${aPiece.row}:c${aPiece.col}:rot${aPiece.rotation}` : 'none';
+    const b = bPiece ? `${bPiece.type}@r${bPiece.row}:c${bPiece.col}:rot${bPiece.rotation}` : 'none';
+    return `pieces=a:${a},b:${b}`;
+  }
+
+  private log(event: string, message: string): void {
+    console.log(`[DefenseLine][${event}] room=${this.room.id} ${message}`);
   }
 }

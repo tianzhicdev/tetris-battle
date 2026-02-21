@@ -62,6 +62,24 @@ describe('DefenseLineGameState contiguous clear rule', () => {
     expect(clearable).toEqual([{ row, startCol, endCol: startCol + run - 1 }]);
   });
 
+  it('does not clear a run that has no owner cell inside the run', () => {
+    const state = new DefenseLineGameState(21);
+    setEmptyBoardForA(state);
+
+    const row = 6;
+    // Run 0..4 is x-filled for A but contains no 'a' cells.
+    for (let col = 0; col < MIN_CONTIGUOUS_FOR_CLEAR; col++) {
+      state.board[row][col] = 'x';
+    }
+    // A has own cell elsewhere in row but not in run.
+    state.board[row][9] = 'a';
+
+    (state as any).rebuildActiveRows();
+    const clearable = (state as any).getClearableSegments('a') as Array<{ row: number; startCol: number; endCol: number }>;
+
+    expect(clearable).toEqual([]);
+  });
+
   it('clears only segment columns and leaves non-segment columns untouched', () => {
     const state = new DefenseLineGameState(3);
     setEmptyBoardForA(state);

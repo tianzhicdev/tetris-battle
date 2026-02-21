@@ -91,6 +91,7 @@ export class DefenseLineGameState {
     if (!this.playerA.activePiece) {
       this.playerA.activePiece = this.createSpawnPiece('a', this.playerA.nextPiece);
       if (!this.canPlacePiece('a', this.playerA.activePiece)) {
+        console.log(`[DefenseLineState][spawn_blocked] phase=start player=a next=${this.playerA.nextPiece} piece=${this.describePiece(this.playerA.activePiece)}`);
         this.playerA.activePiece = null;
         this.winner = 'b';
         this.status = 'finished';
@@ -101,6 +102,7 @@ export class DefenseLineGameState {
     if (!this.playerB.activePiece) {
       this.playerB.activePiece = this.createSpawnPiece('b', this.playerB.nextPiece);
       if (!this.canPlacePiece('b', this.playerB.activePiece)) {
+        console.log(`[DefenseLineState][spawn_blocked] phase=start player=b next=${this.playerB.nextPiece} piece=${this.describePiece(this.playerB.activePiece)}`);
         this.playerB.activePiece = null;
         this.winner = 'a';
         this.status = 'finished';
@@ -319,6 +321,10 @@ export class DefenseLineGameState {
       return { clearedRows: [], clearedSegments: [], clearedCells: [], winner: this.winner };
     }
 
+    console.log(
+      `[DefenseLineState][clear_detected] player=${player} segments=${JSON.stringify(clearableSegments)}`
+    );
+
     // Apply each segment exactly like Tetris row clear, but scoped to segment columns.
     // A: only rows [0..segment.row] shift down in affected columns.
     // B: only rows [segment.row..last] shift up in affected columns.
@@ -376,20 +382,17 @@ export class DefenseLineGameState {
 
   /**
    * A segment is clearable if it has at least MIN_CONTIGUOUS_FOR_CLEAR contiguous
-   * "filled" cells for the given player. The row must also contain at least one
-   * placed piece for that player ('a' for A, 'b' for B) — pure background rows don't clear.
+   * "filled" cells for the given player and includes at least one own cell
+   * inside that run ('a' for A, 'b' for B).
    */
   private getClearableSegments(player: DefenseLinePlayer): DefenseLineClearSegment[] {
     const rows = Array.from(this.activeRows).sort((a, b) => a - b);
     const segments: DefenseLineClearSegment[] = [];
 
     for (const row of rows) {
-      const hasPlayerPiece = this.board[row].some((cell) => cell === player);
-      if (!hasPlayerPiece) {
-        continue;
-      }
-
       let runStart: number | null = null;
+      let runHasPlayerCell = false;
+      const rowSegments: DefenseLineClearSegment[] = [];
 
       for (let col = 0; col <= DEFENSE_BOARD_COLS; col++) {
         const inBounds = col < DEFENSE_BOARD_COLS;
@@ -404,6 +407,10 @@ export class DefenseLineGameState {
         if (filled) {
           if (runStart === null) {
             runStart = col;
+            runHasPlayerCell = false;
+          }
+          if (cell === player) {
+            runHasPlayerCell = true;
           }
           continue;
         }
@@ -413,10 +420,18 @@ export class DefenseLineGameState {
         }
 
         const runEnd = col - 1;
-        if (hasPlayerPiece && runEnd - runStart + 1 >= MIN_CONTIGUOUS_FOR_CLEAR) {
-          segments.push({ row, startCol: runStart, endCol: runEnd });
+        if (runHasPlayerCell && runEnd - runStart + 1 >= MIN_CONTIGUOUS_FOR_CLEAR) {
+          rowSegments.push({ row, startCol: runStart, endCol: runEnd });
         }
         runStart = null;
+        runHasPlayerCell = false;
+      }
+
+      if (rowSegments.length > 0) {
+        segments.push(...rowSegments);
+        console.log(
+          `[DefenseLineState][clearable_row] player=${player} row=${row} rowCells=${this.board[row].join('')} segments=${JSON.stringify(rowSegments)}`
+        );
       }
     }
 
@@ -527,6 +542,9 @@ export class DefenseLineGameState {
   private spawnNextPiece(player: DefenseLinePlayer, state: DefenseLinePlayerState): void {
     const spawnPiece = this.createSpawnPiece(player, state.nextPiece);
     if (!this.canPlacePiece(player, spawnPiece)) {
+      console.log(
+        `[DefenseLineState][spawn_blocked] phase=midgame player=${player} next=${state.nextPiece} piece=${this.describePiece(spawnPiece)}`
+      );
       state.activePiece = null;
       this.winner = this.getOpponent(player);
       this.status = 'finished';
@@ -539,5 +557,10 @@ export class DefenseLineGameState {
 
   private getOpponent(player: DefenseLinePlayer): DefenseLinePlayer {
     return player === 'a' ? 'b' : 'a';
+  }
+
+  private describePiece(piece: DefenseLinePiece | null): string {
+    if (!piece) return 'none';
+    return `${piece.type}@r${piece.row}:c${piece.col}:rot${piece.rotation}`;
   }
 }
