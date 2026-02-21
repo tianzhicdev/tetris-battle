@@ -287,7 +287,7 @@ export class DefenseLineGameState {
       this.activeRows.delete(row);
     }
 
-    this.applyPostClearGravity();
+    this.applyPostClearGravity(player);
     this.rebuildActiveRows();
 
     const state = this.getPlayerState(player);
@@ -304,51 +304,55 @@ export class DefenseLineGameState {
     };
   }
 
-  private applyPostClearGravity(): void {
+  private applyPostClearGravity(player: DefenseLinePlayer): void {
     let changed = false;
 
     do {
       changed = false;
 
-      for (let row = BOARD_ROWS - 2; row >= 0; row--) {
-        for (let col = 0; col < BOARD_COLS; col++) {
-          if (this.board[row][col] !== 'a') {
-            continue;
-          }
+      if (player === 'a') {
+        // Only apply gravity to A's pieces (falling down)
+        for (let row = BOARD_ROWS - 2; row >= 0; row--) {
+          for (let col = 0; col < BOARD_COLS; col++) {
+            if (this.board[row][col] !== 'a') {
+              continue;
+            }
 
-          const targetRow = row + 1;
-          if (targetRow >= BOARD_ROWS) {
-            continue;
-          }
+            const targetRow = row + 1;
+            if (targetRow >= BOARD_ROWS) {
+              continue;
+            }
 
-          if (this.isSolidForPlayer('a', targetRow, col)) {
-            continue;
-          }
+            if (this.isSolidForPlayer('a', targetRow, col)) {
+              continue;
+            }
 
-          this.board[targetRow][col] = 'a';
-          this.board[row][col] = row < 15 ? '0' : 'x'; // Reset to background
-          changed = true;
+            this.board[targetRow][col] = 'a';
+            this.board[row][col] = row < 15 ? '0' : 'x'; // Reset to background
+            changed = true;
+          }
         }
-      }
+      } else {
+        // Only apply gravity to B's pieces (rising up)
+        for (let row = 1; row < BOARD_ROWS; row++) {
+          for (let col = 0; col < BOARD_COLS; col++) {
+            if (this.board[row][col] !== 'b') {
+              continue;
+            }
 
-      for (let row = 1; row < BOARD_ROWS; row++) {
-        for (let col = 0; col < BOARD_COLS; col++) {
-          if (this.board[row][col] !== 'b') {
-            continue;
+            const targetRow = row - 1;
+            if (targetRow < 0) {
+              continue;
+            }
+
+            if (this.isSolidForPlayer('b', targetRow, col)) {
+              continue;
+            }
+
+            this.board[targetRow][col] = 'b';
+            this.board[row][col] = row < 15 ? '0' : 'x'; // Reset to background
+            changed = true;
           }
-
-          const targetRow = row - 1;
-          if (targetRow < 0) {
-            continue;
-          }
-
-          if (this.isSolidForPlayer('b', targetRow, col)) {
-            continue;
-          }
-
-          this.board[targetRow][col] = 'b';
-          this.board[row][col] = row < 15 ? '0' : 'x'; // Reset to background
-          changed = true;
         }
       }
     } while (changed);
