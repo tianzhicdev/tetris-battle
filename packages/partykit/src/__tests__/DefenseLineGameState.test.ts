@@ -243,4 +243,22 @@ describe('DefenseLineGameState contiguous clear rule', () => {
     expect(state.status).toBe('finished');
     expect(state.playerA.activePiece).toBeNull();
   });
+
+  it('ends immediately when spawn is blocked at game start', () => {
+    const state = new DefenseLineGameState(6);
+    state.playerA.nextPiece = 'O';
+    state.playerB.nextPiece = 'O';
+
+    // Block A spawn footprint.
+    state.board[0][4] = 'a';
+    state.board[0][5] = 'a';
+    state.board[1][4] = 'a';
+    state.board[1][5] = 'a';
+
+    state.startGame();
+
+    expect(state.winner).toBe('b');
+    expect(state.status).toBe('finished');
+    expect(state.playerA.activePiece).toBeNull();
+  });
 });
