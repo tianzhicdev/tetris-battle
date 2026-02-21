@@ -937,7 +937,9 @@ export function DefenseLineGame({ playerId, roomId, theme, onExit, aiOpponent }:
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [handleHardDrop, handleMoveLeft, handleMoveRight, handleRotate, handleSoftDrop, playerSide, state]);
 
-  const statusText = winner
+  const hasResolvedOutcome = !!winner && !!playerSide;
+
+  const statusText = hasResolvedOutcome
     ? (playerSide === winner ? 'YOU WIN' : 'YOU LOSE')
     : countdown !== null && countdown > 0
     ? `START IN ${countdown}`
@@ -950,8 +952,8 @@ export function DefenseLineGame({ playerId, roomId, theme, onExit, aiOpponent }:
     : 'WAITING';
 
   const showResultOverlay = !!winner || state?.status === 'finished';
-  const isWin = !!winner && playerSide === winner;
-  const resultHeadline = winner
+  const isWin = hasResolvedOutcome && playerSide === winner;
+  const resultHeadline = hasResolvedOutcome
     ? (isWin ? 'VICTORY' : 'DEFEAT')
     : 'MATCH OVER';
 
@@ -1431,7 +1433,9 @@ export function DefenseLineGame({ playerId, roomId, theme, onExit, aiOpponent }:
                 letterSpacing: '0.35px',
               }}
             >
-              {winner ? (isWin ? 'You won the match.' : 'You lost the match.') : 'Result synced. Match has ended.'}
+              {hasResolvedOutcome
+                ? (isWin ? 'You won the match.' : 'You lost the match.')
+                : 'Result synced. Match has ended.'}
             </div>
             <button
               onClick={onExit}
