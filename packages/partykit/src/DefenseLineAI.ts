@@ -143,7 +143,7 @@ export class DefenseLineAI {
     // For B (spawns at bottom, drops up): higher rows are riskier
     const pieceCenterRow = cells.reduce((sum, [r]) => sum + r, 0) / cells.length;
     if (player === 'a') {
-      // A wants to place closer to row 29 (deeper into board)
+      // A wants to place deeper into board (toward higher row index)
       score += pieceCenterRow * 2;
     } else {
       // B wants to place closer to row 0

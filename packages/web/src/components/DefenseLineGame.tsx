@@ -39,13 +39,13 @@ interface DefenseLineGameProps {
   onExit: () => void;
 }
 
-const BOARD_ROWS = 40;
+const BOARD_ROWS = 20;
 const BOARD_COLS = 10;
-const DIVIDER_ROW = 20;
+const DIVIDER_ROW = 10;
 const MAIN_CANVAS_WIDTH = 250;
-const MAIN_CANVAS_HEIGHT = 1000;
+const MAIN_CANVAS_HEIGHT = 500;
 const OPPONENT_CANVAS_WIDTH = 80;
-const OPPONENT_CANVAS_HEIGHT = 320;
+const OPPONENT_CANVAS_HEIGHT = 160;
 const TICK_MS = 700;
 
 function getPieceCells(piece: DefenseLinePiece | null): Array<[number, number]> {
@@ -634,7 +634,7 @@ export function DefenseLineGame({ playerId, roomId, theme, onExit }: DefenseLine
               style={{
                 position: 'relative',
                 width: 'clamp(65px, 17vw, 80px)',
-                height: 'clamp(180px, 46vw, 260px)',
+                height: 'clamp(90px, 23vw, 130px)',
               }}
             >
               <canvas

@@ -93,15 +93,32 @@ export function MainMenu({ onSelectMode, theme, profile, onProfileUpdate, onChal
           padding: 'clamp(8px, 2vh, 18px) 0',
         }}
       >
+        <img
+          src="/stackcraft2_logo.png"
+          alt="Stackcraft 2"
+          style={{
+            width: 'clamp(220px, 62vw, 520px)',
+            maxWidth: '100%',
+            height: 'auto',
+            objectFit: 'contain',
+            filter: `drop-shadow(0 0 18px ${theme.colors.I}33)`,
+            userSelect: 'none',
+            pointerEvents: 'none',
+          }}
+        />
+
         <h1
           style={{
-            fontSize: 'clamp(2rem, 10vw, 4rem)',
             margin: 0,
-            textShadow: `3px 3px 0 ${theme.colors.I}`,
+            fontSize: 'clamp(1.15rem, 3.5vw, 1.8rem)',
+            letterSpacing: '0.2em',
+            textTransform: 'uppercase',
+            color: T.text.secondary,
             textAlign: 'center',
+            textShadow: `0 0 14px ${theme.colors.I}40`,
           }}
         >
-          TETRIS BATTLE
+          Tetris Battle
         </h1>
 
         {/* Main Actions */}

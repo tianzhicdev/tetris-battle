@@ -27,6 +27,8 @@ export default class DefenseLineServer implements Party.Server {
   private readonly connectionToSide = new Map<string, DefenseLinePlayer>();
 
   private countdownTimer: ReturnType<typeof setInterval> | null = null;
+  private countdownSafetyTimer: ReturnType<typeof setTimeout> | null = null;
+  private countdownDeadlineAt: number | null = null;
   private gameLoop: ReturnType<typeof setInterval> | null = null;
   private aiFallbackTimer: ReturnType<typeof setTimeout> | null = null;
   private aiMoveTimer: ReturnType<typeof setInterval> | null = null;
@@ -72,12 +74,14 @@ export default class DefenseLineServer implements Party.Server {
         this.handleJoin(sender, data);
         return;
       case 'ready':
+        this.ensureCountdownStart();
         this.maybeStartCountdown();
         return;
       case 'move':
       case 'rotate':
       case 'soft_drop':
       case 'hard_drop':
+        this.ensureCountdownStart();
         this.handleInput(sender, data as DefenseLineInput);
         return;
       default:
@@ -281,6 +285,7 @@ export default class DefenseLineServer implements Party.Server {
 
     this.gameState.setStatus('countdown');
     let seconds = 3;
+    this.countdownDeadlineAt = Date.now() + (seconds * 1000);
 
     this.broadcast({ type: 'countdown', seconds });
     this.broadcastState();
@@ -290,12 +295,53 @@ export default class DefenseLineServer implements Party.Server {
 
       if (seconds <= 0) {
         this.stopCountdown();
-        this.startGame();
+        this.startGameSafely('countdown_complete');
         return;
       }
 
       this.broadcast({ type: 'countdown', seconds });
     }, 1000);
+
+    // Durable Object timers can stall under load; keep a deterministic fallback.
+    this.countdownSafetyTimer = setTimeout(() => {
+      this.ensureCountdownStart();
+    }, (seconds * 1000) + 250);
+  }
+
+  private ensureCountdownStart(): void {
+    if (this.gameState.status !== 'countdown') {
+      return;
+    }
+    if (this.countdownDeadlineAt !== null && Date.now() < this.countdownDeadlineAt) {
+      return;
+    }
+    this.stopCountdown();
+    this.startGameSafely('countdown_safety_fallback');
+  }
+
+  private startGameSafely(trigger: string): void {
+    if (this.gameState.status === 'playing' || this.gameState.status === 'finished') {
+      return;
+    }
+    // Must still have two assigned sides (human or AI).
+    if (!this.sideToPlayerId.has('a') || !this.sideToPlayerId.has('b')) {
+      return;
+    }
+
+    try {
+      this.startGame();
+      console.log(`[DefenseLine] Game started (${trigger}) room=${this.room.id}`);
+    } catch (error) {
+      console.error(`[DefenseLine] Failed to start game (${trigger}) room=${this.room.id}:`, error);
+      this.broadcast({
+        type: 'error',
+        message: 'game_start_failed',
+      });
+      this.stopAll();
+      this.resetGameState();
+      this.broadcastRoomState();
+      this.broadcastState();
+    }
   }
 
   private startGame(): void {
@@ -482,6 +528,11 @@ export default class DefenseLineServer implements Party.Server {
       clearInterval(this.countdownTimer);
       this.countdownTimer = null;
     }
+    if (this.countdownSafetyTimer) {
+      clearTimeout(this.countdownSafetyTimer);
+      this.countdownSafetyTimer = null;
+    }
+    this.countdownDeadlineAt = null;
   }
 
   private stopGameLoop(): void {

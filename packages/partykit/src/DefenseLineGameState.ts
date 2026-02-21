@@ -40,12 +40,12 @@ interface InputResult extends ResolutionResult {
   changed: boolean;
 }
 
-export const DEFENSE_BOARD_ROWS = 40;
+export const DEFENSE_BOARD_ROWS = 20;
 export const DEFENSE_BOARD_COLS = 10;
 // Backward-compatible aliases (kept to avoid breaking older imports).
 export const DEFENSE_DEFENSE_BOARD_ROWS = DEFENSE_BOARD_ROWS;
 export const DEFENSE_DEFENSE_BOARD_COLS = DEFENSE_BOARD_COLS;
-const DIVIDER_ROW = 20; // rows 0-19 = '0' zone, rows 20-39 = 'x' zone
+const DIVIDER_ROW = 10; // rows 0-9 = '0' zone, rows 10-19 = 'x' zone
 export const MIN_CONTIGUOUS_FOR_CLEAR = 5; // 5+ contiguous filled cells clears the row
 
 export class DefenseLineGameState {
@@ -60,7 +60,7 @@ export class DefenseLineGameState {
 
   constructor(seed: number = Date.now()) {
     this.rng = new SeededRandom(seed);
-    // Initialize board: rows 0-19 = '0', rows 20-39 = 'x'
+    // Initialize board: rows 0-9 = '0', rows 10-19 = 'x'
     this.board = Array.from({ length: DEFENSE_BOARD_ROWS }, (_, row) =>
       Array.from({ length: DEFENSE_BOARD_COLS }, () => (row < DIVIDER_ROW ? '0' : 'x'))
     );
@@ -303,7 +303,7 @@ export class DefenseLineGameState {
           this.board[0][col] = '0';
         }
       } else {
-        // B clears: shift rows row+1..29 up by 1, row 29 becomes all 'x'
+        // B clears: shift rows row+1..(last row) up by 1, last row becomes all 'x'
         for (let r = row; r < DEFENSE_BOARD_ROWS - 1; r++) {
           for (let col = 0; col < DEFENSE_BOARD_COLS; col++) {
             this.board[r][col] = this.board[r + 1][col];
