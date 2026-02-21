@@ -129,8 +129,17 @@ export function DefenseLineRenderer({ state, viewAs, ghostPiece }: DefenseLineRe
             boxShadow,
             width: '100%',
             aspectRatio: '1 / 1',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            fontSize: '8px',
+            fontWeight: 700,
+            fontFamily: 'monospace',
+            color: 'rgba(255, 255, 255, 0.5)',
           }}
-        />,
+        >
+          {cell}
+        </div>,
       );
     }
   }
