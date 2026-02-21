@@ -302,9 +302,10 @@ function GameApp({ profile: initialProfile }: { profile: UserProfile }) {
         />
       )}
 
-      {mode === 'defense-line' && (
+      {mode === 'defense-line' && gameMatch && (
         <DefenseLineGame
           playerId={playerId}
+          roomId={gameMatch.roomId}
           assignedSide={defenseLineSide}
           theme={currentTheme}
           onExit={handleExitDefenseLine}
