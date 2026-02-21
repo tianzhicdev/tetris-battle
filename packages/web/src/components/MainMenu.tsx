@@ -5,12 +5,13 @@ import { AbilityManager } from './AbilityManager';
 import { ProfilePage } from './ProfilePage';
 import { FriendList } from './FriendList';
 import { FloatingBackground } from './FloatingBackground';
+import { ModeMenuGroup } from './ModeMenuGroup';
 import { audioManager } from '../services/audioManager';
 import { useFriendStore } from '../stores/friendStore';
 import { T } from '../design-tokens';
 
 interface MainMenuProps {
-  onSelectMode: (selection: { mode: 'solo' | 'multiplayer' | 'defense-line'; aiOpponent: boolean }) => void;
+  onSelectMode: (selection: { mode: 'multiplayer' | 'defense-line'; aiOpponent: boolean }) => void;
   theme: any;
   profile: UserProfile;
   onProfileUpdate: (profile: UserProfile) => void;
@@ -21,8 +22,6 @@ export function MainMenu({ onSelectMode, theme, profile, onProfileUpdate, onChal
   const [showAbilities, setShowAbilities] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
   const [showFriends, setShowFriends] = useState(false);
-  const [defenseMode, setDefenseMode] = useState(false);
-  const [aiOpponent, setAIOpponent] = useState(false);
   const pendingRequests = useFriendStore(state => state.pendingRequests);
 
   // Play menu music on mount
@@ -87,161 +86,42 @@ export function MainMenu({ onSelectMode, theme, profile, onProfileUpdate, onChal
           zIndex: 2,
           minHeight: 0,
           overflowY: 'auto',
-          display: 'grid',
-          justifyItems: 'center',
-          alignContent: 'start',
-          gap: 'clamp(8px, 1.6vh, 14px)',
-          padding: 'clamp(4px, 1.2vh, 12px) 0',
+          display: 'flex',
+          justifyContent: 'center',
+          padding: 'clamp(6px, 1.5vh, 14px) 0',
         }}
       >
-        <img
-          src="/stackcraft2_logo.png"
-          alt="Stackcraft 2"
-          style={{
-            width: 'clamp(220px, 62vw, 520px)',
-            maxWidth: '100%',
-            height: 'auto',
-            objectFit: 'contain',
-            filter: `drop-shadow(0 0 18px ${theme.colors.I}33)`,
-            marginTop: '-8px',
-            userSelect: 'none',
-            pointerEvents: 'none',
-          }}
-        />
-
-        {/* Main Actions */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', width: '100%', maxWidth: '400px' }}>
-          {/* Defense Mode Toggle */}
-          <div style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            gap: '12px',
-            padding: '4px',
-          }}>
-            <span style={{
-              fontSize: 'clamp(14px, 3.5vw, 16px)',
-              color: defenseMode ? T.accent.cyan : T.text.secondary,
-              fontFamily: T.font.display,
-              fontWeight: 600,
-              transition: 'color 0.3s ease',
-            }}>
-              Defense Line
-            </span>
-            <button
-              onClick={() => {
-                audioManager.playSfx('button_click');
-                setDefenseMode(!defenseMode);
-              }}
-              style={{
-                width: '56px',
-                height: '30px',
-                borderRadius: '15px',
-                background: defenseMode ? T.accent.cyan : 'rgba(255, 255, 255, 0.15)',
-                border: defenseMode ? `2px solid ${T.accent.cyan}` : '2px solid rgba(255, 255, 255, 0.3)',
-                cursor: 'pointer',
-                position: 'relative',
-                transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-                boxShadow: defenseMode ? T.glow(T.accent.cyan, 0.6) : 'none',
-                padding: 0,
-              }}
-            >
-              <div style={{
-                position: 'absolute',
-                top: '2px',
-                left: defenseMode ? 'calc(100% - 24px - 2px)' : '2px',
-                width: '24px',
-                height: '24px',
-                borderRadius: '50%',
-                background: defenseMode ? '#fff' : 'rgba(255, 255, 255, 0.6)',
-                transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-                boxShadow: '0 2px 4px rgba(0, 0, 0, 0.2)',
-              }} />
-            </button>
-          </div>
-
-          <div style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            gap: '12px',
-            padding: '4px',
-          }}>
-            <span style={{
-              fontSize: 'clamp(14px, 3.5vw, 16px)',
-              color: aiOpponent ? T.accent.cyan : T.text.secondary,
-              fontFamily: T.font.display,
-              fontWeight: 600,
-              transition: 'color 0.3s ease',
-            }}>
-              AI Opponent
-            </span>
-            <button
-              onClick={() => {
-                audioManager.playSfx('button_click');
-                setAIOpponent(!aiOpponent);
-              }}
-              style={{
-                width: '56px',
-                height: '30px',
-                borderRadius: '15px',
-                background: aiOpponent ? T.accent.cyan : 'rgba(255, 255, 255, 0.15)',
-                border: aiOpponent ? `2px solid ${T.accent.cyan}` : '2px solid rgba(255, 255, 255, 0.3)',
-                cursor: 'pointer',
-                position: 'relative',
-                transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-                boxShadow: aiOpponent ? T.glow(T.accent.cyan, 0.6) : 'none',
-                padding: 0,
-              }}
-            >
-              <div style={{
-                position: 'absolute',
-                top: '2px',
-                left: aiOpponent ? 'calc(100% - 24px - 2px)' : '2px',
-                width: '24px',
-                height: '24px',
-                borderRadius: '50%',
-                background: aiOpponent ? '#fff' : 'rgba(255, 255, 255, 0.6)',
-                transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-                boxShadow: '0 2px 4px rgba(0, 0, 0, 0.2)',
-              }} />
-            </button>
-          </div>
-
-          <button
-            onClick={() => {
-              audioManager.playSfx('button_click');
-              onSelectMode({
-                mode: defenseMode ? 'defense-line' : 'multiplayer',
-                aiOpponent,
-              });
-            }}
+        <div style={{
+          width: '100%',
+          maxWidth: '440px',
+          margin: '0 auto',
+          display: 'grid',
+          justifyItems: 'center',
+          alignContent: 'center',
+          gap: 'clamp(8px, 1.6vh, 14px)',
+        }}>
+          <img
+            src="/stackcraft2_logo.png"
+            alt="Stackcraft 2"
             style={{
-              padding: '16px 36px',
-              fontSize: 'clamp(18px, 5.4vw, 26px)',
-              color: defenseMode ? T.accent.cyan : T.accent.purple,
-              cursor: 'pointer',
-              fontFamily: T.font.display,
-              fontWeight: 700,
-              letterSpacing: '3px',
-              transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-              width: '100%',
-              minHeight: '70px',
-              borderRadius: `${T.radius.xl}px`,
-              background: T.bg.button,
-              border: defenseMode ? `2px solid ${T.accent.cyan}44` : `2px solid ${T.accent.purple}44`,
-              boxShadow: defenseMode ? T.glow(T.accent.cyan, 0.8) : T.glow(T.accent.purple, 0.8),
-              textShadow: defenseMode ? T.glow(T.accent.cyan, 1.5) : T.glow(T.accent.purple, 1.5),
-              backdropFilter: 'blur(20px)',
+              width: 'clamp(220px, 62vw, 520px)',
+              maxWidth: '100%',
+              height: 'auto',
+              objectFit: 'contain',
+              filter: `drop-shadow(0 0 18px ${theme.colors.I}33)`,
+              marginTop: '-8px',
+              userSelect: 'none',
+              pointerEvents: 'none',
             }}
-            onMouseDown={(e) => e.currentTarget.style.transform = 'scale(0.95)'}
-            onMouseUp={(e) => e.currentTarget.style.transform = 'scale(1)'}
-            onMouseLeave={(e) => e.currentTarget.style.transform = 'scale(1)'}
-            onTouchStart={(e) => e.currentTarget.style.transform = 'scale(0.95)'}
-            onTouchEnd={(e) => e.currentTarget.style.transform = 'scale(1)'}
-          >
-            PLAY NOW
-          </button>
+          />
+
+          <ModeMenuGroup
+            onSelectMode={(selection) => {
+              audioManager.playSfx('button_click');
+              onSelectMode(selection);
+            }}
+          />
+
           <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', justifyContent: 'center', width: '100%' }}>
             <button
               onClick={() => {

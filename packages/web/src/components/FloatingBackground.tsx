@@ -4,49 +4,49 @@ import { useMemo } from 'react';
 const TETRIMINO_SHAPES: Record<string, { shape: number[][]; color: string }> = {
   I: {
     shape: [[1, 1, 1, 1]],
-    color: 'rgba(0, 212, 255, 0.15)', // cyan
+    color: 'rgba(0, 212, 255, 0.34)', // cyan
   },
   O: {
     shape: [
       [1, 1],
       [1, 1],
     ],
-    color: 'rgba(255, 215, 0, 0.15)', // yellow
+    color: 'rgba(255, 215, 0, 0.34)', // yellow
   },
   T: {
     shape: [
       [0, 1, 0],
       [1, 1, 1],
     ],
-    color: 'rgba(201, 66, 255, 0.15)', // purple
+    color: 'rgba(201, 66, 255, 0.34)', // purple
   },
   S: {
     shape: [
       [0, 1, 1],
       [1, 1, 0],
     ],
-    color: 'rgba(0, 255, 136, 0.15)', // green
+    color: 'rgba(0, 255, 136, 0.34)', // green
   },
   Z: {
     shape: [
       [1, 1, 0],
       [0, 1, 1],
     ],
-    color: 'rgba(255, 0, 110, 0.15)', // red/pink
+    color: 'rgba(255, 0, 110, 0.34)', // red/pink
   },
   J: {
     shape: [
       [1, 0, 0],
       [1, 1, 1],
     ],
-    color: 'rgba(0, 100, 255, 0.15)', // blue
+    color: 'rgba(0, 100, 255, 0.34)', // blue
   },
   L: {
     shape: [
       [0, 0, 1],
       [1, 1, 1],
     ],
-    color: 'rgba(255, 165, 0, 0.15)', // orange
+    color: 'rgba(255, 165, 0, 0.34)', // orange
   },
 };
 
@@ -59,7 +59,6 @@ type FloatingPieceConfig = {
   rotation: number;
   driftX: number;
   opacity: number;
-  blur: number;
 };
 
 const PIECE_TYPES = ['I', 'O', 'T', 'S', 'Z', 'J', 'L'] as const;
@@ -81,8 +80,7 @@ const FLOATING_PIECES: FloatingPieceConfig[] = LANE_X.flatMap((x, laneIndex) => 
       delay: -phase,
       rotation: -24 + (laneIndex % 7) * 8,
       driftX: primaryDrift,
-      opacity: 0.62 + (laneIndex % 3) * 0.06,
-      blur: 0.2 + (laneIndex % 3) * 0.15,
+      opacity: 0.82 + (laneIndex % 3) * 0.05,
     },
     {
       type: PIECE_TYPES[(laneIndex + 3) % PIECE_TYPES.length],
@@ -92,8 +90,7 @@ const FLOATING_PIECES: FloatingPieceConfig[] = LANE_X.flatMap((x, laneIndex) => 
       delay: -(phase + primaryDuration / 2),
       rotation: 18 - (laneIndex % 6) * 7,
       driftX: secondaryDrift,
-      opacity: 0.58 + ((laneIndex + 1) % 3) * 0.06,
-      blur: 0.22 + ((laneIndex + 1) % 3) * 0.12,
+      opacity: 0.78 + ((laneIndex + 1) % 3) * 0.05,
     },
   ];
 });
@@ -161,7 +158,7 @@ export function FloatingBackground() {
           }
         }
         @media (prefers-reduced-motion: reduce) {
-          .floating-tetrimino { animation: none !important; opacity: 0.4 !important; }
+          .floating-tetrimino { animation: none !important; opacity: 0.6 !important; }
         }
       `}</style>
       {FLOATING_PIECES.map((piece, i) => {
@@ -183,7 +180,6 @@ export function FloatingBackground() {
               animation: `${keyframesId}-fall ${piece.duration}s linear infinite`,
               animationDelay: `${piece.delay}s`,
               willChange: 'transform, opacity',
-              filter: `blur(${piece.blur}px)`,
             } as React.CSSProperties}
           >
             <TetriminoShape
