@@ -31,6 +31,7 @@ interface DefenseLineRendererProps {
   state: DefenseLineGameState;
   viewAs: DefenseLinePlayer;
   ghostPiece?: DefenseLinePiece | null;
+  clearedRows?: { player: DefenseLinePlayer; rows: number[] } | null;
 }
 
 const BOARD_ROWS = 30;
@@ -76,11 +77,10 @@ function mapToActual(visualRow: number, visualCol: number, viewAs: DefenseLinePl
   return [BOARD_ROWS - 1 - visualRow, BOARD_COLS - 1 - visualCol];
 }
 
-export function DefenseLineRenderer({ state, viewAs, ghostPiece }: DefenseLineRendererProps) {
+export function DefenseLineRenderer({ state, viewAs, clearedRows }: DefenseLineRendererProps) {
   const aActive = buildPieceLookup(state.playerA.activePiece);
   const bActive = buildPieceLookup(state.playerB.activePiece);
-  const ghostCells = buildPieceLookup(ghostPiece ?? null);
-  const activeRowSet = new Set(state.activeRows);
+  const clearedRowSet = new Set(clearedRows?.rows || []);
 
   const cells: ReactNode[] = [];
 
@@ -90,33 +90,25 @@ export function DefenseLineRenderer({ state, viewAs, ghostPiece }: DefenseLineRe
       const key = `${row}:${col}`;
 
       const onDivider = row === 14;
-      const activeRow = activeRowSet.has(row);
+      const isCleared = clearedRowSet.has(row);
 
-      const cell = state.board[row]?.[col];
+      const cell = state.board[row]?.[col] || (row < 15 ? '0' : 'x');
       const hasA = aActive.has(key);
       const hasB = bActive.has(key);
-      const hasGhost = ghostCells.has(key);
 
-      let background = row < 15 ? 'rgba(255, 153, 102, 0.12)' : 'rgba(0, 212, 255, 0.12)';
-      let border = '1px solid rgba(255, 255, 255, 0.08)';
-      let boxShadow = 'none';
+      // Determine actual cell value (active piece overrides board)
+      let displayCell = cell;
+      if (hasA) displayCell = 'a';
+      if (hasB) displayCell = 'b';
 
-      if (activeRow) {
-        background = row < 15 ? 'rgba(255, 153, 102, 0.2)' : 'rgba(0, 212, 255, 0.2)';
-      }
-
-      if (cell === 'a' || hasA) {
-        background = '#ff8a3c';
-        boxShadow = 'inset 0 0 10px rgba(255, 208, 153, 0.35)';
-      } else if (cell === 'b' || hasB) {
-        background = '#36d6ff';
-        boxShadow = 'inset 0 0 10px rgba(173, 238, 255, 0.45)';
-      } else if (hasGhost) {
-        background = viewAs === 'a' ? 'rgba(255, 138, 60, 0.35)' : 'rgba(54, 214, 255, 0.35)';
-      }
-
-      if (onDivider) {
-        border = '1px solid rgba(255, 255, 255, 0.08)';
+      // Color scheme: a/x = blue, b/0 = red
+      let background = '#000';
+      if (isCleared) {
+        background = '#fff'; // Blink white when cleared
+      } else if (displayCell === 'a' || displayCell === 'x') {
+        background = 'rgba(54, 162, 235, 0.8)'; // Blue
+      } else if (displayCell === 'b' || displayCell === '0') {
+        background = 'rgba(255, 99, 132, 0.8)'; // Red
       }
 
       cells.push(
@@ -124,21 +116,21 @@ export function DefenseLineRenderer({ state, viewAs, ghostPiece }: DefenseLineRe
           key={`cell-${visualRow}-${visualCol}`}
           style={{
             background,
-            border,
-            borderBottom: onDivider ? '2px solid rgba(255, 255, 255, 0.45)' : border,
-            boxShadow,
+            border: '1px solid rgba(255, 255, 255, 0.1)',
+            borderBottom: onDivider ? '2px solid rgba(255, 255, 255, 0.6)' : undefined,
             width: '100%',
             aspectRatio: '1 / 1',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            fontSize: '8px',
+            fontSize: '9px',
             fontWeight: 700,
             fontFamily: 'monospace',
-            color: 'rgba(255, 255, 255, 0.5)',
+            color: isCleared ? '#000' : '#fff',
+            position: 'relative',
           }}
         >
-          {cell}
+          {isCleared && visualCol === 2 ? `R${row}` : displayCell}
         </div>,
       );
     }

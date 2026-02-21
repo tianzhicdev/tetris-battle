@@ -3,9 +3,7 @@ import PartySocket from 'partysocket';
 import { normalizePartykitHost } from '../services/partykit/host';
 import {
   DefenseLineRenderer,
-  canPlaceDefenseLinePiece,
   type DefenseLineGameState,
-  type DefenseLinePiece,
   type DefenseLinePlayer,
 } from './DefenseLineRenderer';
 
@@ -24,6 +22,7 @@ export function DefenseLineGame({ playerId, preferredSide, theme, onExit }: Defe
   const [countdown, setCountdown] = useState<number | null>(null);
   const [winner, setWinner] = useState<DefenseLinePlayer | null>(null);
   const [connected, setConnected] = useState(false);
+  const [clearedRows, setClearedRows] = useState<{ player: DefenseLinePlayer; rows: number[] } | null>(null);
 
   const socketRef = useRef<PartySocket | null>(null);
 
@@ -82,6 +81,12 @@ export function DefenseLineGame({ playerId, preferredSide, theme, onExit }: Defe
 
       if (data.type === 'win' && (data.winner === 'a' || data.winner === 'b')) {
         setWinner(data.winner);
+        return;
+      }
+
+      if (data.type === 'clear' && data.player && Array.isArray(data.rows)) {
+        setClearedRows({ player: data.player, rows: data.rows });
+        setTimeout(() => setClearedRows(null), 1000); // Clear after 1 second
       }
     });
 
@@ -127,25 +132,6 @@ export function DefenseLineGame({ playerId, preferredSide, theme, onExit }: Defe
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [playerSide, sendInput, state]);
 
-  const ghostPiece = useMemo(() => {
-    if (!state || !playerSide) {
-      return null;
-    }
-
-    const current = playerSide === 'a' ? state.playerA.activePiece : state.playerB.activePiece;
-    if (!current) {
-      return null;
-    }
-
-    const step = playerSide === 'a' ? 1 : -1;
-    let ghost: DefenseLinePiece = { ...current };
-
-    while (canPlaceDefenseLinePiece(state, playerSide, { ...ghost, row: ghost.row + step })) {
-      ghost = { ...ghost, row: ghost.row + step };
-    }
-
-    return ghost;
-  }, [playerSide, state]);
 
   const scoreText = useMemo(() => {
     if (!state || !playerSide) {
@@ -213,7 +199,7 @@ export function DefenseLineGame({ playerId, preferredSide, theme, onExit }: Defe
         <DefenseLineRenderer
           state={state}
           viewAs={playerSide}
-          ghostPiece={ghostPiece}
+          clearedRows={clearedRows}
         />
       ) : (
         <div style={{ opacity: 0.8 }}>Waiting for game state...</div>
