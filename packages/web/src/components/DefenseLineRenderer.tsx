@@ -77,14 +77,13 @@ function mapToActual(visualRow: number, visualCol: number, viewAs: DefenseLinePl
   return [BOARD_ROWS - 1 - visualRow, BOARD_COLS - 1 - visualCol];
 }
 
-export function DefenseLineRenderer({ state, viewAs, clearedRows }: DefenseLineRendererProps) {
+export function DefenseLineRenderer({ state, viewAs }: DefenseLineRendererProps) {
   const aActive = buildPieceLookup(state.playerA.activePiece);
   const bActive = buildPieceLookup(state.playerB.activePiece);
-  const clearedRowSet = new Set(clearedRows?.rows || []);
 
   // Calculate board size to fit screen
-  // Available height: viewport - header (100px) - buttons (60px) - minimal margins (20px)
-  const availableHeight = typeof window !== 'undefined' ? window.innerHeight - 180 : 600;
+  // Available height: viewport - header (~100px) - buttons (~60px)
+  const availableHeight = typeof window !== 'undefined' ? window.innerHeight - 160 : 600;
   const cellSize = Math.floor(availableHeight / BOARD_ROWS);
   const boardWidth = cellSize * BOARD_COLS;
 
@@ -96,7 +95,6 @@ export function DefenseLineRenderer({ state, viewAs, clearedRows }: DefenseLineR
       const key = `${row}:${col}`;
 
       const onDivider = row === 14;
-      const isCleared = clearedRowSet.has(row);
 
       const cell = state.board[row]?.[col] || (row < 15 ? '0' : 'x');
       const hasA = aActive.has(key);
@@ -109,9 +107,7 @@ export function DefenseLineRenderer({ state, viewAs, clearedRows }: DefenseLineR
 
       // Color scheme: a/x = blue, b/0 = red
       let background = '#000';
-      if (isCleared) {
-        background = '#fff'; // Blink white when cleared
-      } else if (displayCell === 'a' || displayCell === 'x') {
+      if (displayCell === 'a' || displayCell === 'x') {
         background = 'rgba(54, 162, 235, 0.8)'; // Blue
       } else if (displayCell === 'b' || displayCell === '0') {
         background = 'rgba(255, 99, 132, 0.8)'; // Red
@@ -132,11 +128,10 @@ export function DefenseLineRenderer({ state, viewAs, clearedRows }: DefenseLineR
             fontSize: `${Math.max(6, cellSize * 0.4)}px`,
             fontWeight: 700,
             fontFamily: 'monospace',
-            color: isCleared ? '#000' : '#fff',
-            position: 'relative',
+            color: '#fff',
           }}
         >
-          {isCleared && visualCol === 2 ? `R${row}` : displayCell}
+          {displayCell}
         </div>,
       );
     }

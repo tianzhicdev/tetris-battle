@@ -279,84 +279,48 @@ export class DefenseLineGameState {
       return { clearedRows: [], winner: this.winner };
     }
 
-    for (const row of clearableRows) {
-      for (let col = 0; col < BOARD_COLS; col++) {
-        // A clears → '0', B clears → 'x'
-        this.board[row][col] = player === 'a' ? '0' : 'x';
+    // Sort rows so we process them correctly when shifting
+    // A clears: process from bottom to top (highest row first)
+    // B clears: process from top to bottom (lowest row first)
+    const sorted = player === 'a'
+      ? [...clearableRows].sort((a, b) => b - a)
+      : [...clearableRows].sort((a, b) => a - b);
+
+    for (const row of sorted) {
+      if (player === 'a') {
+        // A clears: shift rows 0..row-1 down by 1, row 0 becomes all '0'
+        for (let r = row; r > 0; r--) {
+          for (let col = 0; col < BOARD_COLS; col++) {
+            this.board[r][col] = this.board[r - 1][col];
+          }
+        }
+        // New row 0 = all '0'
+        for (let col = 0; col < BOARD_COLS; col++) {
+          this.board[0][col] = '0';
+        }
+      } else {
+        // B clears: shift rows row+1..29 up by 1, row 29 becomes all 'x'
+        for (let r = row; r < BOARD_ROWS - 1; r++) {
+          for (let col = 0; col < BOARD_COLS; col++) {
+            this.board[r][col] = this.board[r + 1][col];
+          }
+        }
+        // New row 29 = all 'x'
+        for (let col = 0; col < BOARD_COLS; col++) {
+          this.board[BOARD_ROWS - 1][col] = 'x';
+        }
       }
-      this.activeRows.delete(row);
     }
 
-    this.applyPostClearGravity(player);
     this.rebuildActiveRows();
 
     const state = this.getPlayerState(player);
     state.rowsCleared += clearableRows.length;
 
-    // Win condition disabled for experimentation
-    // if (state.rowsCleared >= CLEAR_TARGET) {
-    //   this.status = 'finished';
-    //   this.winner = player;
-    // }
-
     return {
       clearedRows: clearableRows,
       winner: this.winner,
     };
-  }
-
-  private applyPostClearGravity(player: DefenseLinePlayer): void {
-    let changed = false;
-
-    do {
-      changed = false;
-
-      if (player === 'a') {
-        // Only apply gravity to A's pieces (falling down)
-        for (let row = BOARD_ROWS - 2; row >= 0; row--) {
-          for (let col = 0; col < BOARD_COLS; col++) {
-            if (this.board[row][col] !== 'a') {
-              continue;
-            }
-
-            const targetRow = row + 1;
-            if (targetRow >= BOARD_ROWS) {
-              continue;
-            }
-
-            if (this.isSolidForPlayer('a', targetRow, col)) {
-              continue;
-            }
-
-            this.board[targetRow][col] = 'a';
-            this.board[row][col] = row < 15 ? '0' : 'x'; // Reset to background
-            changed = true;
-          }
-        }
-      } else {
-        // Only apply gravity to B's pieces (rising up)
-        for (let row = 1; row < BOARD_ROWS; row++) {
-          for (let col = 0; col < BOARD_COLS; col++) {
-            if (this.board[row][col] !== 'b') {
-              continue;
-            }
-
-            const targetRow = row - 1;
-            if (targetRow < 0) {
-              continue;
-            }
-
-            if (this.isSolidForPlayer('b', targetRow, col)) {
-              continue;
-            }
-
-            this.board[targetRow][col] = 'b';
-            this.board[row][col] = row < 15 ? '0' : 'x'; // Reset to background
-            changed = true;
-          }
-        }
-      }
-    } while (changed);
   }
 
   private lockPiece(player: DefenseLinePlayer, piece: DefenseLinePiece): void {

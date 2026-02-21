@@ -14,7 +14,7 @@ interface DefenseLineGameProps {
   onExit: () => void;
 }
 
-const ROOM_ID = 'global-v2';
+const ROOM_ID = 'global-v3';
 
 export function DefenseLineGame({ playerId, preferredSide, theme, onExit }: DefenseLineGameProps) {
   const [state, setState] = useState<DefenseLineGameState | null>(null);
@@ -22,7 +22,6 @@ export function DefenseLineGame({ playerId, preferredSide, theme, onExit }: Defe
   const [countdown, setCountdown] = useState<number | null>(null);
   const [winner, setWinner] = useState<DefenseLinePlayer | null>(null);
   const [connected, setConnected] = useState(false);
-  const [clearedRows, setClearedRows] = useState<{ player: DefenseLinePlayer; rows: number[] } | null>(null);
 
   const socketRef = useRef<PartySocket | null>(null);
 
@@ -84,10 +83,6 @@ export function DefenseLineGame({ playerId, preferredSide, theme, onExit }: Defe
         return;
       }
 
-      if (data.type === 'clear' && data.player && Array.isArray(data.rows)) {
-        setClearedRows({ player: data.player, rows: data.rows });
-        setTimeout(() => setClearedRows(null), 1000); // Clear after 1 second
-      }
     });
 
     return () => {
@@ -202,7 +197,6 @@ export function DefenseLineGame({ playerId, preferredSide, theme, onExit }: Defe
           <DefenseLineRenderer
             state={state}
             viewAs={playerSide}
-            clearedRows={clearedRows}
           />
         ) : (
           <div style={{ opacity: 0.8 }}>Waiting for game state...</div>
