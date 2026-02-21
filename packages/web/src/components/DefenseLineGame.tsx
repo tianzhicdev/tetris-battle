@@ -22,6 +22,8 @@ interface DefenseLinePiece {
 interface DefenseLinePlayerState {
   activePiece: DefenseLinePiece | null;
   nextPiece: TetrominoType;
+  holdPiece: TetrominoType | null;
+  holdUsed: boolean;
   rowsCleared: number;
   queue: TetrominoType[];
 }
@@ -410,6 +412,12 @@ export function DefenseLineGame({ playerId, roomId, theme, onExit, onPlayAgain }
     sendInput({ type: 'hard_drop' });
   }, [sendInput]);
 
+  const handleHold = useCallback(() => {
+    audioManager.playSfx('piece_rotate', 0.35);
+    haptics.light();
+    sendInput({ type: 'hold' });
+  }, [sendInput]);
+
   const stopAutoRepeat = useCallback(() => {
     if (dasTimeoutRef.current) {
       clearTimeout(dasTimeoutRef.current);
@@ -595,12 +603,18 @@ export function DefenseLineGame({ playerId, roomId, theme, onExit, onPlayAgain }
           event.preventDefault();
           handleHardDrop();
           break;
+        case 'c':
+        case 'C':
+        case 'Shift':
+          event.preventDefault();
+          handleHold();
+          break;
       }
     };
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [handleHardDrop, handleMoveLeft, handleMoveRight, handleRotate, handleSoftDrop, playerSide, state]);
+  }, [handleHardDrop, handleHold, handleMoveLeft, handleMoveRight, handleRotate, handleSoftDrop, playerSide, state]);
 
   const statusText = winner
     ? (playerSide === winner ? 'YOU WIN' : 'YOU LOSE')
@@ -768,10 +782,53 @@ export function DefenseLineGame({ playerId, roomId, theme, onExit, onPlayAgain }
             minWidth: 0,
             minHeight: 0,
             display: 'flex',
-            alignItems: 'flex-start',
-            justifyContent: 'center',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'flex-start',
+            gap: 'clamp(4px, 0.8vh, 8px)',
           }}
         >
+          {/* Hold piece slot */}
+          <div
+            style={{
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              opacity: yourState?.holdUsed ? 0.35 : 1,
+              transition: 'opacity 150ms ease',
+            }}
+          >
+            <div
+              style={{
+                fontSize: '7px',
+                letterSpacing: '2px',
+                color: 'rgba(255,255,255,0.3)',
+                textTransform: 'uppercase',
+                marginBottom: '2px',
+                textAlign: 'center',
+              }}
+            >
+              HOLD
+            </div>
+            <div
+              style={{
+                width: '46px',
+                height: '46px',
+                border: `1px solid ${yourState?.holdUsed ? 'rgba(255,255,255,0.06)' : 'rgba(0, 240, 240, 0.2)'}`,
+                borderRadius: '6px',
+                background: 'rgba(5, 5, 20, 0.5)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+            >
+              {yourState?.holdPiece ? (
+                <NextPiecePanel nextPieces={[yourState.holdPiece]} />
+              ) : (
+                <div style={{ fontSize: '10px', color: 'rgba(255,255,255,0.12)' }}>--</div>
+              )}
+            </div>
+          </div>
           {nextPieces.length > 0 && <NextPiecePanel nextPieces={nextPieces} />}
         </div>
 
@@ -977,6 +1034,7 @@ export function DefenseLineGame({ playerId, roomId, theme, onExit, onPlayAgain }
         {[
           { key: 'left', icon: '◀', onPress: handleMoveLeft, repeatable: true },
           { key: 'hard', icon: '⏬', onPress: handleHardDrop, repeatable: false },
+          { key: 'hold', icon: '⤭', onPress: handleHold, repeatable: false },
           { key: 'down', icon: '▼', onPress: handleSoftDrop, repeatable: true },
           { key: 'rotate', icon: '↻', onPress: handleRotate, repeatable: false },
           { key: 'right', icon: '▶', onPress: handleMoveRight, repeatable: true },

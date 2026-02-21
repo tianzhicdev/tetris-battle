@@ -18,6 +18,8 @@ export interface DefenseLinePiece {
 export interface DefenseLinePlayerState {
   activePiece: DefenseLinePiece | null;
   nextPiece: TetrominoType;
+  holdPiece: TetrominoType | null;
+  holdUsed: boolean;
   rowsCleared: number;
   queue: TetrominoType[];
 }
@@ -85,7 +87,7 @@ export class DefenseLineGameState {
     }
   }
 
-  processInput(player: DefenseLinePlayer, input: 'move_left' | 'move_right' | 'rotate_cw' | 'rotate_ccw' | 'soft_drop' | 'hard_drop'): InputResult {
+  processInput(player: DefenseLinePlayer, input: 'move_left' | 'move_right' | 'rotate_cw' | 'rotate_ccw' | 'soft_drop' | 'hard_drop' | 'hold'): InputResult {
     if (this.status !== 'playing' || this.winner) {
       return { changed: false, clearedRows: [], winner: this.winner };
     }
@@ -108,6 +110,8 @@ export class DefenseLineGameState {
         return this.softDrop(player);
       case 'hard_drop':
         return this.hardDrop(player);
+      case 'hold':
+        return this.holdPiece(player);
       default:
         return { changed: false, clearedRows: [], winner: this.winner };
     }
@@ -144,12 +148,16 @@ export class DefenseLineGameState {
       playerA: {
         activePiece: this.playerA.activePiece ? { ...this.playerA.activePiece } : null,
         nextPiece: this.playerA.nextPiece,
+        holdPiece: this.playerA.holdPiece,
+        holdUsed: this.playerA.holdUsed,
         rowsCleared: this.playerA.rowsCleared,
         queue: [...this.playerA.queue],
       },
       playerB: {
         activePiece: this.playerB.activePiece ? { ...this.playerB.activePiece } : null,
         nextPiece: this.playerB.nextPiece,
+        holdPiece: this.playerB.holdPiece,
+        holdUsed: this.playerB.holdUsed,
         rowsCleared: this.playerB.rowsCleared,
         queue: [...this.playerB.queue],
       },
@@ -169,6 +177,8 @@ export class DefenseLineGameState {
     return {
       activePiece: null,
       nextPiece,
+      holdPiece: null,
+      holdUsed: false,
       rowsCleared: 0,
       queue,
     };
@@ -193,6 +203,7 @@ export class DefenseLineGameState {
     const resolution = this.resolveAfterLock(player);
     state.activePiece = this.createSpawnPiece(player, state.nextPiece);
     state.nextPiece = this.drawNextPiece(state);
+    state.holdUsed = false;
 
     return {
       changed: true,
@@ -223,12 +234,37 @@ export class DefenseLineGameState {
     const resolution = this.resolveAfterLock(player);
     state.activePiece = this.createSpawnPiece(player, state.nextPiece);
     state.nextPiece = this.drawNextPiece(state);
+    state.holdUsed = false;
 
     return {
       changed: true,
       clearedRows: resolution.clearedRows,
       winner: resolution.winner,
     };
+  }
+
+  private holdPiece(player: DefenseLinePlayer): InputResult {
+    const state = this.getPlayerState(player);
+    const piece = state.activePiece;
+    if (!piece || state.holdUsed) {
+      return { changed: false, clearedRows: [], winner: this.winner };
+    }
+
+    const currentType = piece.type;
+
+    if (state.holdPiece) {
+      // Swap: spawn the held piece, stash the current one
+      state.activePiece = this.createSpawnPiece(player, state.holdPiece);
+      state.holdPiece = currentType;
+    } else {
+      // First hold: stash current piece, draw next from queue
+      state.holdPiece = currentType;
+      state.activePiece = this.createSpawnPiece(player, state.nextPiece);
+      state.nextPiece = this.drawNextPiece(state);
+    }
+
+    state.holdUsed = true;
+    return { changed: true, clearedRows: [], winner: this.winner };
   }
 
   private tryMove(player: DefenseLinePlayer, state: DefenseLinePlayerState, deltaRow: number, deltaCol: number): { changed: boolean; clearedRows: number[] } {

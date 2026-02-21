@@ -14,7 +14,8 @@ type DefenseLineInput =
   | { type: 'move'; direction: 'left' | 'right' }
   | { type: 'rotate'; direction: 'cw' | 'ccw' }
   | { type: 'soft_drop' }
-  | { type: 'hard_drop' };
+  | { type: 'hard_drop' }
+  | { type: 'hold' };
 
 const TICK_MS = 700;
 const AI_FALLBACK_MS = 10_000; // 10 seconds before AI joins
@@ -36,7 +37,7 @@ export default class DefenseLineServer implements Party.Server {
   // AI state
   private aiSide: DefenseLinePlayer | null = null;
   private readonly ai = new DefenseLineAI();
-  private aiMoveQueue: Array<'move_left' | 'move_right' | 'rotate_cw' | 'hard_drop'> = [];
+  private aiMoveQueue: Array<'move_left' | 'move_right' | 'rotate_cw' | 'hard_drop' | 'hold'> = [];
 
   constructor(readonly room: Party.Room) {
     const seed = parseInt(room.id.substring(0, 8), 36) || Date.now();
@@ -81,6 +82,7 @@ export default class DefenseLineServer implements Party.Server {
       case 'rotate':
       case 'soft_drop':
       case 'hard_drop':
+      case 'hold':
         this.ensureCountdownStart();
         this.handleInput(sender, data as DefenseLineInput);
         return;
@@ -249,7 +251,7 @@ export default class DefenseLineServer implements Party.Server {
     }
   }
 
-  private normalizeInput(input: DefenseLineInput, player: DefenseLinePlayer): 'move_left' | 'move_right' | 'rotate_cw' | 'rotate_ccw' | 'soft_drop' | 'hard_drop' {
+  private normalizeInput(input: DefenseLineInput, player: DefenseLinePlayer): 'move_left' | 'move_right' | 'rotate_cw' | 'rotate_ccw' | 'soft_drop' | 'hard_drop' | 'hold' {
     if (input.type === 'move') {
       // Reverse left/right for player B (board is flipped 180°)
       if (player === 'b') {
@@ -410,29 +412,36 @@ export default class DefenseLineServer implements Party.Server {
         this.gameState.board,
         this.aiSide,
         piece,
+        playerState.holdPiece,
+        playerState.holdUsed,
       );
 
-      // Generate moves: rotations first, then horizontal, then hard drop
-      const shapes = TETROMINO_SHAPES[piece.type];
-      const numRotations = shapes.length;
-      const rotationDiff = ((target.targetRotation - piece.rotation) % numRotations + numRotations) % numRotations;
+      if (target.useHold) {
+        // Hold first, then recalculate on next tick (queue will be empty again)
+        this.aiMoveQueue.push('hold');
+      } else {
+        // Generate moves: rotations first, then horizontal, then hard drop
+        const shapes = TETROMINO_SHAPES[piece.type];
+        const numRotations = shapes.length;
+        const rotationDiff = ((target.targetRotation - piece.rotation) % numRotations + numRotations) % numRotations;
 
-      for (let i = 0; i < rotationDiff; i++) {
-        this.aiMoveQueue.push('rotate_cw');
-      }
-
-      const colDiff = target.targetCol - piece.col;
-      if (colDiff > 0) {
-        for (let i = 0; i < colDiff; i++) {
-          this.aiMoveQueue.push('move_right');
+        for (let i = 0; i < rotationDiff; i++) {
+          this.aiMoveQueue.push('rotate_cw');
         }
-      } else if (colDiff < 0) {
-        for (let i = 0; i < Math.abs(colDiff); i++) {
-          this.aiMoveQueue.push('move_left');
-        }
-      }
 
-      this.aiMoveQueue.push('hard_drop');
+        const colDiff = target.targetCol - piece.col;
+        if (colDiff > 0) {
+          for (let i = 0; i < colDiff; i++) {
+            this.aiMoveQueue.push('move_right');
+          }
+        } else if (colDiff < 0) {
+          for (let i = 0; i < Math.abs(colDiff); i++) {
+            this.aiMoveQueue.push('move_left');
+          }
+        }
+
+        this.aiMoveQueue.push('hard_drop');
+      }
     }
 
     // Remember current piece identity to detect lock

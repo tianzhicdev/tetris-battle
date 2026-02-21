@@ -28,35 +28,59 @@ export class DefenseLineAI {
   /**
    * Decide which input to emit next for the AI player.
    * Returns a sequence of normalized inputs to reach the target placement.
+   * If useHold is true, the AI should hold first, then place the resulting piece.
    */
   findBestPlacement(
     board: DefenseLineCell[][],
     player: DefenseLinePlayer,
     piece: DefenseLinePiece,
-  ): { targetRotation: number; targetCol: number } {
+    holdPiece?: TetrominoType | null,
+    holdUsed?: boolean,
+  ): { targetRotation: number; targetCol: number; useHold: boolean } {
     const shouldMistake = Math.random() < this.mistakeRate;
 
-    const placements = this.getAllPlacements(board, player, piece);
-    if (placements.length === 0) {
-      return { targetRotation: piece.rotation, targetCol: piece.col };
+    const currentPlacements = this.getAllPlacements(board, player, piece);
+    const bestCurrent = this.pickPlacement(currentPlacements, shouldMistake);
+
+    // Evaluate hold option if available and not already used this piece
+    if (!holdUsed && holdPiece) {
+      const holdShape = TETROMINO_SHAPES[holdPiece][0];
+      const holdSpawnPiece: DefenseLinePiece = {
+        type: holdPiece,
+        rotation: 0,
+        row: piece.row,
+        col: Math.floor((DEFENSE_BOARD_COLS - holdShape[0].length) / 2),
+      };
+      const holdPlacements = this.getAllPlacements(board, player, holdSpawnPiece);
+      const bestHold = this.pickPlacement(holdPlacements, shouldMistake);
+
+      if (bestHold && (!bestCurrent || bestHold.score > bestCurrent.score + 15)) {
+        return { targetRotation: bestHold.rotation, targetCol: bestHold.col, useHold: true };
+      }
     }
 
-    // Sort by score descending
+    if (!bestCurrent) {
+      return { targetRotation: piece.rotation, targetCol: piece.col, useHold: false };
+    }
+
+    return { targetRotation: bestCurrent.rotation, targetCol: bestCurrent.col, useHold: false };
+  }
+
+  private pickPlacement(placements: AIPlacement[], shouldMistake: boolean): AIPlacement | null {
+    if (placements.length === 0) return null;
+
     placements.sort((a, b) => b.score - a.score);
 
     if (shouldMistake && placements.length > 1) {
-      // Pick a random non-optimal placement from the bottom half
       const bottomHalf = placements.slice(Math.floor(placements.length / 2));
-      const pick = bottomHalf[Math.floor(Math.random() * bottomHalf.length)];
-      return { targetRotation: pick.rotation, targetCol: pick.col };
+      return bottomHalf[Math.floor(Math.random() * bottomHalf.length)];
     }
 
-    // Pick the best (with slight randomness among top 2)
     if (placements.length >= 2 && Math.random() < 0.3) {
-      return { targetRotation: placements[1].rotation, targetCol: placements[1].col };
+      return placements[1];
     }
 
-    return { targetRotation: placements[0].rotation, targetCol: placements[0].col };
+    return placements[0];
   }
 
   private getAllPlacements(
