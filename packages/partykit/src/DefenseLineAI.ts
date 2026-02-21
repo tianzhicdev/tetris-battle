@@ -1,0 +1,318 @@
+import {
+  TETROMINO_SHAPES,
+  type TetrominoType,
+} from '@tetris-battle/game-core';
+import type {
+  DefenseLinePlayer,
+  DefenseLineCell,
+  DefenseLinePiece,
+} from './DefenseLineGameState';
+
+const BOARD_ROWS = 30;
+const BOARD_COLS = 5;
+
+interface AIPlacement {
+  rotation: number;
+  col: number;
+  score: number;
+}
+
+/**
+ * Simple AI for Defense Line mode.
+ * Evaluates all possible placements and picks the best one
+ * (with occasional intentional mistakes for balance).
+ */
+export class DefenseLineAI {
+  private mistakeRate = 0.30; // 30% mistake rate
+
+  /**
+   * Decide which input to emit next for the AI player.
+   * Returns a sequence of normalized inputs to reach the target placement.
+   */
+  findBestPlacement(
+    board: DefenseLineCell[][],
+    player: DefenseLinePlayer,
+    piece: DefenseLinePiece,
+  ): { targetRotation: number; targetCol: number } {
+    const shouldMistake = Math.random() < this.mistakeRate;
+
+    const placements = this.getAllPlacements(board, player, piece);
+    if (placements.length === 0) {
+      return { targetRotation: piece.rotation, targetCol: piece.col };
+    }
+
+    // Sort by score descending
+    placements.sort((a, b) => b.score - a.score);
+
+    if (shouldMistake && placements.length > 1) {
+      // Pick a random non-optimal placement from the bottom half
+      const bottomHalf = placements.slice(Math.floor(placements.length / 2));
+      const pick = bottomHalf[Math.floor(Math.random() * bottomHalf.length)];
+      return { targetRotation: pick.rotation, targetCol: pick.col };
+    }
+
+    // Pick the best (with slight randomness among top 2)
+    if (placements.length >= 2 && Math.random() < 0.3) {
+      return { targetRotation: placements[1].rotation, targetCol: placements[1].col };
+    }
+
+    return { targetRotation: placements[0].rotation, targetCol: placements[0].col };
+  }
+
+  private getAllPlacements(
+    board: DefenseLineCell[][],
+    player: DefenseLinePlayer,
+    piece: DefenseLinePiece,
+  ): AIPlacement[] {
+    const placements: AIPlacement[] = [];
+    const shapes = TETROMINO_SHAPES[piece.type];
+
+    for (let rotation = 0; rotation < shapes.length; rotation++) {
+      const shape = shapes[rotation];
+      const shapeWidth = shape[0].length;
+
+      for (let col = -(shapeWidth - 1); col < BOARD_COLS; col++) {
+        // Check if this rotation+col is valid at spawn row
+        const testPiece: DefenseLinePiece = {
+          type: piece.type,
+          rotation,
+          row: piece.row,
+          col,
+        };
+
+        if (!this.canPlace(board, player, testPiece)) {
+          continue;
+        }
+
+        // Hard drop: find where piece lands
+        const landed = this.hardDropPiece(board, player, testPiece);
+        if (!landed) continue;
+
+        // Simulate locking and evaluate
+        const score = this.evaluatePlacement(board, player, landed);
+        placements.push({ rotation, col, score });
+      }
+    }
+
+    return placements;
+  }
+
+  private hardDropPiece(
+    board: DefenseLineCell[][],
+    player: DefenseLinePlayer,
+    piece: DefenseLinePiece,
+  ): DefenseLinePiece | null {
+    const step = player === 'a' ? 1 : -1;
+    let current = { ...piece };
+
+    // eslint-disable-next-line no-constant-condition
+    while (true) {
+      const next = { ...current, row: current.row + step };
+      if (!this.canPlace(board, player, next)) {
+        break;
+      }
+      current = next;
+    }
+
+    return current;
+  }
+
+  private evaluatePlacement(
+    board: DefenseLineCell[][],
+    player: DefenseLinePlayer,
+    piece: DefenseLinePiece,
+  ): number {
+    // Simulate locking the piece on a copy of the board
+    const boardCopy = board.map(row => [...row]);
+    const cells = this.getPieceCells(piece);
+
+    for (const [row, col] of cells) {
+      if (row >= 0 && row < BOARD_ROWS && col >= 0 && col < BOARD_COLS) {
+        boardCopy[row][col] = player;
+      }
+    }
+
+    let score = 0;
+
+    // 1. Count clearable rows (highest priority)
+    const clearableCount = this.countClearableRows(boardCopy, player);
+    score += clearableCount * 100;
+
+    // 2. Penalize height (how far from spawn side)
+    // For A (spawns at top, drops down): lower rows are riskier
+    // For B (spawns at bottom, drops up): higher rows are riskier
+    const pieceCenterRow = cells.reduce((sum, [r]) => sum + r, 0) / cells.length;
+    if (player === 'a') {
+      // A wants to place closer to row 29 (deeper into board)
+      score += pieceCenterRow * 2;
+    } else {
+      // B wants to place closer to row 0
+      score += (BOARD_ROWS - 1 - pieceCenterRow) * 2;
+    }
+
+    // 3. Penalize holes (empty passable cells with solid above/below)
+    const holes = this.countHoles(boardCopy, player);
+    score -= holes * 15;
+
+    // 4. Reward filling columns evenly (low bumpiness)
+    const bumpiness = this.getBumpiness(boardCopy, player);
+    score -= bumpiness * 3;
+
+    // 5. Penalize blocking own side near spawn
+    if (player === 'a') {
+      for (const [row] of cells) {
+        if (row < 3) score -= 20; // Don't stack near spawn
+      }
+    } else {
+      for (const [row] of cells) {
+        if (row > BOARD_ROWS - 4) score -= 20;
+      }
+    }
+
+    return score;
+  }
+
+  private countClearableRows(board: DefenseLineCell[][], player: DefenseLinePlayer): number {
+    let count = 0;
+    for (let row = 0; row < BOARD_ROWS; row++) {
+      let hasPlayerPiece = false;
+      let allFilled = true;
+
+      for (let col = 0; col < BOARD_COLS; col++) {
+        const cell = board[row][col];
+        if (cell === player) {
+          hasPlayerPiece = true;
+        }
+
+        if (player === 'a') {
+          if (cell !== 'a' && cell !== 'x') {
+            allFilled = false;
+            break;
+          }
+        } else {
+          if (cell !== 'b' && cell !== '0') {
+            allFilled = false;
+            break;
+          }
+        }
+      }
+
+      if (allFilled && hasPlayerPiece) {
+        count++;
+      }
+    }
+    return count;
+  }
+
+  private countHoles(board: DefenseLineCell[][], player: DefenseLinePlayer): number {
+    let holes = 0;
+
+    if (player === 'a') {
+      // A drops downward: scan from top, count empty-for-A cells below solid-for-A cells
+      for (let col = 0; col < BOARD_COLS; col++) {
+        let solidFound = false;
+        for (let row = 0; row < BOARD_ROWS; row++) {
+          const cell = board[row][col];
+          const isSolid = cell === 'a' || cell === 'x';
+          if (isSolid) {
+            solidFound = true;
+          } else if (solidFound) {
+            holes++;
+          }
+        }
+      }
+    } else {
+      // B drops upward: scan from bottom
+      for (let col = 0; col < BOARD_COLS; col++) {
+        let solidFound = false;
+        for (let row = BOARD_ROWS - 1; row >= 0; row--) {
+          const cell = board[row][col];
+          const isSolid = cell === 'b' || cell === '0';
+          if (isSolid) {
+            solidFound = true;
+          } else if (solidFound) {
+            holes++;
+          }
+        }
+      }
+    }
+
+    return holes;
+  }
+
+  private getBumpiness(board: DefenseLineCell[][], player: DefenseLinePlayer): number {
+    const heights: number[] = [];
+
+    for (let col = 0; col < BOARD_COLS; col++) {
+      let height = 0;
+
+      if (player === 'a') {
+        // Height from top: first solid-for-A cell
+        for (let row = 0; row < BOARD_ROWS; row++) {
+          const cell = board[row][col];
+          if (cell === 'a') {
+            height = BOARD_ROWS - row;
+            break;
+          }
+        }
+      } else {
+        // Height from bottom: first solid-for-B cell
+        for (let row = BOARD_ROWS - 1; row >= 0; row--) {
+          const cell = board[row][col];
+          if (cell === 'b') {
+            height = row + 1;
+            break;
+          }
+        }
+      }
+
+      heights.push(height);
+    }
+
+    let bumpiness = 0;
+    for (let i = 0; i < heights.length - 1; i++) {
+      bumpiness += Math.abs(heights[i] - heights[i + 1]);
+    }
+
+    return bumpiness;
+  }
+
+  private canPlace(
+    board: DefenseLineCell[][],
+    player: DefenseLinePlayer,
+    piece: DefenseLinePiece,
+  ): boolean {
+    const cells = this.getPieceCells(piece);
+
+    for (const [row, col] of cells) {
+      if (col < 0 || col >= BOARD_COLS || row < 0 || row >= BOARD_ROWS) {
+        return false;
+      }
+      const cell = board[row][col];
+      if (player === 'a') {
+        if (cell === 'a' || cell === 'x') return false;
+      } else {
+        if (cell === 'b' || cell === '0') return false;
+      }
+    }
+
+    return true;
+  }
+
+  private getPieceCells(piece: DefenseLinePiece): Array<[number, number]> {
+    const shapes = TETROMINO_SHAPES[piece.type];
+    const rotation = ((piece.rotation % shapes.length) + shapes.length) % shapes.length;
+    const shape = shapes[rotation];
+    const cells: Array<[number, number]> = [];
+
+    for (let r = 0; r < shape.length; r++) {
+      for (let c = 0; c < shape[r].length; c++) {
+        if (shape[r][c] === 1) {
+          cells.push([piece.row + r, piece.col + c]);
+        }
+      }
+    }
+
+    return cells;
+  }
+}

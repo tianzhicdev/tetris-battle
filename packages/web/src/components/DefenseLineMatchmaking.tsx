@@ -10,14 +10,13 @@ interface DefenseLineMatchmakingProps {
   onMatchReady: (player: DefenseLinePlayer) => void;
 }
 
-const ROOM_ID = 'global';
+const ROOM_ID = 'global-v4';
 
 export function DefenseLineMatchmaking({ playerId, theme, onCancel, onMatchReady }: DefenseLineMatchmakingProps) {
   const [connected, setConnected] = useState(false);
-  const [selectedSide, setSelectedSide] = useState<DefenseLinePlayer | null>(null);
   const [assignedSide, setAssignedSide] = useState<DefenseLinePlayer | null>(null);
   const [countdown, setCountdown] = useState<number | null>(null);
-  const [players, setPlayers] = useState<{ a: string | null; b: string | null }>({ a: null, b: null });
+  const [waitSeconds, setWaitSeconds] = useState(0);
 
   const socketRef = useRef<PartySocket | null>(null);
   const startedRef = useRef(false);
@@ -32,6 +31,14 @@ export function DefenseLineMatchmaking({ playerId, theme, onCancel, onMatchReady
     assignedSideRef.current = assignedSide;
   }, [assignedSide]);
 
+  // Wait timer
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setWaitSeconds(s => s + 1);
+    }, 1000);
+    return () => clearInterval(interval);
+  }, []);
+
   useEffect(() => {
     const host = normalizePartykitHost(import.meta.env.VITE_PARTYKIT_HOST);
     const socket = new PartySocket({
@@ -44,6 +51,11 @@ export function DefenseLineMatchmaking({ playerId, theme, onCancel, onMatchReady
 
     socket.addEventListener('open', () => {
       setConnected(true);
+      // Auto-join immediately — server assigns side
+      socket.send(JSON.stringify({
+        type: 'join',
+        playerId,
+      }));
     });
 
     socket.addEventListener('close', () => {
@@ -56,11 +68,6 @@ export function DefenseLineMatchmaking({ playerId, theme, onCancel, onMatchReady
       try {
         data = JSON.parse(event.data);
       } catch {
-        return;
-      }
-
-      if (data.type === 'room_state' && data.players) {
-        setPlayers({ a: data.players.a ?? null, b: data.players.b ?? null });
         return;
       }
 
@@ -84,21 +91,7 @@ export function DefenseLineMatchmaking({ playerId, theme, onCancel, onMatchReady
       socket.close();
       socketRef.current = null;
     };
-  }, []);
-
-  const sendJoin = (side: DefenseLinePlayer) => {
-    const socket = socketRef.current;
-    if (!socket || socket.readyState !== WebSocket.OPEN) {
-      return;
-    }
-
-    setSelectedSide(side);
-    socket.send(JSON.stringify({
-      type: 'join',
-      playerId,
-      player: side,
-    }));
-  };
+  }, [playerId]);
 
   return (
     <div
@@ -115,33 +108,17 @@ export function DefenseLineMatchmaking({ playerId, theme, onCancel, onMatchReady
         padding: '24px',
       }}
     >
-      <h2 style={{ margin: 0 }}>Defense Line Matchmaking</h2>
-      <div style={{ opacity: 0.85 }}>{connected ? 'Connected to room' : 'Connecting to room...'}</div>
-
-      <div style={{ display: 'flex', gap: '10px' }}>
-        <button
-          onClick={() => sendJoin('a')}
-          disabled={!connected || !!assignedSide}
-          style={{ padding: '10px 18px', cursor: 'pointer' }}
-        >
-          Join as A
-        </button>
-        <button
-          onClick={() => sendJoin('b')}
-          disabled={!connected || !!assignedSide}
-          style={{ padding: '10px 18px', cursor: 'pointer' }}
-        >
-          Join as B
-        </button>
+      <h2 style={{ margin: 0 }}>Defense Line</h2>
+      <div style={{ opacity: 0.85 }}>
+        {!connected ? 'Connecting...' : assignedSide ? `Joined as ${assignedSide.toUpperCase()}` : 'Joining...'}
       </div>
 
-      <div style={{ fontSize: '14px', color: '#ddd' }}>
-        Selected: {selectedSide ? selectedSide.toUpperCase() : '-'} | Assigned: {assignedSide ? assignedSide.toUpperCase() : '-'}
-      </div>
-
-      <div style={{ fontSize: '14px', color: '#ccc' }}>
-        Player A: {players.a ? 'Ready' : 'Waiting'} | Player B: {players.b ? 'Ready' : 'Waiting'}
-      </div>
+      {assignedSide && countdown === null && (
+        <div style={{ fontSize: '14px', color: '#ccc' }}>
+          Waiting for opponent... ({waitSeconds}s)
+          {waitSeconds >= 7 && <div style={{ color: '#ffd166', marginTop: '4px' }}>AI opponent joining soon...</div>}
+        </div>
+      )}
 
       {countdown !== null && countdown > 0 && (
         <div style={{ fontSize: '22px', color: '#ffd166', fontWeight: 700 }}>

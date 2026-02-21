@@ -43,7 +43,7 @@ function GameApp({ profile: initialProfile }: { profile: UserProfile }) {
   const { theme } = useTheme();
   const currentTheme = toLegacyTheme(theme); // Convert to legacy format for existing components
   const [gameMatch, setGameMatch] = useState<GameMatch | null>(null);
-  const [defenseLineSide, setDefenseLineSide] = useState<'a' | 'b' | null>(null);
+  const [defenseLineSide, setDefenseLineSide] = useState<'a' | 'b'>('a');
   const [profile, setProfile] = useState<UserProfile>(initialProfile);
   const presenceRef = useRef<PartykitPresence | null>(null);
 
@@ -180,7 +180,6 @@ function GameApp({ profile: initialProfile }: { profile: UserProfile }) {
     if (selectedMode === 'solo') {
       setMode('solo');
     } else if (selectedMode === 'defense-line') {
-      setDefenseLineSide(null);
       setMode('defense-line-matchmaking');
     } else {
       setMode('matchmaking');
@@ -203,7 +202,6 @@ function GameApp({ profile: initialProfile }: { profile: UserProfile }) {
   }, []);
 
   const handleExitDefenseLine = useCallback(() => {
-    setDefenseLineSide(null);
     setMode('menu');
   }, []);
 
@@ -291,7 +289,7 @@ function GameApp({ profile: initialProfile }: { profile: UserProfile }) {
       {mode === 'defense-line' && (
         <DefenseLineGame
           playerId={playerId}
-          preferredSide={defenseLineSide}
+          assignedSide={defenseLineSide}
           theme={currentTheme}
           onExit={handleExitDefenseLine}
         />

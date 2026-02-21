@@ -1,12 +1,13 @@
 import type * as Party from 'partykit/server';
+import { TETROMINO_SHAPES } from '@tetris-battle/game-core';
 import {
   DefenseLineGameState,
   type DefenseLinePlayer,
 } from './DefenseLineGameState';
+import { DefenseLineAI } from './DefenseLineAI';
 
 interface JoinPayload {
   playerId: string;
-  player?: DefenseLinePlayer;
 }
 
 type DefenseLineInput =
@@ -16,6 +17,8 @@ type DefenseLineInput =
   | { type: 'hard_drop' };
 
 const TICK_MS = 700;
+const AI_FALLBACK_MS = 10_000; // 10 seconds before AI joins
+const AI_MOVE_INTERVAL_MS = 300; // AI makes a move every 300ms
 
 export default class DefenseLineServer implements Party.Server {
   private gameState: DefenseLineGameState;
@@ -25,6 +28,13 @@ export default class DefenseLineServer implements Party.Server {
 
   private countdownTimer: ReturnType<typeof setInterval> | null = null;
   private gameLoop: ReturnType<typeof setInterval> | null = null;
+  private aiFallbackTimer: ReturnType<typeof setTimeout> | null = null;
+  private aiMoveTimer: ReturnType<typeof setInterval> | null = null;
+
+  // AI state
+  private aiSide: DefenseLinePlayer | null = null;
+  private readonly ai = new DefenseLineAI();
+  private aiMoveQueue: Array<'move_left' | 'move_right' | 'rotate_cw' | 'hard_drop'> = [];
 
   constructor(readonly room: Party.Room) {
     const seed = parseInt(room.id.substring(0, 8), 36) || Date.now();
@@ -90,14 +100,17 @@ export default class DefenseLineServer implements Party.Server {
     this.sideToPlayerId.delete(side);
 
     if (this.gameState.status === 'playing' || this.gameState.status === 'countdown' || this.gameState.status === 'finished') {
-      this.stopGameLoop();
-      this.stopCountdown();
+      this.stopAll();
       this.resetGameState();
     }
+
+    this.cancelAIFallback();
 
     this.broadcastRoomState();
     this.broadcastState();
   }
+
+  // ------- Join & Assignment -------
 
   private handleJoin(conn: Party.Connection, payload: JoinPayload): void {
     if (!payload.playerId) {
@@ -105,7 +118,8 @@ export default class DefenseLineServer implements Party.Server {
       return;
     }
 
-    const assigned = this.assignPlayer(conn, payload.playerId, payload.player);
+    // Auto-assign: first player gets 'a', second gets 'b'
+    const assigned = this.assignPlayer(conn, payload.playerId);
 
     if (!assigned) {
       conn.send(JSON.stringify({ type: 'error', message: 'room_full' }));
@@ -119,8 +133,85 @@ export default class DefenseLineServer implements Party.Server {
 
     this.broadcastRoomState();
     this.broadcastState();
+
+    // Check if both sides are filled (human or AI)
+    if (this.sideToPlayerId.has('a') && this.sideToPlayerId.has('b')) {
+      this.maybeStartCountdown();
+    } else {
+      // Only one human player — start AI fallback timer
+      this.scheduleAIFallback();
+    }
+  }
+
+  private assignPlayer(conn: Party.Connection, playerId: string): DefenseLinePlayer | null {
+    // Reconnection: if playerId already has a side, rejoin
+    const existingSide = this.getSideByPlayerId(playerId);
+    if (existingSide) {
+      const previousConn = this.sideToConnection.get(existingSide);
+      if (previousConn) {
+        this.connectionToSide.delete(previousConn.id);
+      }
+      this.sideToConnection.set(existingSide, conn);
+      this.connectionToSide.set(conn.id, existingSide);
+      return existingSide;
+    }
+
+    // Auto-assign: first available side
+    const fallback = this.canTakeSide('a') ? 'a' : this.canTakeSide('b') ? 'b' : null;
+    if (!fallback) {
+      return null;
+    }
+
+    this.takeSide(fallback, playerId, conn);
+    return fallback;
+  }
+
+  // ------- AI Fallback -------
+
+  private scheduleAIFallback(): void {
+    if (this.aiFallbackTimer) return;
+
+    this.aiFallbackTimer = setTimeout(() => {
+      this.aiFallbackTimer = null;
+
+      // If both sides already filled, skip
+      if (this.sideToPlayerId.has('a') && this.sideToPlayerId.has('b')) {
+        return;
+      }
+
+      this.spawnAI();
+    }, AI_FALLBACK_MS);
+  }
+
+  private cancelAIFallback(): void {
+    if (this.aiFallbackTimer) {
+      clearTimeout(this.aiFallbackTimer);
+      this.aiFallbackTimer = null;
+    }
+  }
+
+  private spawnAI(): void {
+    // Find which side is empty
+    const side: DefenseLinePlayer | null =
+      !this.sideToPlayerId.has('a') ? 'a' :
+      !this.sideToPlayerId.has('b') ? 'b' :
+      null;
+
+    if (!side) return;
+
+    const aiPlayerId = `bot_${Date.now()}`;
+    this.sideToPlayerId.set(side, aiPlayerId);
+    // No connection for AI — sideToConnection stays empty for this side
+    this.aiSide = side;
+
+    console.log(`[DefenseLine] AI spawned as player ${side}`);
+
+    this.broadcastRoomState();
+    this.broadcastState();
     this.maybeStartCountdown();
   }
+
+  // ------- Input Handling -------
 
   private handleInput(sender: Party.Connection, input: DefenseLineInput): void {
     const side = this.connectionToSide.get(sender.id);
@@ -170,21 +261,23 @@ export default class DefenseLineServer implements Party.Server {
     return input.type;
   }
 
+  // ------- Game Lifecycle -------
+
   private maybeStartCountdown(): void {
     if (this.gameState.status === 'playing' || this.gameState.status === 'finished') {
       return;
     }
 
-    const hasA = this.sideToConnection.has('a');
-    const hasB = this.sideToConnection.has('b');
-
-    if (!hasA || !hasB) {
+    // Both sides need a player ID (human or AI)
+    if (!this.sideToPlayerId.has('a') || !this.sideToPlayerId.has('b')) {
       return;
     }
 
     if (this.countdownTimer) {
       return;
     }
+
+    this.cancelAIFallback(); // No longer need AI fallback
 
     this.gameState.setStatus('countdown');
     let seconds = 3;
@@ -233,11 +326,104 @@ export default class DefenseLineServer implements Party.Server {
         this.finishGame(tick.winner);
       }
     }, TICK_MS);
+
+    // Start AI move loop if AI is present
+    if (this.aiSide) {
+      this.startAIMoveLoop();
+    }
+  }
+
+  private startAIMoveLoop(): void {
+    if (this.aiMoveTimer) {
+      clearInterval(this.aiMoveTimer);
+    }
+
+    this.aiMoveTimer = setInterval(() => {
+      if (!this.aiSide || this.gameState.status !== 'playing' || this.gameState.winner) {
+        this.stopAIMoveLoop();
+        return;
+      }
+
+      this.executeAIMove();
+    }, AI_MOVE_INTERVAL_MS);
+  }
+
+  private executeAIMove(): void {
+    if (!this.aiSide) return;
+
+    const playerState = this.aiSide === 'a'
+      ? this.gameState.playerA
+      : this.gameState.playerB;
+
+    const piece = playerState.activePiece;
+    if (!piece) return;
+
+    // If move queue is empty, compute new target placement
+    if (this.aiMoveQueue.length === 0) {
+      const target = this.ai.findBestPlacement(
+        this.gameState.board,
+        this.aiSide,
+        piece,
+      );
+
+      // Generate moves: rotations first, then horizontal, then hard drop
+      const shapes = TETROMINO_SHAPES[piece.type];
+      const numRotations = shapes.length;
+      const rotationDiff = ((target.targetRotation - piece.rotation) % numRotations + numRotations) % numRotations;
+
+      for (let i = 0; i < rotationDiff; i++) {
+        this.aiMoveQueue.push('rotate_cw');
+      }
+
+      const colDiff = target.targetCol - piece.col;
+      if (colDiff > 0) {
+        for (let i = 0; i < colDiff; i++) {
+          this.aiMoveQueue.push('move_right');
+        }
+      } else if (colDiff < 0) {
+        for (let i = 0; i < Math.abs(colDiff); i++) {
+          this.aiMoveQueue.push('move_left');
+        }
+      }
+
+      this.aiMoveQueue.push('hard_drop');
+    }
+
+    // Remember current piece identity to detect lock
+    const pieceType = piece.type;
+    const pieceRow = piece.row;
+
+    // Execute next move from queue
+    const nextMove = this.aiMoveQueue.shift();
+    if (!nextMove) return;
+
+    const result = this.gameState.processInput(this.aiSide, nextMove);
+    if (result.changed) {
+      if (result.clearedRows.length > 0) {
+        this.broadcast({
+          type: 'clear',
+          player: this.aiSide,
+          rows: result.clearedRows,
+        });
+      }
+
+      this.broadcastState();
+
+      if (result.winner) {
+        this.finishGame(result.winner);
+      }
+    }
+
+    // If the piece was locked (hard_drop or soft_drop that caused lock),
+    // clear the move queue so AI recalculates for the new piece
+    const newPiece = playerState.activePiece;
+    if (!newPiece || newPiece.type !== pieceType || (nextMove === 'hard_drop' && newPiece.row !== pieceRow)) {
+      this.aiMoveQueue = [];
+    }
   }
 
   private finishGame(winner: DefenseLinePlayer): void {
-    this.stopCountdown();
-    this.stopGameLoop();
+    this.stopAll();
 
     this.broadcast({
       type: 'win',
@@ -245,6 +431,8 @@ export default class DefenseLineServer implements Party.Server {
     });
     this.broadcastState();
   }
+
+  // ------- Broadcasting -------
 
   private broadcastState(): void {
     this.broadcast({
@@ -268,36 +456,10 @@ export default class DefenseLineServer implements Party.Server {
     this.room.broadcast(JSON.stringify(payload));
   }
 
-  private assignPlayer(conn: Party.Connection, playerId: string, preferred?: DefenseLinePlayer): DefenseLinePlayer | null {
-    const existingSide = this.getSideByPlayerId(playerId);
-    if (existingSide) {
-      const previousConn = this.sideToConnection.get(existingSide);
-      if (previousConn) {
-        this.connectionToSide.delete(previousConn.id);
-      }
-      this.sideToConnection.set(existingSide, conn);
-      this.connectionToSide.set(conn.id, existingSide);
-      return existingSide;
-    }
-
-    if (preferred && this.canTakeSide(preferred)) {
-      this.takeSide(preferred, playerId, conn);
-      return preferred;
-    }
-
-    const fallback = this.canTakeSide('a') ? 'a' : this.canTakeSide('b') ? 'b' : null;
-    if (!fallback) {
-      return null;
-    }
-
-    this.takeSide(fallback, playerId, conn);
-    return fallback;
-  }
+  // ------- Helpers -------
 
   private canTakeSide(side: DefenseLinePlayer): boolean {
-    const conn = this.sideToConnection.get(side);
-    const playerId = this.sideToPlayerId.get(side);
-    return !conn && !playerId;
+    return !this.sideToPlayerId.has(side);
   }
 
   private takeSide(side: DefenseLinePlayer, playerId: string, conn: Party.Connection): void {
@@ -329,8 +491,24 @@ export default class DefenseLineServer implements Party.Server {
     }
   }
 
+  private stopAIMoveLoop(): void {
+    if (this.aiMoveTimer) {
+      clearInterval(this.aiMoveTimer);
+      this.aiMoveTimer = null;
+    }
+  }
+
+  private stopAll(): void {
+    this.stopCountdown();
+    this.stopGameLoop();
+    this.stopAIMoveLoop();
+    this.cancelAIFallback();
+  }
+
   private resetGameState(): void {
     const seed = parseInt(this.room.id.substring(0, 8), 36) || Date.now();
     this.gameState = new DefenseLineGameState(seed + Date.now());
+    this.aiSide = null;
+    this.aiMoveQueue = [];
   }
 }

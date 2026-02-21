@@ -9,16 +9,16 @@ import {
 
 interface DefenseLineGameProps {
   playerId: string;
-  preferredSide: DefenseLinePlayer | null;
+  assignedSide: DefenseLinePlayer;
   theme: any;
   onExit: () => void;
 }
 
-const ROOM_ID = 'global-v3';
+const ROOM_ID = 'global-v4';
 
-export function DefenseLineGame({ playerId, preferredSide, theme, onExit }: DefenseLineGameProps) {
+export function DefenseLineGame({ playerId, assignedSide, theme, onExit }: DefenseLineGameProps) {
   const [state, setState] = useState<DefenseLineGameState | null>(null);
-  const [playerSide, setPlayerSide] = useState<DefenseLinePlayer | null>(preferredSide);
+  const [playerSide, setPlayerSide] = useState<DefenseLinePlayer | null>(assignedSide);
   const [countdown, setCountdown] = useState<number | null>(null);
   const [winner, setWinner] = useState<DefenseLinePlayer | null>(null);
   const [connected, setConnected] = useState(false);
@@ -41,7 +41,6 @@ export function DefenseLineGame({ playerId, preferredSide, theme, onExit }: Defe
       socket.send(JSON.stringify({
         type: 'join',
         playerId,
-        player: preferredSide ?? undefined,
       }));
     });
 
@@ -89,7 +88,7 @@ export function DefenseLineGame({ playerId, preferredSide, theme, onExit }: Defe
       socket.close();
       socketRef.current = null;
     };
-  }, [playerId, preferredSide]);
+  }, [playerId, assignedSide]);
 
   const sendInput = useCallback((payload: unknown) => {
     const socket = socketRef.current;

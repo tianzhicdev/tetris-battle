@@ -280,11 +280,11 @@ export class DefenseLineGameState {
     }
 
     // Sort rows so we process them correctly when shifting
-    // A clears: process from bottom to top (highest row first)
-    // B clears: process from top to bottom (lowest row first)
+    // A clears (shifts rows above DOWN): process LOWEST first so higher rows stay in place
+    // B clears (shifts rows below UP): process HIGHEST first so lower rows stay in place
     const sorted = player === 'a'
-      ? [...clearableRows].sort((a, b) => b - a)
-      : [...clearableRows].sort((a, b) => a - b);
+      ? [...clearableRows].sort((a, b) => a - b)
+      : [...clearableRows].sort((a, b) => b - a);
 
     for (const row of sorted) {
       if (player === 'a') {
