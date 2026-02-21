@@ -83,8 +83,8 @@ export function DefenseLineRenderer({ state, viewAs, clearedRows }: DefenseLineR
   const clearedRowSet = new Set(clearedRows?.rows || []);
 
   // Calculate board size to fit screen
-  // Available height: viewport - header (80px) - buttons (200px) - margins (80px)
-  const availableHeight = typeof window !== 'undefined' ? window.innerHeight - 360 : 600;
+  // Available height: viewport - header (100px) - buttons (60px) - minimal margins (20px)
+  const availableHeight = typeof window !== 'undefined' ? window.innerHeight - 180 : 600;
   const cellSize = Math.floor(availableHeight / BOARD_ROWS);
   const boardWidth = cellSize * BOARD_COLS;
 
@@ -147,10 +147,10 @@ export function DefenseLineRenderer({ state, viewAs, clearedRows }: DefenseLineR
       style={{
         display: 'grid',
         gridTemplateColumns: `repeat(${BOARD_COLS}, minmax(0, 1fr))`,
-        gap: '1px',
+        gap: '0px',
         width: `${boardWidth}px`,
-        padding: '4px',
-        borderRadius: '6px',
+        padding: '0px',
+        borderRadius: '4px',
         border: '1px solid rgba(255, 255, 255, 0.18)',
         background: 'rgba(0, 0, 0, 0.45)',
       }}

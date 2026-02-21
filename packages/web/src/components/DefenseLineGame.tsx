@@ -135,17 +135,17 @@ export function DefenseLineGame({ playerId, preferredSide, theme, onExit }: Defe
 
   const scoreText = useMemo(() => {
     if (!state || !playerSide) {
-      return 'A: 0/10 | B: 0/10';
+      return 'A: 0 | B: 0';
     }
 
     const a = state.playerA.rowsCleared;
     const b = state.playerB.rowsCleared;
 
     if (playerSide === 'a') {
-      return `You ${a}/10 | Opponent ${b}/10`;
+      return `You: ${a} | Opponent: ${b}`;
     }
 
-    return `You ${b}/10 | Opponent ${a}/10`;
+    return `You: ${b} | Opponent: ${a}`;
   }, [playerSide, state]);
 
   return (
@@ -159,8 +159,8 @@ export function DefenseLineGame({ playerId, preferredSide, theme, onExit }: Defe
         flexDirection: 'column',
         alignItems: 'center',
         justifyContent: 'flex-start',
-        gap: '8px',
-        padding: '12px',
+        gap: '4px',
+        padding: '8px 0',
         fontFamily: 'monospace',
         overflow: 'hidden',
       }}
@@ -209,36 +209,36 @@ export function DefenseLineGame({ playerId, preferredSide, theme, onExit }: Defe
         )}
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: '8px', width: 'min(360px, 90vw)' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '6px', width: '100%', maxWidth: '100vw', padding: '0 12px' }}>
         <button
           onClick={() => sendInput({ type: 'move', direction: 'left' })}
-          style={{ padding: '12px', fontSize: '14px', fontWeight: 600, background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.2)', borderRadius: '8px', cursor: 'pointer', color: '#fff' }}
+          style={{ padding: '10px 4px', fontSize: '12px', fontWeight: 600, background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.2)', borderRadius: '6px', cursor: 'pointer', color: '#fff' }}
         >
-          ◀ Left
-        </button>
-        <button
-          onClick={() => sendInput({ type: 'soft_drop' })}
-          style={{ padding: '12px', fontSize: '14px', fontWeight: 600, background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.2)', borderRadius: '8px', cursor: 'pointer', color: '#fff' }}
-        >
-          ▼ Down
-        </button>
-        <button
-          onClick={() => sendInput({ type: 'move', direction: 'right' })}
-          style={{ padding: '12px', fontSize: '14px', fontWeight: 600, background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.2)', borderRadius: '8px', cursor: 'pointer', color: '#fff' }}
-        >
-          Right ▶
-        </button>
-        <button
-          onClick={() => sendInput({ type: 'rotate', direction: 'cw' })}
-          style={{ padding: '12px', fontSize: '14px', fontWeight: 600, background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.2)', borderRadius: '8px', cursor: 'pointer', color: '#fff', gridColumn: 'span 1' }}
-        >
-          ↻ Rotate
+          ◀
         </button>
         <button
           onClick={() => sendInput({ type: 'hard_drop' })}
-          style={{ padding: '12px', fontSize: '14px', fontWeight: 600, background: 'rgba(0,212,255,0.2)', border: '1px solid rgba(0,212,255,0.4)', borderRadius: '8px', cursor: 'pointer', color: '#00d4ff', gridColumn: 'span 2' }}
+          style={{ padding: '10px 4px', fontSize: '12px', fontWeight: 600, background: 'rgba(0,212,255,0.2)', border: '1px solid rgba(0,212,255,0.4)', borderRadius: '6px', cursor: 'pointer', color: '#00d4ff' }}
         >
-          ⏬ DROP
+          ⏬
+        </button>
+        <button
+          onClick={() => sendInput({ type: 'soft_drop' })}
+          style={{ padding: '10px 4px', fontSize: '12px', fontWeight: 600, background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.2)', borderRadius: '6px', cursor: 'pointer', color: '#fff' }}
+        >
+          ▼
+        </button>
+        <button
+          onClick={() => sendInput({ type: 'rotate', direction: 'cw' })}
+          style={{ padding: '10px 4px', fontSize: '12px', fontWeight: 600, background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.2)', borderRadius: '6px', cursor: 'pointer', color: '#fff' }}
+        >
+          ↻
+        </button>
+        <button
+          onClick={() => sendInput({ type: 'move', direction: 'right' })}
+          style={{ padding: '10px 4px', fontSize: '12px', fontWeight: 600, background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.2)', borderRadius: '6px', cursor: 'pointer', color: '#fff' }}
+        >
+          ▶
         </button>
       </div>
     </div>

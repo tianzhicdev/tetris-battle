@@ -293,10 +293,11 @@ export class DefenseLineGameState {
     const state = this.getPlayerState(player);
     state.rowsCleared += clearableRows.length;
 
-    if (state.rowsCleared >= CLEAR_TARGET) {
-      this.status = 'finished';
-      this.winner = player;
-    }
+    // Win condition disabled for experimentation
+    // if (state.rowsCleared >= CLEAR_TARGET) {
+    //   this.status = 'finished';
+    //   this.winner = player;
+    // }
 
     return {
       clearedRows: clearableRows,
