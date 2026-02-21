@@ -152,15 +152,17 @@ export function DefenseLineGame({ playerId, preferredSide, theme, onExit }: Defe
     <div
       style={{
         minHeight: '100vh',
+        height: '100vh',
         background: theme.backgroundColor,
         color: theme.textColor,
         display: 'flex',
         flexDirection: 'column',
         alignItems: 'center',
-        justifyContent: 'center',
-        gap: '14px',
-        padding: '24px 12px',
+        justifyContent: 'flex-start',
+        gap: '8px',
+        padding: '12px',
         fontFamily: 'monospace',
+        overflow: 'hidden',
       }}
     >
       <div style={{ display: 'flex', width: 'min(440px, 90vw)', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -182,28 +184,30 @@ export function DefenseLineGame({ playerId, preferredSide, theme, onExit }: Defe
         </div>
       </div>
 
-      <h2 style={{ margin: 0, color: '#f5f5f5' }}>Defense Line</h2>
-      <div style={{ fontSize: '15px', color: '#ddd' }}>{scoreText}</div>
+      <h2 style={{ margin: 0, color: '#f5f5f5', fontSize: '18px' }}>Defense Line</h2>
+      <div style={{ fontSize: '13px', color: '#ddd' }}>{scoreText}</div>
 
       {countdown !== null && countdown > 0 && (
-        <div style={{ fontSize: '22px', color: '#ffd166', fontWeight: 700 }}>Starting in {countdown}</div>
+        <div style={{ fontSize: '18px', color: '#ffd166', fontWeight: 700 }}>Starting in {countdown}</div>
       )}
 
       {winner && (
-        <div style={{ fontSize: '22px', color: '#7bff9b', fontWeight: 700 }}>
+        <div style={{ fontSize: '18px', color: '#7bff9b', fontWeight: 700 }}>
           {playerSide === winner ? 'You Win' : 'You Lose'}
         </div>
       )}
 
-      {state && playerSide ? (
-        <DefenseLineRenderer
-          state={state}
-          viewAs={playerSide}
-          clearedRows={clearedRows}
-        />
-      ) : (
-        <div style={{ opacity: 0.8 }}>Waiting for game state...</div>
-      )}
+      <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', width: '100%' }}>
+        {state && playerSide ? (
+          <DefenseLineRenderer
+            state={state}
+            viewAs={playerSide}
+            clearedRows={clearedRows}
+          />
+        ) : (
+          <div style={{ opacity: 0.8 }}>Waiting for game state...</div>
+        )}
+      </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: '8px', width: 'min(360px, 90vw)' }}>
         <button

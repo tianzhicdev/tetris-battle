@@ -82,6 +82,12 @@ export function DefenseLineRenderer({ state, viewAs, clearedRows }: DefenseLineR
   const bActive = buildPieceLookup(state.playerB.activePiece);
   const clearedRowSet = new Set(clearedRows?.rows || []);
 
+  // Calculate board size to fit screen
+  // Available height: viewport - header (80px) - buttons (200px) - margins (80px)
+  const availableHeight = typeof window !== 'undefined' ? window.innerHeight - 360 : 600;
+  const cellSize = Math.floor(availableHeight / BOARD_ROWS);
+  const boardWidth = cellSize * BOARD_COLS;
+
   const cells: ReactNode[] = [];
 
   for (let visualRow = 0; visualRow < BOARD_ROWS; visualRow++) {
@@ -119,11 +125,11 @@ export function DefenseLineRenderer({ state, viewAs, clearedRows }: DefenseLineR
             border: '1px solid rgba(255, 255, 255, 0.1)',
             borderBottom: onDivider ? '2px solid rgba(255, 255, 255, 0.6)' : undefined,
             width: '100%',
-            aspectRatio: '1 / 1.5',
+            aspectRatio: '1 / 1',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            fontSize: '8px',
+            fontSize: `${Math.max(6, cellSize * 0.4)}px`,
             fontWeight: 700,
             fontFamily: 'monospace',
             color: isCleared ? '#000' : '#fff',
@@ -142,9 +148,9 @@ export function DefenseLineRenderer({ state, viewAs, clearedRows }: DefenseLineR
         display: 'grid',
         gridTemplateColumns: `repeat(${BOARD_COLS}, minmax(0, 1fr))`,
         gap: '1px',
-        width: 'min(160px, 70vw)',
-        padding: '6px',
-        borderRadius: '8px',
+        width: `${boardWidth}px`,
+        padding: '4px',
+        borderRadius: '6px',
         border: '1px solid rgba(255, 255, 255, 0.18)',
         background: 'rgba(0, 0, 0, 0.45)',
       }}
