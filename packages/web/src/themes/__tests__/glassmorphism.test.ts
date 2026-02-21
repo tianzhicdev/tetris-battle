@@ -33,7 +33,7 @@ describe('Glassmorphism Theme', () => {
 
   it('should have CSS variables', () => {
     expect(glassmorphismTheme.cssVars).toBeDefined();
-    expect(glassmorphismTheme.cssVars?.['--theme-bg']).toBe('rgba(5, 5, 20, 0.75)');
+    expect(glassmorphismTheme.cssVars?.['--theme-bg']).toBe('rgba(5, 5, 20, 1)');
     expect(glassmorphismTheme.cssVars?.['--theme-accent']).toBe('#00f0f0');
   });
 

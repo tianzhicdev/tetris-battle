@@ -40,8 +40,11 @@ interface InputResult extends ResolutionResult {
   changed: boolean;
 }
 
-export const DEFENSE_DEFENSE_BOARD_ROWS = 40;
-export const DEFENSE_DEFENSE_BOARD_COLS = 10;
+export const DEFENSE_BOARD_ROWS = 40;
+export const DEFENSE_BOARD_COLS = 10;
+// Backward-compatible aliases (kept to avoid breaking older imports).
+export const DEFENSE_DEFENSE_BOARD_ROWS = DEFENSE_BOARD_ROWS;
+export const DEFENSE_DEFENSE_BOARD_COLS = DEFENSE_BOARD_COLS;
 const DIVIDER_ROW = 20; // rows 0-19 = '0' zone, rows 20-39 = 'x' zone
 export const MIN_CONTIGUOUS_FOR_CLEAR = 5; // 5+ contiguous filled cells clears the row
 
@@ -58,8 +61,8 @@ export class DefenseLineGameState {
   constructor(seed: number = Date.now()) {
     this.rng = new SeededRandom(seed);
     // Initialize board: rows 0-19 = '0', rows 20-39 = 'x'
-    this.board = Array.from({ length: DEFENSE_DEFENSE_BOARD_ROWS }, (_, row) =>
-      Array.from({ length: DEFENSE_DEFENSE_BOARD_COLS }, () => (row < DIVIDER_ROW ? '0' : 'x'))
+    this.board = Array.from({ length: DEFENSE_BOARD_ROWS }, (_, row) =>
+      Array.from({ length: DEFENSE_BOARD_COLS }, () => (row < DIVIDER_ROW ? '0' : 'x'))
     );
     this.activeRows = new Set<number>();
     this.playerA = this.createPlayerState();

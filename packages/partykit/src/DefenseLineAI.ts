@@ -3,8 +3,8 @@ import {
   type TetrominoType,
 } from '@tetris-battle/game-core';
 import {
-  DEFENSE_DEFENSE_BOARD_ROWS,
-  DEFENSE_DEFENSE_BOARD_COLS,
+  DEFENSE_BOARD_ROWS,
+  DEFENSE_BOARD_COLS,
   MIN_CONTIGUOUS_FOR_CLEAR,
   type DefenseLinePlayer,
   type DefenseLineCell,

@@ -3,7 +3,6 @@ import { MainMenu } from './components/MainMenu';
 import { TetrisGame } from './components/TetrisGame';
 import { Matchmaking } from './components/PartykitMatchmaking';
 import { ServerAuthMultiplayerGame } from './components/ServerAuthMultiplayerGame';
-import { DefenseLineMatchmaking } from './components/DefenseLineMatchmaking';
 import { DefenseLineGame } from './components/DefenseLineGame';
 import { audioManager } from './services/audioManager';
 import { ChallengeWaiting } from './components/ChallengeWaiting';
@@ -34,7 +33,6 @@ type GameMode =
   | 'solo'
   | 'matchmaking'
   | 'multiplayer'
-  | 'defense-line-matchmaking'
   | 'defense-line';
 
 interface GameMatch {
@@ -49,7 +47,6 @@ function GameApp({ profile: initialProfile }: { profile: UserProfile }) {
   const { theme } = useTheme();
   const currentTheme = toLegacyTheme(theme); // Convert to legacy format for existing components
   const [gameMatch, setGameMatch] = useState<GameMatch | null>(null);
-  const [defenseLineSide, setDefenseLineSide] = useState<'a' | 'b'>('a');
   const [profile, setProfile] = useState<UserProfile>(initialProfile);
   const [matchmakingMode, setMatchmakingMode] = useState<'normal' | 'defense'>('normal');
   const presenceRef = useRef<PartykitPresence | null>(null);
@@ -211,11 +208,6 @@ function GameApp({ profile: initialProfile }: { profile: UserProfile }) {
     setMode('menu');
   }, []);
 
-  const handleDefenseLineReady = useCallback((side: 'a' | 'b') => {
-    setDefenseLineSide(side);
-    setMode('defense-line');
-  }, []);
-
   const handleExitDefenseLine = useCallback(() => {
     setMode('menu');
   }, []);
@@ -293,20 +285,10 @@ function GameApp({ profile: initialProfile }: { profile: UserProfile }) {
         />
       )}
 
-      {mode === 'defense-line-matchmaking' && (
-        <DefenseLineMatchmaking
-          playerId={playerId}
-          theme={currentTheme}
-          onCancel={handleCancelMatchmaking}
-          onMatchReady={handleDefenseLineReady}
-        />
-      )}
-
       {mode === 'defense-line' && gameMatch && (
         <DefenseLineGame
           playerId={playerId}
           roomId={gameMatch.roomId}
-          assignedSide={defenseLineSide}
           theme={currentTheme}
           onExit={handleExitDefenseLine}
         />
