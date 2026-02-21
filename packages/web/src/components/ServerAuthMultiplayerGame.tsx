@@ -13,11 +13,13 @@ import { FloatingBackground } from './FloatingBackground';
 
 import { ParticleEffect } from './ParticleEffect';
 import { FlashOverlay } from './FlashOverlay';
+import { CyberpunkParticles, type CyberpunkParticlesHandle } from './CyberpunkParticles';
 import { DebugLogger } from '../services/debug/DebugLogger';
 import { DebugPanel } from './debug/DebugPanel';
 import { useDebugStore } from '../stores/debugStore';
 import {
   ABILITIES,
+  getHardDropPosition,
   getAbilityTargeting,
   isDebuffAbility,
 } from '@tetris-battle/game-core';
@@ -34,6 +36,7 @@ import { OpponentPreview } from './game/OpponentPreview';
 import { AbilityDock } from './game/AbilityDock';
 import { GameTouchControls } from './game/GameTouchControls';
 import { MobileGameLayout } from './game/MobileGameLayout';
+import { Icon } from './ui/Icon';
 
 interface ServerAuthMultiplayerGameProps {
   roomId: string;
@@ -44,6 +47,7 @@ interface ServerAuthMultiplayerGameProps {
   onExit: () => void;
   aiOpponent?: any;
   mockMode?: boolean;
+  mockStatic?: boolean;
 }
 
 const BOMB_ABILITY_TYPES = new Set<string>(['circle_bomb', 'cross_firebomb']);
@@ -97,6 +101,99 @@ type TimedEffectEntry = {
   remainingMs: number;
   durationMs: number;
 };
+
+type ClearedRowSnapshot = {
+  rowIndex: number;
+  cells: string[];
+};
+
+type LineClearParticle = {
+  x: number;
+  y: number;
+  vx: number;
+  vy: number;
+  gravity: number;
+  size: number;
+  life: number;
+  decay: number;
+  color: string;
+  rotation: number;
+  rotationVelocity: number;
+};
+
+type HardDropTrailCell = {
+  x: number;
+  startY: number;
+  endY: number;
+  color: string;
+};
+
+type HardDropTrailEffect = {
+  boardWidth: number;
+  boardHeight: number;
+  cells: HardDropTrailCell[];
+  expiresAt: number;
+};
+
+type FloatingText = {
+  id: number;
+  text: string;
+  x: number;
+  y: number;
+  color: string;
+  size: number;
+  born: number;
+};
+
+type LockFlash = {
+  cells: Array<{ x: number; y: number }>;
+  color: string;
+  expiresAt: number;
+};
+
+function hexToRgbaColor(hex: string, alpha: number): string {
+  const r = parseInt(hex.slice(1, 3), 16);
+  const g = parseInt(hex.slice(3, 5), 16);
+  const b = parseInt(hex.slice(5, 7), 16);
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+}
+
+function extractClearedRowsFromPreviousBoard(previousGrid: any[][], linesCleared: number): ClearedRowSnapshot[] {
+  if (!Array.isArray(previousGrid) || linesCleared <= 0) return [];
+
+  const fullRows = previousGrid
+    .map((row, rowIndex) => ({ rowIndex, cells: row }))
+    .filter(({ cells }) => Array.isArray(cells) && cells.length > 0 && cells.every((cell) => typeof cell === 'string'))
+    .map(({ rowIndex, cells }) => ({ rowIndex, cells: cells as string[] }));
+
+  if (fullRows.length >= linesCleared) {
+    return fullRows.slice(-linesCleared);
+  }
+
+  if (fullRows.length > 0) {
+    return fullRows;
+  }
+
+  // Fallback: choose the densest rows nearest the bottom when exact full rows are not observable.
+  const denseRows = previousGrid
+    .map((row, rowIndex) => {
+      const typedRow = Array.isArray(row) ? row : [];
+      const filled = typedRow.filter((cell) => typeof cell === 'string').length;
+      return { rowIndex, filled, cells: typedRow.filter((cell): cell is string => typeof cell === 'string') };
+    })
+    .filter((row) => row.filled > 0)
+    .sort((a, b) => {
+      if (b.filled !== a.filled) return b.filled - a.filled;
+      return b.rowIndex - a.rowIndex;
+    })
+    .slice(0, linesCleared)
+    .sort((a, b) => a.rowIndex - b.rowIndex);
+
+  return denseRows.map((row) => ({
+    rowIndex: row.rowIndex,
+    cells: previousGrid[row.rowIndex].map((cell: any) => (typeof cell === 'string' ? cell : '')),
+  }));
+}
 
 function cloneBoardGrid(grid: any[][]): any[][] {
   return grid.map((row) => [...row]);
@@ -437,12 +534,13 @@ export function ServerAuthMultiplayerGame({
   onExit,
   aiOpponent,
   mockMode = false,
+  mockStatic = false,
 }: ServerAuthMultiplayerGameProps) {
   const opponentMiniBoardWidth = 'clamp(65px, 17vw, 80px)';
   const topUiInset = 'max(12px, calc(env(safe-area-inset-top) + 8px))';
   const bottomUiInset = 'max(2px, env(safe-area-inset-bottom))';
   const statsCardsTop = topUiInset;
-  const statsRowHeight = 'clamp(56px, 9vh, 76px)';
+  const statsRowHeight = 'clamp(48px, 7vh, 64px)';
   const statsToBoardGap = 'clamp(4px, 0.7vh, 8px)';
   const measuredStatsToBoardGapPx = 6;
   const abilitiesBarHeight = 'clamp(52px, 9vh, 64px)';
@@ -451,19 +549,21 @@ export function ServerAuthMultiplayerGame({
   const boardBottomPadding = 'clamp(4px, 0.9vh, 8px)';
   const playerZoneTopFallback = `calc(${statsCardsTop} + ${statsRowHeight} + ${statsToBoardGap})`;
   const playerZoneHeightFallback = `calc(100dvh - ${playerZoneTopFallback} - ${abilitiesBarHeight} - ${controlsGapHeight} - ${controlsBarHeight} - ${boardBottomPadding} - ${bottomUiInset})`;
-  const statsOverlaySidePaddingPx = 8;
-  const statsOverlayGapPx = 6;
-  const statsFourthWidthExpr = `(100vw - ${statsOverlaySidePaddingPx * 2}px - ${statsOverlayGapPx * 3}px) / 4`;
-  const statsCardWidth = `calc(${statsFourthWidthExpr})`;
-  const statsStarsLeft = `calc(${statsOverlaySidePaddingPx}px + (${statsFourthWidthExpr}) + ${statsOverlayGapPx}px)`;
-  const statsLinesLeft = `calc(${statsOverlaySidePaddingPx}px + (${statsFourthWidthExpr} * 2) + ${statsOverlayGapPx * 2}px)`;
-  const statsExitLeft = `calc(${statsOverlaySidePaddingPx}px + (${statsFourthWidthExpr} * 3) + ${statsOverlayGapPx * 3}px)`;
+  const statsOverlaySidePadding = 'clamp(8px, 2vw, 14px)';
   const statsCardAnchorRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const lineClearOverlayRef = useRef<HTMLCanvasElement>(null);
   const opponentCanvasRef = useRef<HTMLCanvasElement>(null);
   const rendererRef = useRef<TetrisRenderer | null>(null);
   const opponentRendererRef = useRef<TetrisRenderer | null>(null);
+  const cyberpunkParticlesRef = useRef<CyberpunkParticlesHandle>(null);
   const gameClientRef = useRef<ServerAuthGameClient | null>(null);
+  const lineClearParticlesRef = useRef<LineClearParticle[]>([]);
+  const hardDropParticlesRef = useRef<LineClearParticle[]>([]);
+  const hardDropTrailRef = useRef<HardDropTrailEffect | null>(null);
+  const lineClearParticlesRafRef = useRef<number | null>(null);
+  const hardDropShakeRafRef = useRef<number | null>(null);
+  const prevBoardForLineClearFxRef = useRef<any[][] | null>(null);
 
   // Local state for rendering (from server)
   const [yourState, setYourState] = useState<any | null>(null);
@@ -474,6 +574,9 @@ export function ServerAuthMultiplayerGame({
 
   const [screenShake, setScreenShake] = useState(0);
   const [flashEffect, setFlashEffect] = useState<{ color: string } | null>(null);
+  const [floatingTexts, setFloatingTexts] = useState<FloatingText[]>([]);
+  const [flashingRows, setFlashingRows] = useState<Array<{ rowIndex: number; expiresAt: number }>>([]);
+  const [lockFlash, setLockFlash] = useState<LockFlash | null>(null);
   const [particles, setParticles] = useState<{ x: number; y: number; id: number; count?: number; colors?: string[] } | null>(null);
   const [selfBoardFx, setSelfBoardFx] = useState<BoardFxState | null>(null);
   const [opponentBoardFx, setOpponentBoardFx] = useState<BoardFxState | null>(null);
@@ -499,7 +602,6 @@ export function ServerAuthMultiplayerGame({
   const [effectClockMs, setEffectClockMs] = useState(() => Date.now());
   const [lastStateFrameMs, setLastStateFrameMs] = useState(() => Date.now());
   const [statsCardBottomPx, setStatsCardBottomPx] = useState<number | null>(null);
-  const [statsCardHeightPx, setStatsCardHeightPx] = useState<number | null>(null);
   const statsBlastControls = useAnimationControls();
   const rightPanelBlastControls = useAnimationControls();
   const abilitiesBlastControls = useAnimationControls();
@@ -580,8 +682,25 @@ export function ServerAuthMultiplayerGame({
   }, [profile.loadout, setLoadout]);
 
   useEffect(() => {
+    if (mockStatic) return;
     const interval = setInterval(() => setEffectClockMs(Date.now()), 100);
     return () => clearInterval(interval);
+  }, [mockStatic]);
+
+  useEffect(() => {
+    return () => {
+      if (lineClearParticlesRafRef.current !== null) {
+        cancelAnimationFrame(lineClearParticlesRafRef.current);
+      }
+      if (hardDropShakeRafRef.current !== null) {
+        cancelAnimationFrame(hardDropShakeRafRef.current);
+      }
+      lineClearParticlesRafRef.current = null;
+      hardDropShakeRafRef.current = null;
+      lineClearParticlesRef.current = [];
+      hardDropParticlesRef.current = [];
+      hardDropTrailRef.current = null;
+    };
   }, []);
 
   useEffect(() => {
@@ -610,14 +729,9 @@ export function ServerAuthMultiplayerGame({
         if (!anchor) return;
         const anchorRect = anchor.getBoundingClientRect();
         const nextBottom = Math.round(anchorRect.bottom);
-        const nextHeight = Math.round(anchorRect.height);
         setStatsCardBottomPx((prev) => {
           if (prev === null) return nextBottom;
           return Math.abs(prev - nextBottom) > 1 ? nextBottom : prev;
-        });
-        setStatsCardHeightPx((prev) => {
-          if (prev === null) return nextHeight;
-          return Math.abs(prev - nextHeight) > 1 ? nextHeight : prev;
         });
       });
     };
@@ -726,6 +840,34 @@ export function ServerAuthMultiplayerGame({
     };
   }, []);
 
+  const triggerHardDropShake = useCallback(() => {
+    if (hardDropShakeRafRef.current !== null) {
+      cancelAnimationFrame(hardDropShakeRafRef.current);
+    }
+
+    const intensity = 0.2;
+    const durationMs = 200;
+    const startMs = performance.now();
+
+    const tick = (now: number) => {
+      const elapsed = now - startMs;
+      const progress = Math.min(1, elapsed / durationMs);
+      const eased = 1 - progress;
+      const value = intensity * eased;
+      setScreenShake((prev) => Math.max(prev, value));
+
+      if (progress < 1) {
+        hardDropShakeRafRef.current = requestAnimationFrame(tick);
+        return;
+      }
+
+      hardDropShakeRafRef.current = null;
+      setScreenShake((prev) => (prev <= intensity ? 0 : prev));
+    };
+
+    hardDropShakeRafRef.current = requestAnimationFrame(tick);
+  }, []);
+
   const triggerHardDropBounce = useCallback(() => {
     void playerDropBounceControls.start({
       y: [0, -5, 0],
@@ -760,12 +902,329 @@ export function ServerAuthMultiplayerGame({
     ]);
   }, [abilitiesBlastControls, controlsBlastControls, rightPanelBlastControls, statsBlastControls]);
 
+  const addFloatingText = useCallback((text: string, x: number, y: number, color: string, size: number) => {
+    const id = Date.now() + Math.random();
+    setFloatingTexts(prev => [...prev, { id, text, x, y, color, size, born: Date.now() }]);
+    setTimeout(() => {
+      setFloatingTexts(prev => prev.filter(t => t.id !== id));
+    }, 1400);
+  }, []);
+
+  const runLineClearParticlesFrame = useCallback(() => {
+    const canvas = lineClearOverlayRef.current;
+    const ctx = canvas?.getContext('2d');
+    if (!canvas || !ctx) {
+      lineClearParticlesRafRef.current = null;
+      return;
+    }
+
+    const now = Date.now();
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    const activeTrail = hardDropTrailRef.current;
+    let isTrailActive = false;
+    if (activeTrail && activeTrail.expiresAt > now) {
+      isTrailActive = true;
+      const cellWidth = canvas.width / activeTrail.boardWidth;
+      const cellHeight = canvas.height / activeTrail.boardHeight;
+      const inset = 4;
+
+      for (const segment of activeTrail.cells) {
+        const start = Math.min(segment.startY, segment.endY);
+        const end = Math.max(segment.startY, segment.endY);
+        for (let y = start; y <= end; y++) {
+          const drawX = segment.x * cellWidth + inset;
+          const drawY = y * cellHeight + inset;
+          const drawW = Math.max(1, cellWidth - inset * 2);
+          const drawH = Math.max(1, cellHeight - inset * 2);
+
+          ctx.save();
+          ctx.shadowBlur = 8;
+          ctx.shadowColor = hexToRgbaColor(segment.color, 0.27);
+          ctx.fillStyle = hexToRgbaColor(segment.color, 0.13);
+          ctx.fillRect(drawX, drawY, drawW, drawH);
+          ctx.restore();
+        }
+      }
+    } else if (activeTrail) {
+      hardDropTrailRef.current = null;
+    }
+
+    // Render flashing rows (white flash effect)
+    const activeFlashingRows = flashingRows.filter(row => row.expiresAt > now);
+    if (activeFlashingRows.length > 0) {
+      const cellHeight = canvas.height / 20; // Standard tetris height
+
+      ctx.save();
+      for (const { rowIndex } of activeFlashingRows) {
+        const y = rowIndex * cellHeight;
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
+        ctx.shadowBlur = 16;
+        ctx.shadowColor = '#ffffff';
+        ctx.fillRect(0, y, canvas.width, cellHeight);
+      }
+      ctx.restore();
+    }
+
+    const integrateParticles = (particles: LineClearParticle[]): LineClearParticle[] => {
+      const nextParticles: LineClearParticle[] = [];
+      for (const particle of particles) {
+        particle.vy += particle.gravity;
+        particle.x += particle.vx;
+        particle.y += particle.vy;
+        particle.rotation += particle.rotationVelocity;
+        particle.life -= particle.decay;
+        if (particle.life <= 0) continue;
+
+        ctx.save();
+        ctx.translate(particle.x, particle.y);
+        ctx.rotate(particle.rotation);
+        ctx.shadowBlur = 8;
+        ctx.shadowColor = hexToRgbaColor(particle.color, Math.min(1, particle.life + 0.25));
+        ctx.fillStyle = hexToRgbaColor(particle.color, particle.life);
+        ctx.fillRect(-particle.size / 2, -particle.size / 2, particle.size, particle.size);
+        ctx.restore();
+
+        nextParticles.push(particle);
+      }
+      return nextParticles;
+    };
+
+    lineClearParticlesRef.current = integrateParticles(lineClearParticlesRef.current);
+    hardDropParticlesRef.current = integrateParticles(hardDropParticlesRef.current);
+
+    const hasActiveFlash = activeFlashingRows.length > 0;
+    if (isTrailActive || hasActiveFlash || lineClearParticlesRef.current.length > 0 || hardDropParticlesRef.current.length > 0) {
+      lineClearParticlesRafRef.current = requestAnimationFrame(runLineClearParticlesFrame);
+      return;
+    }
+
+    lineClearParticlesRafRef.current = null;
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+  }, [flashingRows]);
+
+  const spawnLineClearParticles = useCallback((clearedRows: ClearedRowSnapshot[], boardWidth: number, boardHeight: number) => {
+    const canvas = lineClearOverlayRef.current;
+    if (!canvas || clearedRows.length === 0 || boardWidth <= 0 || boardHeight <= 0) return;
+
+    const pieceColors = theme.colors as Record<string, string>;
+    const cellWidth = canvas.width / boardWidth;
+    const cellHeight = canvas.height / boardHeight;
+    const spawned: LineClearParticle[] = [];
+
+    for (const clearedRow of clearedRows) {
+      const yCenter = (clearedRow.rowIndex + 0.5) * cellHeight;
+      for (let x = 0; x < boardWidth; x++) {
+        const piece = clearedRow.cells[x];
+        if (!piece) continue;
+        const color = pieceColors[piece] || '#ffffff';
+        const xCenter = (x + 0.5) * cellWidth;
+
+        for (let i = 0; i < 6; i++) {
+          const angle = Math.random() * Math.PI * 2;
+          const speed = 0.9 + Math.random() * 2.8;
+          spawned.push({
+            x: xCenter + (Math.random() - 0.5) * cellWidth * 0.4,
+            y: yCenter + (Math.random() - 0.5) * cellHeight * 0.4,
+            vx: Math.cos(angle) * speed,
+            vy: Math.sin(angle) * speed - 0.6,
+            gravity: 0.12,
+            size: Math.max(2, Math.min(cellWidth, cellHeight) * (0.14 + Math.random() * 0.24)),
+            life: 1,
+            decay: 0.015 + Math.random() * 0.025,
+            color,
+            rotation: Math.random() * Math.PI * 2,
+            rotationVelocity: (Math.random() - 0.5) * 0.25,
+          });
+        }
+      }
+    }
+
+    if (spawned.length === 0) return;
+    lineClearParticlesRef.current = [...lineClearParticlesRef.current, ...spawned];
+    if (lineClearParticlesRafRef.current === null) {
+      lineClearParticlesRafRef.current = requestAnimationFrame(runLineClearParticlesFrame);
+    }
+  }, [runLineClearParticlesFrame, theme.colors]);
+
+  const triggerHardDropTrailImpact = useCallback(() => {
+    if (!yourState?.currentPiece || !Array.isArray(yourState.board)) return;
+
+    const boardGrid = yourState.board;
+    const boardHeight = boardGrid.length;
+    const boardWidth = boardGrid[0]?.length ?? 10;
+    if (boardHeight <= 0 || boardWidth <= 0) return;
+
+    const piece = yourState.currentPiece as any;
+    const shape = Array.isArray(piece.shape) ? piece.shape : [];
+    const startX = piece.position?.x ?? piece.x;
+    const startY = piece.position?.y ?? piece.y;
+    if (!Number.isFinite(startX) || !Number.isFinite(startY) || shape.length === 0) return;
+
+    const pieceForDrop = {
+      ...piece,
+      shape,
+      position: { x: startX, y: startY },
+    };
+    const boardForDrop = {
+      grid: boardGrid,
+      width: boardWidth,
+      height: boardHeight,
+    };
+    const finalPosition = getHardDropPosition(boardForDrop as any, pieceForDrop as any);
+    const finalY = finalPosition?.y;
+    if (!Number.isFinite(finalY)) return;
+
+    const pieceColor = (theme.colors as Record<string, string>)[piece.type] || '#ffffff';
+    const trailCells: HardDropTrailCell[] = [];
+    const dustParticles: LineClearParticle[] = [];
+    const overlayCanvas = lineClearOverlayRef.current;
+    const cellWidth = overlayCanvas ? overlayCanvas.width / boardWidth : 0;
+    const cellHeight = overlayCanvas ? overlayCanvas.height / boardHeight : 0;
+
+    for (let y = 0; y < shape.length; y++) {
+      for (let x = 0; x < shape[y].length; x++) {
+        if (!shape[y][x]) continue;
+
+        const boardX = startX + x;
+        const originalY = startY + y;
+        const landedY = finalY + y;
+        if (boardX < 0 || boardX >= boardWidth || landedY < 0 || landedY >= boardHeight) continue;
+
+        trailCells.push({
+          x: boardX,
+          startY: Math.max(0, originalY),
+          endY: landedY,
+          color: pieceColor,
+        });
+
+        if (overlayCanvas && cellWidth > 0 && cellHeight > 0) {
+          const impactCenterX = (boardX + 0.5) * cellWidth;
+          const impactCenterY = (landedY + 1) * cellHeight - Math.max(2, cellHeight * 0.16);
+
+          for (let i = 0; i < 4; i++) {
+            dustParticles.push({
+              x: impactCenterX + (Math.random() - 0.5) * cellWidth * 0.35,
+              y: impactCenterY + (Math.random() - 0.5) * cellHeight * 0.2,
+              vx: -0.25 + Math.random() * 0.5,
+              vy: -(0.5 + Math.random()),
+              gravity: 0.04,
+              size: Math.max(2, Math.min(cellWidth, cellHeight) * (0.09 + Math.random() * 0.14)),
+              life: 1,
+              decay: 0.03 + Math.random() * 0.018,
+              color: pieceColor,
+              rotation: Math.random() * Math.PI * 2,
+              rotationVelocity: (Math.random() - 0.5) * 0.2,
+            });
+          }
+        }
+      }
+    }
+
+    if (trailCells.length > 0) {
+      hardDropTrailRef.current = {
+        boardWidth,
+        boardHeight,
+        cells: trailCells,
+        expiresAt: Date.now() + 150,
+      };
+    }
+
+    if (dustParticles.length > 0) {
+      hardDropParticlesRef.current = [...hardDropParticlesRef.current, ...dustParticles];
+    }
+
+    // Spawn cyberpunk trail particles for hard drop
+    if (trailCells.length > 0) {
+      const CELL_SIZE = 25;
+      trailCells.forEach(({ x: boardX, endY, color }) => {
+        const x = boardX * CELL_SIZE + CELL_SIZE / 2;
+        const y = endY * CELL_SIZE + CELL_SIZE / 2;
+        cyberpunkParticlesRef.current?.addParticles(x, y, color, 5, 'trail');
+      });
+    }
+
+    if ((trailCells.length > 0 || dustParticles.length > 0) && lineClearParticlesRafRef.current === null) {
+      lineClearParticlesRafRef.current = requestAnimationFrame(runLineClearParticlesFrame);
+    }
+
+    triggerHardDropShake();
+  }, [runLineClearParticlesFrame, theme.colors, triggerHardDropShake, yourState?.board, yourState?.currentPiece]);
+
   useEffect(() => {
     if (!mockMode) return;
 
     setIsConnected(true);
     const startMs = Date.now();
     let tickCount = 0;
+
+    if (mockStatic) {
+      const now = Date.now();
+      const staticYourTimedEffects = [
+        { abilityType: 'wide_load', remainingMs: 7200, durationMs: 9000 },
+      ];
+      const staticOpponentTimedEffects = [
+        { abilityType: 'mirage', remainingMs: 4100, durationMs: 5000 },
+        { abilityType: 'blind_spot', remainingMs: 3600, durationMs: 5000 },
+        { abilityType: 'reverse_controls', remainingMs: 5200, durationMs: 6000 },
+      ];
+
+      const yourStateMock: MockStatePayload = {
+        board: createMockBoard(12, 20, 18),
+        currentPiece: createMockPiece('T', 4, 3),
+        magnetGhost: createMockPiece('T', 6, 15),
+        nextPieces: ['I', 'T', 'L', 'O', 'S'],
+        score: 14320,
+        stars: 186,
+        linesCleared: 42,
+        comboCount: 3,
+        isGameOver: false,
+        activeEffects: staticYourTimedEffects.map((entry) => entry.abilityType),
+        timedEffects: staticYourTimedEffects,
+        pieceCountEffects: [
+          { abilityType: 'magnet', remaining: 2, total: 3 },
+          { abilityType: 'overcharge', remaining: 1, total: 3 },
+        ],
+        tiltDirection: 1,
+      };
+
+      const opponentStateMock: MockStatePayload = {
+        board: createMockBoard(10, 20, 27),
+        currentPiece: createMockPiece('Z', 4, 4),
+        magnetGhost: null,
+        nextPieces: ['Z', 'J', 'I', 'T', 'O'],
+        score: 12980,
+        stars: 141,
+        linesCleared: 39,
+        comboCount: 2,
+        isGameOver: false,
+        activeEffects: staticOpponentTimedEffects.map((entry) => entry.abilityType),
+        timedEffects: staticOpponentTimedEffects,
+        pieceCountEffects: [
+          { abilityType: 'shapeshifter', remaining: 2, total: 3 },
+        ],
+        tiltDirection: -1,
+      };
+
+      setLastStateFrameMs(now);
+      setYourState(yourStateMock);
+      setOpponentState(opponentStateMock);
+      setConnectionStats({
+        latency: 42,
+        avgLatency: 42,
+        minLatency: 24,
+        maxLatency: 77,
+        quality: 'good',
+      });
+
+      setAbilityNotifications([]);
+
+      return () => {
+        setIsConnected(false);
+        setConnectionStats(null);
+        setAbilityNotifications([]);
+      };
+    }
 
     const tick = () => {
       tickCount += 1;
@@ -863,7 +1322,7 @@ export function ServerAuthMultiplayerGame({
       setIsConnected(false);
       setConnectionStats(null);
     };
-  }, [mockMode, queueNotification, triggerBoardAbilityVisual]);
+  }, [mockMode, mockStatic, queueNotification, triggerBoardAbilityVisual]);
 
   const applyBoardDiffAnimations = useCallback((
     renderer: TetrisRenderer,
@@ -991,6 +1450,19 @@ export function ServerAuthMultiplayerGame({
       prevYourPieceRef.current = null;
       prevSelfBoardRef.current = null;
       prevOpponentBoardRef.current = null;
+      prevBoardForLineClearFxRef.current = null;
+      lineClearParticlesRef.current = [];
+      hardDropParticlesRef.current = [];
+      hardDropTrailRef.current = null;
+      if (lineClearParticlesRafRef.current !== null) {
+        cancelAnimationFrame(lineClearParticlesRafRef.current);
+        lineClearParticlesRafRef.current = null;
+      }
+      const overlayCanvas = lineClearOverlayRef.current;
+      const overlayCtx = overlayCanvas?.getContext('2d');
+      if (overlayCanvas && overlayCtx) {
+        overlayCtx.clearRect(0, 0, overlayCanvas.width, overlayCanvas.height);
+      }
       pendingBoardAbilityFxRef.current = { self: null, opponent: null };
       client.disconnect();
       audioManager.stopMusic(true);
@@ -1167,12 +1639,87 @@ export function ServerAuthMultiplayerGame({
   // Track line clears from server for effects
   const prevLinesRef = useRef(0);
   useEffect(() => {
-    if (!yourState) return;
+    if (!yourState || !Array.isArray(yourState.board)) return;
+
+    if (prevLinesRef.current === 0 && yourState.linesCleared > 4) {
+      prevLinesRef.current = yourState.linesCleared;
+      prevBoardForLineClearFxRef.current = cloneBoardGrid(yourState.board);
+      return;
+    }
 
     const linesDiff = yourState.linesCleared - prevLinesRef.current;
     if (linesDiff > 0) {
       console.log(`[SERVER-AUTH] ${linesDiff} lines cleared!`);
       triggerLineClearExplosionPulse(linesDiff);
+
+      const previousBoard = prevBoardForLineClearFxRef.current;
+      if (previousBoard) {
+        const clearedRows = extractClearedRowsFromPreviousBoard(previousBoard, linesDiff);
+        if (clearedRows.length > 0) {
+          const boardWidth = previousBoard[0]?.length ?? yourState.board[0]?.length ?? 10;
+          const boardHeight = previousBoard.length || yourState.board.length || 20;
+          spawnLineClearParticles(clearedRows, boardWidth, boardHeight);
+
+          // Spawn cyberpunk particles for each cleared cell
+          const CELL_SIZE = 25; // Match canvas cell size
+          clearedRows.forEach(({ rowIndex, cells }) => {
+            cells.forEach((cellColor, colIndex) => {
+              if (cellColor) {
+                const x = colIndex * CELL_SIZE + CELL_SIZE / 2;
+                const y = rowIndex * CELL_SIZE + CELL_SIZE / 2;
+                // Burst particles (explosive)
+                cyberpunkParticlesRef.current?.addParticles(x, y, cellColor, 8, 'burst');
+                // Line sweep particles (slower, glowing)
+                cyberpunkParticlesRef.current?.addParticles(x, y, cellColor, 3, 'lineSweep');
+              }
+            });
+          });
+
+          // Add floating text for line clear
+          const labels = ['', 'SINGLE', 'DOUBLE', 'TRIPLE', 'TETRIS!'];
+          const colors = ['', '#ffffff', '#00f0f0', '#f0a020', '#ff2080'];
+          const label = labels[linesDiff] || 'MULTI!';
+          const labelColor = colors[linesDiff] || '#ff2080';
+          const size = linesDiff === 4 ? 24 : 18;
+          const comboCount = yourState.comboCount ?? 0;
+          const comboText = comboCount > 1 ? ` ×${comboCount}` : '';
+
+          // Get center row for positioning
+          const centerRowIndex = clearedRows[Math.floor(clearedRows.length / 2)]?.rowIndex ?? 10;
+
+          // Line clear label
+          addFloatingText(
+            label + comboText,
+            boardWidth * CELL_SIZE / 2,
+            centerRowIndex * CELL_SIZE - 10,
+            labelColor,
+            size
+          );
+
+          // Score earned (estimate based on lines cleared)
+          const baseScore = linesDiff * 100;
+          const scoreEarned = baseScore * (comboCount > 1 ? comboCount : 1);
+          addFloatingText(
+            `+${scoreEarned}`,
+            boardWidth * CELL_SIZE / 2,
+            centerRowIndex * CELL_SIZE + 18,
+            '#ffffffcc',
+            13
+          );
+
+          // Add flashing row effect (280ms duration)
+          const flashDuration = 280;
+          const now = Date.now();
+          const newFlashingRows = clearedRows.map(({ rowIndex }) => ({
+            rowIndex,
+            expiresAt: now + flashDuration
+          }));
+          setFlashingRows(prev => [...prev, ...newFlashingRows]);
+          setTimeout(() => {
+            setFlashingRows(prev => prev.filter(row => row.expiresAt > Date.now()));
+          }, flashDuration + 50);
+        }
+      }
 
       if (linesDiff >= 4) {
         // TETRIS!
@@ -1196,7 +1743,8 @@ export function ServerAuthMultiplayerGame({
       setTimeout(() => setScreenShake(0), 400);
     }
     prevLinesRef.current = yourState.linesCleared;
-  }, [yourState?.linesCleared, triggerLineClearExplosionPulse]);
+    prevBoardForLineClearFxRef.current = cloneBoardGrid(yourState.board);
+  }, [yourState?.linesCleared, yourState?.board, yourState?.comboCount, spawnLineClearParticles, triggerLineClearExplosionPulse, addFloatingText]);
 
   // Show "+N ⭐" popup when stars are earned (threshold filters passive regen)
   useEffect(() => {
@@ -1211,6 +1759,52 @@ export function ServerAuthMultiplayerGame({
     }
     prevStarsRef.current = yourState.stars;
   }, [yourState?.stars]);
+
+  // Track piece changes for lock particles
+  const prevPieceRef = useRef<any>(null);
+  useEffect(() => {
+    if (!yourState?.currentPiece) return;
+
+    const currentPiece = yourState.currentPiece as any;
+    const prevPiece = prevPieceRef.current;
+
+    // Detect when piece changes (previous piece locked, new piece spawned)
+    if (prevPiece && (
+      prevPiece.type !== currentPiece.type ||
+      prevPiece.x !== currentPiece.x ||
+      prevPiece.y !== currentPiece.y ||
+      Math.abs(prevPiece.x - currentPiece.x) > 3 // New piece spawned at different location
+    )) {
+      // Previous piece locked - spawn lock particles and flash
+      const CELL_SIZE = 25;
+      const shape = prevPiece.shape || [];
+      const color = prevPiece.color || '#00d4ff';
+      const lockCells: Array<{ x: number; y: number }> = [];
+
+      for (let r = 0; r < shape.length; r++) {
+        for (let c = 0; c < shape[r].length; c++) {
+          if (shape[r][c]) {
+            const x = (prevPiece.x + c) * CELL_SIZE + CELL_SIZE / 2;
+            const y = (prevPiece.y + r) * CELL_SIZE + CELL_SIZE / 2;
+            cyberpunkParticlesRef.current?.addParticles(x, y, color, 3, 'lock');
+            lockCells.push({ x: prevPiece.x + c, y: prevPiece.y + r });
+          }
+        }
+      }
+
+      // Trigger lock flash effect (180ms duration)
+      if (lockCells.length > 0) {
+        setLockFlash({
+          cells: lockCells,
+          color,
+          expiresAt: Date.now() + 180
+        });
+        setTimeout(() => setLockFlash(null), 200);
+      }
+    }
+
+    prevPieceRef.current = currentPiece;
+  }, [yourState?.currentPiece]);
 
   // Handle ability activation
   const handleAbilityActivate = (ability: Ability) => {
@@ -1427,6 +2021,7 @@ export function ServerAuthMultiplayerGame({
         haptics.medium();
         audioManager.playSfx('hard_drop');
         triggerHardDropBounce();
+        triggerHardDropTrailImpact();
         break;
       case 'rotate_cw':
         haptics.light();
@@ -1435,7 +2030,7 @@ export function ServerAuthMultiplayerGame({
     }
 
     gameClientRef.current.sendInput(input);
-  }, [yourState, gameFinished, triggerHardDropBounce]);
+  }, [yourState, gameFinished, triggerHardDropBounce, triggerHardDropTrailImpact]);
 
   const handleMoveLeft = useCallback(() => sendMobileInput('move_left'), [sendMobileInput]);
   const handleMoveRight = useCallback(() => sendMobileInput('move_right'), [sendMobileInput]);
@@ -1477,6 +2072,7 @@ export function ServerAuthMultiplayerGame({
           audioManager.playSfx('hard_drop');
           haptics.medium();
           triggerHardDropBounce();
+          triggerHardDropTrailImpact();
           gameClientRef.current.sendInput('hard_drop');
           break;
         case '1':
@@ -1493,7 +2089,7 @@ export function ServerAuthMultiplayerGame({
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [yourState, gameFinished, availableAbilities, triggerHardDropBounce]);
+  }, [yourState, gameFinished, availableAbilities, triggerHardDropBounce, triggerHardDropTrailImpact]);
 
   // Calculate rewards when game finishes
   useEffect(() => {
@@ -1542,14 +2138,14 @@ export function ServerAuthMultiplayerGame({
         overflow: 'hidden',
         background: 'linear-gradient(135deg, #0a0e27 0%, #1a1433 50%, #0f0a1e 100%)',
         color: '#ffffff',
-        fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
+        fontFamily: '"Orbitron", "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
         position: 'fixed',
         top: 0,
         left: 0,
       }}
     >
       <FloatingBackground />
-      {mockMode && (
+      {mockMode && !mockStatic && (
         <div
           style={{
             position: 'absolute',
@@ -1576,8 +2172,8 @@ export function ServerAuthMultiplayerGame({
               color: 'rgba(125, 227, 255, 0.95)',
               box: {
                 top: statsCardsTop,
-                left: `${statsOverlaySidePaddingPx}px`,
-                width: `calc(100% - ${statsOverlaySidePaddingPx * 2}px)`,
+                left: statsOverlaySidePadding,
+                right: statsOverlaySidePadding,
                 height: statsRowHeight,
               },
             },
@@ -1704,6 +2300,8 @@ export function ServerAuthMultiplayerGame({
             <GameHeader
               score={yourState?.score ?? 0}
               stars={yourState?.stars ?? 0}
+              linesCleared={yourState?.linesCleared ?? 0}
+              comboCount={yourState?.comboCount ?? 0}
               notifications={abilityNotifications}
               isConnected={isConnected}
               connectionStats={connectionStats}
@@ -1771,6 +2369,10 @@ export function ServerAuthMultiplayerGame({
                   transform: getTiltAngle(yourState) ? `rotate(${getTiltAngle(yourState)}deg) scale(0.96)` : 'none',
                   transition: 'transform 200ms ease-out',
                   position: 'relative',
+                  background: 'rgba(5, 5, 22, 1)',
+                  backdropFilter: 'blur(6px)',
+                  WebkitBackdropFilter: 'blur(6px)',
+                  borderRadius: '9px',
                 }}
               >
                 <canvas
@@ -1779,15 +2381,45 @@ export function ServerAuthMultiplayerGame({
                   height={500}
                   style={{
                     display: 'block',
+                    position: 'relative',
+                    zIndex: 1,
                     height: '100%',
                     maxHeight: 'calc(100dvh - 170px)',
                     width: 'auto',
                     maxWidth: '100%',
                     borderRadius: '9px',
-                    border: `2px solid ${selfBoardFx?.borderColor || '#00d4ff'}`,
-                    backgroundColor: 'rgba(5,5,15,0.8)',
-                    boxShadow: selfBoardFx?.glow || '0 0 18px rgba(0, 212, 255, 0.45), inset 0 0 18px rgba(0, 212, 255, 0.08)',
+                    border: `1px solid ${selfBoardFx?.borderColor || 'rgba(0, 240, 240, 0.09)'}`,
+                    backgroundColor: 'transparent',
+                    boxShadow: selfBoardFx?.glow || '0 0 30px rgba(0, 240, 240, 0.03)',
                   }}
+                />
+                <div
+                  style={{
+                    position: 'absolute',
+                    inset: 0,
+                    borderRadius: '9px',
+                    pointerEvents: 'none',
+                    zIndex: 2,
+                    background: 'radial-gradient(ellipse at 50% 45%, transparent 35%, rgba(3,3,15,0.65) 100%)',
+                  }}
+                />
+                <canvas
+                  ref={lineClearOverlayRef}
+                  width={250}
+                  height={500}
+                  style={{
+                    position: 'absolute',
+                    inset: 0,
+                    width: '100%',
+                    height: '100%',
+                    pointerEvents: 'none',
+                    zIndex: 3,
+                  }}
+                />
+                <CyberpunkParticles
+                  ref={cyberpunkParticlesRef}
+                  width={250}
+                  height={500}
                 />
                 {stateHasEffect(yourState, 'ink_splash') && !mockMode && (
                   <InkSplashMask idPrefix="mobile-self" borderRadius="9px" />
@@ -1819,6 +2451,56 @@ export function ServerAuthMultiplayerGame({
                   </motion.div>
                 ))}
               </AnimatePresence>
+              {/* Floating score text on line clears */}
+              {floatingTexts.map(ft => {
+                const age = Math.min((Date.now() - ft.born) / 1400, 1);
+                return (
+                  <div key={ft.id} style={{
+                    position: 'absolute',
+                    left: ft.x,
+                    top: ft.y - age * 50,
+                    transform: `translateX(-50%) scale(${1 + age * 0.15})`,
+                    fontSize: ft.size,
+                    fontWeight: 900,
+                    color: ft.color,
+                    textShadow: `0 0 10px ${ft.color}, 0 0 30px ${ft.color}66`,
+                    opacity: age < 0.15 ? age / 0.15 : 1 - (age - 0.15) / 0.85,
+                    zIndex: 20,
+                    pointerEvents: 'none',
+                    letterSpacing: 3,
+                    whiteSpace: 'nowrap',
+                    fontFamily: 'Orbitron',
+                  }}>
+                    {ft.text}
+                  </div>
+                );
+              })}
+              {/* Lock flash effect on piece settling */}
+              {lockFlash && lockFlash.expiresAt > Date.now() && lockFlash.cells.map((cell, i) => {
+                const CELL_SIZE = 25;
+                const age = Math.min((Date.now() - (lockFlash.expiresAt - 180)) / 180, 1);
+                const opacity = 1 - age;
+                const scale = 1.15 - (age * 0.15);
+
+                return (
+                  <div
+                    key={`lf-${i}`}
+                    style={{
+                      position: 'absolute',
+                      left: cell.x * CELL_SIZE - 4,
+                      top: cell.y * CELL_SIZE - 4,
+                      width: CELL_SIZE + 8,
+                      height: CELL_SIZE + 8,
+                      background: `radial-gradient(circle, ${lockFlash.color}44, transparent 70%)`,
+                      opacity,
+                      transform: `scale(${scale})`,
+                      zIndex: 3,
+                      pointerEvents: 'none',
+                      transition: 'opacity 0.18s ease-out, transform 0.18s ease-out',
+                    }}
+                  />
+                );
+              })}
             </motion.div>
           )}
           opponentPreview={(
@@ -1852,275 +2534,137 @@ export function ServerAuthMultiplayerGame({
         />
       ) : (
         <>
-      {/* Top Scoreboard split into independent overlay containers */}
+      {/* Top HUD: floating text stats + compact latency badge */}
       <motion.div
         animate={statsBlastControls}
         ref={statsCardAnchorRef}
         style={{
           position: 'absolute',
           top: statsCardsTop,
-          left: `${statsOverlaySidePaddingPx}px`,
+          left: statsOverlaySidePadding,
+          right: statsOverlaySidePadding,
           zIndex: 7,
           pointerEvents: 'none',
-          width: statsCardWidth,
-          minWidth: 0,
-          padding: '2px clamp(8px, 1.2vw, 12px) 3px',
-          borderRadius: '10px',
-          background: 'linear-gradient(180deg, rgba(0, 28, 42, 0.82) 0%, rgba(0, 14, 24, 0.72) 100%)',
-          border: '1px solid rgba(0, 212, 255, 0.42)',
-          boxShadow: '0 0 18px rgba(0, 212, 255, 0.22), inset 0 0 14px rgba(0, 212, 255, 0.14)',
-          textAlign: 'center',
+          display: 'grid',
+          gridTemplateColumns: 'repeat(3, minmax(0, 1fr))',
+          gap: 'clamp(8px, 1.6vw, 16px)',
+          alignItems: 'start',
           fontVariantNumeric: 'tabular-nums',
         }}
       >
-        <div style={{ fontSize: 'clamp(7px, 0.95vw, 10px)', fontWeight: 700, letterSpacing: '0.7px', textTransform: 'uppercase', color: 'rgba(125, 227, 255, 0.95)', marginBottom: '4px' }}>
-          Score
-        </div>
-        <AnimatePresence mode="popLayout">
-          <motion.div
-            key={`top-score-${yourState?.score ?? 0}`}
-            variants={scoreVariants}
-            initial="initial"
-            animate="animate"
-            exit="exit"
-            transition={springs.gentle}
-            style={{
-              fontSize: 'clamp(30px, 8vw, 96px)',
-              lineHeight: 0.72,
-              fontWeight: 900,
-              letterSpacing: '-1.2px',
-              color: '#67eaff',
-              textShadow: '0 0 12px rgba(0, 212, 255, 0.95), 0 0 26px rgba(0, 212, 255, 0.45)',
-              whiteSpace: 'nowrap',
-              display: 'inline-block',
-            }}
-          >
-            <span
+        {[
+          {
+            key: 'score',
+            label: 'SCORE',
+            value: yourState?.score ?? 0,
+            color: '#67eaff',
+            glow: '0 0 10px rgba(0, 212, 255, 0.6), 0 0 20px rgba(0, 212, 255, 0.28)',
+          },
+          {
+            key: 'stars',
+            label: 'STARS',
+            value: yourState?.stars ?? 0,
+            color: '#df82ff',
+            glow: '0 0 10px rgba(201, 66, 255, 0.58), 0 0 20px rgba(201, 66, 255, 0.24)',
+          },
+          {
+            key: 'lines',
+            label: 'LINES',
+            value: yourState?.linesCleared ?? 0,
+            color: '#7dffb0',
+            glow: '0 0 10px rgba(0, 255, 136, 0.55), 0 0 20px rgba(0, 255, 136, 0.22)',
+          },
+        ].map((stat) => (
+          <div key={stat.key} style={{ minWidth: 0, textAlign: 'center' }}>
+            <div
               style={{
-                display: 'inline-block',
-                transform: 'scaleY(1.3)',
-                transformOrigin: 'center top',
-                marginTop: '2px',
+                fontSize: '9px',
+                lineHeight: 1,
+                letterSpacing: '3px',
+                color: 'rgba(255,255,255,0.3)',
+                marginBottom: '4px',
+                textTransform: 'uppercase',
               }}
             >
-              {yourState?.score ?? 0}
-            </span>
-          </motion.div>
-        </AnimatePresence>
-      </motion.div>
-      <motion.div
-        animate={statsBlastControls}
-        style={{
-          position: 'absolute',
-          top: statsCardsTop,
-          left: statsStarsLeft,
-          zIndex: 7,
-          pointerEvents: 'none',
-          width: statsCardWidth,
-          minWidth: 0,
-          padding: '2px clamp(8px, 1.2vw, 12px) 3px',
-          borderRadius: '10px',
-          background: 'linear-gradient(180deg, rgba(38, 12, 60, 0.82) 0%, rgba(22, 8, 38, 0.72) 100%)',
-          border: '1px solid rgba(201, 66, 255, 0.45)',
-          boxShadow: '0 0 18px rgba(201, 66, 255, 0.25), inset 0 0 14px rgba(201, 66, 255, 0.16)',
-          textAlign: 'center',
-          fontVariantNumeric: 'tabular-nums',
-        }}
-      >
-        <div style={{ fontSize: 'clamp(7px, 0.95vw, 10px)', fontWeight: 700, letterSpacing: '0.7px', textTransform: 'uppercase', color: 'rgba(227, 160, 255, 0.95)', marginBottom: '4px' }}>
-          Stars
-        </div>
-        <AnimatePresence mode="popLayout">
-          <motion.div
-            key={`top-stars-${yourState?.stars ?? 0}`}
-            variants={scoreVariants}
-            initial="initial"
-            animate="animate"
-            exit="exit"
-            transition={springs.gentle}
-            style={{
-              fontSize: 'clamp(30px, 8vw, 96px)',
-              lineHeight: 0.72,
-              fontWeight: 900,
-              letterSpacing: '-1.2px',
-              color: '#df82ff',
-              textShadow: '0 0 12px rgba(201, 66, 255, 0.95), 0 0 26px rgba(201, 66, 255, 0.45)',
-              whiteSpace: 'nowrap',
-              display: 'inline-block',
-            }}
-          >
-            <span
-              style={{
-                display: 'inline-block',
-                transform: 'scaleY(1.3)',
-                transformOrigin: 'center top',
-                marginTop: '2px',
-              }}
-            >
-              {yourState?.stars ?? 0}
-            </span>
-          </motion.div>
-        </AnimatePresence>
-      </motion.div>
-      <motion.div
-        animate={statsBlastControls}
-        style={{
-          position: 'absolute',
-          top: statsCardsTop,
-          left: statsLinesLeft,
-          zIndex: 7,
-          pointerEvents: 'none',
-          width: statsCardWidth,
-          minWidth: 0,
-          padding: '2px clamp(8px, 1.2vw, 12px) 3px',
-          borderRadius: '10px',
-          background: 'linear-gradient(180deg, rgba(4, 44, 26, 0.82) 0%, rgba(3, 22, 13, 0.72) 100%)',
-          border: '1px solid rgba(0, 255, 136, 0.42)',
-          boxShadow: '0 0 18px rgba(0, 255, 136, 0.22), inset 0 0 14px rgba(0, 255, 136, 0.14)',
-          textAlign: 'center',
-          fontVariantNumeric: 'tabular-nums',
-        }}
-      >
-        <div style={{ fontSize: 'clamp(7px, 0.95vw, 10px)', fontWeight: 700, letterSpacing: '0.7px', textTransform: 'uppercase', color: 'rgba(153, 255, 204, 0.95)', marginBottom: '4px' }}>
-          Lines
-        </div>
-        <AnimatePresence mode="popLayout">
-          <motion.div
-            key={`top-lines-${yourState?.linesCleared ?? 0}`}
-            variants={scoreVariants}
-            initial="initial"
-            animate="animate"
-            exit="exit"
-            transition={springs.gentle}
-            style={{
-              fontSize: 'clamp(30px, 8vw, 96px)',
-              lineHeight: 0.72,
-              fontWeight: 900,
-              letterSpacing: '-1.2px',
-              color: '#7dffb0',
-              textShadow: '0 0 12px rgba(0, 255, 136, 0.95), 0 0 26px rgba(0, 255, 136, 0.45)',
-              whiteSpace: 'nowrap',
-              display: 'inline-block',
-            }}
-          >
-            <span
-              style={{
-                display: 'inline-block',
-                transform: 'scaleY(1.3)',
-                transformOrigin: 'center top',
-                marginTop: '2px',
-              }}
-            >
-              {yourState?.linesCleared ?? 0}
-            </span>
-          </motion.div>
-        </AnimatePresence>
+              {stat.label}
+            </div>
+            <AnimatePresence mode="popLayout">
+              <motion.div
+                key={`hud-${stat.key}-${stat.value}`}
+                variants={scoreVariants}
+                initial="initial"
+                animate="animate"
+                exit="exit"
+                transition={springs.gentle}
+                style={{
+                  fontSize: 'clamp(30px, 7.6vw, 84px)',
+                  lineHeight: 0.86,
+                  fontWeight: 900,
+                  letterSpacing: '-1px',
+                  color: stat.color,
+                  textShadow: stat.glow,
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                {stat.value}
+              </motion.div>
+            </AnimatePresence>
+          </div>
+        ))}
       </motion.div>
       <motion.button
-        animate={statsBlastControls}
         whileTap="tap"
         variants={buttonVariants}
         transition={springs.snappy}
         onClick={onExit}
+        title="Exit match"
+        aria-label="Exit match"
         style={{
           position: 'absolute',
-          top: statsCardsTop,
-          left: statsExitLeft,
+          top: `calc(${statsCardsTop} + 2px)`,
+          right: 'clamp(8px, 2vw, 14px)',
           zIndex: 8,
-          width: statsCardWidth,
-          minWidth: 0,
-          height: statsCardHeightPx !== null ? `${statsCardHeightPx}px` : undefined,
-          boxSizing: 'border-box',
-          padding: '2px clamp(8px, 1.2vw, 12px) 3px',
-          borderRadius: '10px',
-          background: 'linear-gradient(180deg, rgba(44, 22, 12, 0.82) 0%, rgba(26, 12, 6, 0.72) 100%)',
-          border: '1px solid rgba(255, 170, 91, 0.45)',
-          boxShadow: '0 0 18px rgba(255, 170, 91, 0.22), inset 0 0 14px rgba(255, 170, 91, 0.14)',
-          textAlign: 'center',
-          color: '#ffe8cf',
+          background: 'transparent',
+          border: 'none',
+          padding: '2px',
+          margin: 0,
           cursor: 'pointer',
-          display: 'flex',
-          flexDirection: 'column',
+          display: 'inline-flex',
           alignItems: 'center',
-          justifyContent: 'center',
-          gap: '2px',
+          gap: '4px',
           lineHeight: 1,
+          color: 'rgba(255,255,255,0.3)',
         }}
       >
-        <div
+        <span
           style={{
-            fontSize: 'clamp(7px, 0.95vw, 10px)',
-            fontWeight: 700,
-            letterSpacing: '0.7px',
-            textTransform: 'uppercase',
-            color: 'rgba(255, 214, 166, 0.95)',
-            marginBottom: '1px',
+            width: '6px',
+            height: '6px',
+            borderRadius: '50%',
+            display: 'inline-block',
+            background:
+              connectionStats?.quality === 'excellent'
+                ? '#4ade80'
+                : connectionStats?.quality === 'good'
+                ? '#fbbf24'
+                : connectionStats?.quality === 'poor'
+                ? '#fb923c'
+                : '#ef4444',
+            boxShadow: '0 0 6px rgba(74, 222, 128, 0.5)',
+          }}
+        />
+        <span
+          style={{
+            fontSize: '8px',
+            color: 'rgba(255,255,255,0.3)',
+            letterSpacing: '0.2px',
+            whiteSpace: 'nowrap',
           }}
         >
-          Latency
-        </div>
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            gap: '4px',
-            minHeight: 'clamp(16px, 3.5vw, 24px)',
-          }}
-        >
-          <span
-            style={{
-              width: 'clamp(6px, 1vw, 8px)',
-              height: 'clamp(6px, 1vw, 8px)',
-              borderRadius: '50%',
-              display: 'inline-block',
-              background:
-                connectionStats?.quality === 'excellent'
-                  ? '#4ade80'
-                  : connectionStats?.quality === 'good'
-                  ? '#fbbf24'
-                  : connectionStats?.quality === 'poor'
-                  ? '#fb923c'
-                  : '#ef4444',
-              boxShadow: '0 0 8px currentColor',
-              color:
-                connectionStats?.quality === 'excellent'
-                  ? '#4ade80'
-                  : connectionStats?.quality === 'good'
-                  ? '#fbbf24'
-                  : connectionStats?.quality === 'poor'
-                  ? '#fb923c'
-                  : '#ef4444',
-            }}
-          />
-          <span
-            style={{
-              fontSize: 'clamp(17px, 4.5vw, 40px)',
-              lineHeight: 0.9,
-              fontWeight: 900,
-              letterSpacing: '-0.8px',
-              color: '#ffb36e',
-              textShadow: '0 0 10px rgba(255, 170, 91, 0.9), 0 0 22px rgba(255, 170, 91, 0.45)',
-              whiteSpace: 'nowrap',
-            }}
-          >
-            {Number.isFinite(connectionStats?.avgLatency)
-              ? `${Math.round(connectionStats!.avgLatency)}ms`
-              : '--'}
-          </span>
-        </div>
-        <div
-          style={{
-            fontSize: 'clamp(8px, 1.15vw, 10px)',
-            fontWeight: 800,
-            letterSpacing: '0.65px',
-            textTransform: 'uppercase',
-            color: '#ffd4ad',
-            marginTop: '1px',
-          }}
-        >
-          Exit
-        </div>
+          {Number.isFinite(connectionStats?.avgLatency)
+            ? `${Math.round(connectionStats!.avgLatency)}ms`
+            : '--'}
+        </span>
       </motion.button>
       {/* Main Game Area */}
 	      <div
@@ -2222,6 +2766,10 @@ export function ServerAuthMultiplayerGame({
                     ? `rotate(${getTiltAngle(yourState)}deg) scale(0.96)`
                     : 'none',
                   transition: 'transform 200ms ease-out',
+                  background: 'rgba(5, 5, 20, 0.75)',
+                  backdropFilter: 'blur(4px)',
+                  WebkitBackdropFilter: 'blur(4px)',
+                  borderRadius: 'clamp(6px, 1.5vw, 10px)',
                 }}
               >
                 <canvas
@@ -2230,15 +2778,40 @@ export function ServerAuthMultiplayerGame({
                   height={500}
                   style={{
                     display: 'block',
-                    border: `2px solid ${selfBoardFx?.borderColor || '#00d4ff'}`,
-                    backgroundColor: 'rgba(5,5,15,0.8)',
+                    position: 'relative',
+                    zIndex: 1,
                     maxHeight: playerZoneHeight,
                     maxWidth: '100%',
                     height: 'auto',
                     width: 'auto',
                     objectFit: 'contain',
                     borderRadius: 'clamp(6px, 1.5vw, 10px)',
-                    boxShadow: selfBoardFx?.glow || '0 0 20px rgba(0, 212, 255, 0.5), 0 0 40px rgba(0, 212, 255, 0.2), inset 0 0 20px rgba(0, 212, 255, 0.05)',
+                    border: `1px solid ${selfBoardFx?.borderColor || 'rgba(0, 240, 240, 0.15)'}`,
+                    backgroundColor: 'transparent',
+                    boxShadow: selfBoardFx?.glow || '0 0 20px rgba(0, 240, 240, 0.08), 0 0 60px rgba(0, 240, 240, 0.03)',
+                  }}
+                />
+                <div
+                  style={{
+                    position: 'absolute',
+                    inset: 0,
+                    borderRadius: 'clamp(6px, 1.5vw, 10px)',
+                    pointerEvents: 'none',
+                    zIndex: 2,
+                    background: 'radial-gradient(ellipse at center, transparent 40%, rgba(10,10,24,0.6) 100%)',
+                  }}
+                />
+                <canvas
+                  ref={lineClearOverlayRef}
+                  width={250}
+                  height={500}
+                  style={{
+                    position: 'absolute',
+                    inset: 0,
+                    width: '100%',
+                    height: '100%',
+                    pointerEvents: 'none',
+                    zIndex: 3,
                   }}
                 />
                 {stateHasEffect(yourState, 'ink_splash') && !mockMode && (
@@ -2355,12 +2928,12 @@ export function ServerAuthMultiplayerGame({
 	                height={160}
 	                style={{
 	                  display: 'block',
-	                  border: `1px solid ${opponentBoardFx?.borderColor || 'rgba(255, 0, 110, 0.5)'}`,
-	                  backgroundColor: 'rgba(5,5,15,0.8)',
+	                  border: `1px solid ${opponentBoardFx?.borderColor || 'rgba(255, 255, 255, 0.1)'}`,
+	                  backgroundColor: 'rgba(5, 5, 20, 0.72)',
 	                  width: '100%',
 	                  height: '100%',
 	                  borderRadius: 'clamp(4px, 1vw, 6px)',
-	                  boxShadow: opponentBoardFx?.glow || '0 0 10px rgba(255, 0, 110, 0.3), inset 0 0 10px rgba(255, 0, 110, 0.05)',
+	                  boxShadow: opponentBoardFx?.glow || '0 0 8px rgba(255, 255, 255, 0.08)',
 	                }}
 	              />
                 {stateHasEffect(opponentState, 'ink_splash') && !mockMode && (
@@ -2530,11 +3103,12 @@ export function ServerAuthMultiplayerGame({
         height: abilitiesBarHeight,
         display: 'grid',
         gridTemplateColumns: 'repeat(6, minmax(0, 1fr))',
+        placeItems: 'center',
         gap: 'clamp(4px, 0.8vw, 8px)',
         padding: 'clamp(6px, 1vw, 10px)',
-        background: 'linear-gradient(180deg, rgba(8, 10, 24, 0.45) 0%, rgba(6, 8, 18, 0.75) 100%)',
-        backdropFilter: 'blur(18px)',
-        borderTop: '1px solid rgba(255, 255, 255, 0.1)',
+        background: 'linear-gradient(180deg, rgba(7, 9, 20, 0.34) 0%, rgba(5, 7, 16, 0.62) 100%)',
+        backdropFilter: 'blur(14px)',
+        borderTop: '1px solid rgba(255, 255, 255, 0.08)',
       }}>
         {Array.from({ length: 6 }).map((_, index) => {
           const ability = availableAbilities[index];
@@ -2543,16 +3117,17 @@ export function ServerAuthMultiplayerGame({
               <div
                 key={`ability-empty-${index}`}
                 style={{
+                  width: '48px',
+                  height: '48px',
                   borderRadius: '8px',
-                  border: '1px dashed rgba(255,255,255,0.12)',
-                  background: 'rgba(255,255,255,0.03)',
+                  border: '1px dashed rgba(255,255,255,0.08)',
+                  background: 'rgba(255,255,255,0.02)',
                 }}
               />
             );
           }
 
           const isAffordable = (yourState?.stars ?? 0) >= ability.cost;
-          const isDebuff = isDebuffAbility(ability);
 
           return (
             <motion.button
@@ -2568,44 +3143,41 @@ export function ServerAuthMultiplayerGame({
               disabled={!isAffordable}
               title={`${ability.name}: ${ability.description}`}
               style={{
+                width: '48px',
+                height: '48px',
                 borderRadius: '8px',
-                border: `1px solid ${isAffordable
-                  ? (isDebuff ? 'rgba(255, 0, 110, 0.35)' : 'rgba(0, 212, 255, 0.35)')
-                  : 'rgba(255,255,255,0.08)'}`,
-                background: isAffordable ? 'rgba(10, 10, 30, 0.7)' : 'rgba(10, 10, 30, 0.35)',
+                border: '1px solid rgba(255,255,255,0.08)',
+                background: 'rgba(255,255,255,0.03)',
                 color: '#fff',
                 display: 'grid',
-                gridTemplateRows: '1fr 1fr',
+                gridTemplateRows: '1fr auto',
                 alignItems: 'center',
                 justifyItems: 'center',
-                rowGap: '1px',
-                padding: '3px 4px',
+                rowGap: '2px',
+                padding: '4px',
                 cursor: isAffordable ? 'pointer' : 'not-allowed',
-                opacity: isAffordable ? 1 : 0.45,
+                opacity: isAffordable ? 1 : 0.38,
                 minWidth: 0,
                 textAlign: 'center',
               }}
             >
+              <Icon
+                type="ability"
+                name={ability.type}
+                color={isDebuffAbility(ability) ? '#ff7aa9' : '#7de3ff'}
+                size={28}
+                active={isAffordable}
+              />
               <span
                 style={{
-                  fontSize: 'clamp(7px, 1.1vw, 9px)',
-                  fontWeight: 800,
-                  letterSpacing: '0.3px',
-                  whiteSpace: 'nowrap',
+                  fontSize: '8px',
+                  fontWeight: 700,
+                  fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace',
+                  color: 'rgba(255,255,255,0.25)',
                   lineHeight: 1,
                 }}
               >
-                {ability.shortName}
-              </span>
-              <span
-                style={{
-                  fontSize: 'clamp(10px, 1.5vw, 12px)',
-                  fontWeight: 800,
-                  color: isDebuff ? '#ff6b9a' : '#66e3ff',
-                  lineHeight: 1,
-                }}
-              >
-                {ability.cost}
+                ★{ability.cost}
               </span>
             </motion.button>
           );
@@ -2622,10 +3194,9 @@ export function ServerAuthMultiplayerGame({
         gap: 'clamp(4px, 1vw, 8px)',
         padding: 'clamp(6px, 1.5vw, 10px)',
         paddingBottom: `calc(clamp(6px, 1.5vw, 10px) + ${bottomUiInset})`,
-        background: 'linear-gradient(180deg, rgba(10,10,25,0.4) 0%, rgba(5,5,15,0.8) 100%)',
-        backdropFilter: 'blur(20px)',
-        borderTop: '1px solid rgba(0, 212, 255, 0.2)',
-        boxShadow: '0 -5px 25px rgba(0, 212, 255, 0.1)',
+        background: 'linear-gradient(180deg, rgba(8, 10, 18, 0.36) 0%, rgba(5, 7, 14, 0.68) 100%)',
+        backdropFilter: 'blur(14px)',
+        borderTop: '1px solid rgba(255, 255, 255, 0.08)',
       }}>
         {/* Move Left */}
         <motion.button
@@ -2641,22 +3212,19 @@ export function ServerAuthMultiplayerGame({
           }}
           style={{
             flex: 1,
-            background: 'rgba(10, 10, 30, 0.6)',
-            backdropFilter: 'blur(20px)',
-            color: '#ffffff',
-            border: '1px solid rgba(255, 255, 255, 0.2)',
+            background: 'rgba(255, 255, 255, 0.04)',
+            color: 'rgba(255, 255, 255, 0.4)',
+            border: '1px solid rgba(255, 255, 255, 0.08)',
             borderRadius: 'clamp(8px, 2vw, 12px)',
             cursor: 'pointer',
             touchAction: 'manipulation',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            boxShadow: '0 4px 15px rgba(0, 0, 0, 0.3)',
+            backdropFilter: 'blur(10px)',
           }}
         >
-          <svg width="clamp(20px, 5vw, 32px)" height="clamp(20px, 5vw, 32px)" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
-            <polyline points="15 18 9 12 15 6" />
-          </svg>
+          <Icon type="control" name="left" color="rgba(255,255,255,0.4)" size={24} />
         </motion.button>
 
         {/* Hard Drop */}
@@ -2670,27 +3238,24 @@ export function ServerAuthMultiplayerGame({
             audioManager.playSfx('hard_drop');
             haptics.medium();
             triggerHardDropBounce();
+            triggerHardDropTrailImpact();
             gameClientRef.current.sendInput('hard_drop');
           }}
           style={{
             flex: 1,
-            background: 'rgba(10, 10, 30, 0.6)',
-            color: '#ffffff',
-            border: '2px solid rgba(255, 0, 110, 0.4)',
+            background: 'rgba(255, 255, 255, 0.04)',
+            color: 'rgba(255, 255, 255, 0.4)',
+            border: '1px solid rgba(255, 255, 255, 0.08)',
             borderRadius: 'clamp(8px, 2vw, 12px)',
             cursor: 'pointer',
             touchAction: 'manipulation',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            boxShadow: '0 0 20px rgba(255, 0, 110, 0.5)',
-            backdropFilter: 'blur(20px)',
+            backdropFilter: 'blur(10px)',
           }}
         >
-          <svg width="clamp(20px, 5vw, 32px)" height="clamp(20px, 5vw, 32px)" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
-            <polyline points="7 13 12 18 17 13" />
-            <polyline points="7 6 12 11 17 6" />
-          </svg>
+          <Icon type="control" name="drop" color="rgba(255,255,255,0.4)" size={24} />
         </motion.button>
 
         {/* Soft Drop */}
@@ -2707,22 +3272,19 @@ export function ServerAuthMultiplayerGame({
           }}
           style={{
             flex: 1,
-            background: 'rgba(10, 10, 30, 0.6)',
-            color: '#ffffff',
-            border: '2px solid rgba(201, 66, 255, 0.4)',
+            background: 'rgba(255, 255, 255, 0.04)',
+            color: 'rgba(255, 255, 255, 0.4)',
+            border: '1px solid rgba(255, 255, 255, 0.08)',
             borderRadius: 'clamp(8px, 2vw, 12px)',
             cursor: 'pointer',
             touchAction: 'manipulation',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            boxShadow: '0 0 20px rgba(201, 66, 255, 0.5)',
-            backdropFilter: 'blur(20px)',
+            backdropFilter: 'blur(10px)',
           }}
         >
-          <svg width="clamp(20px, 5vw, 32px)" height="clamp(20px, 5vw, 32px)" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
-            <polyline points="6 9 12 15 18 9" />
-          </svg>
+          <Icon type="control" name="down" color="rgba(255,255,255,0.4)" size={24} />
         </motion.button>
 
         {/* Rotate */}
@@ -2739,23 +3301,19 @@ export function ServerAuthMultiplayerGame({
           }}
           style={{
             flex: 1,
-            background: 'rgba(10, 10, 30, 0.6)',
-            color: '#ffffff',
-            border: '2px solid rgba(0, 255, 136, 0.4)',
+            background: 'rgba(255, 255, 255, 0.04)',
+            color: 'rgba(255, 255, 255, 0.4)',
+            border: '1px solid rgba(255, 255, 255, 0.08)',
             borderRadius: 'clamp(8px, 2vw, 12px)',
             cursor: 'pointer',
             touchAction: 'manipulation',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            boxShadow: '0 0 20px rgba(0, 255, 136, 0.5)',
-            backdropFilter: 'blur(20px)',
+            backdropFilter: 'blur(10px)',
           }}
         >
-          <svg width="clamp(20px, 5vw, 32px)" height="clamp(20px, 5vw, 32px)" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
-            <path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8" />
-            <polyline points="21 3 21 8 16 8" />
-          </svg>
+          <Icon type="control" name="rotate" color="rgba(255,255,255,0.4)" size={24} />
         </motion.button>
 
         {/* Move Right */}
@@ -2772,22 +3330,19 @@ export function ServerAuthMultiplayerGame({
           }}
           style={{
             flex: 1,
-            background: 'rgba(10, 10, 30, 0.6)',
-            color: '#ffffff',
-            border: '2px solid rgba(255, 165, 0, 0.4)',
+            background: 'rgba(255, 255, 255, 0.04)',
+            color: 'rgba(255, 255, 255, 0.4)',
+            border: '1px solid rgba(255, 255, 255, 0.08)',
             borderRadius: 'clamp(8px, 2vw, 12px)',
             cursor: 'pointer',
             touchAction: 'manipulation',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            boxShadow: '0 0 20px rgba(255, 165, 0, 0.5)',
-            backdropFilter: 'blur(20px)',
+            backdropFilter: 'blur(10px)',
           }}
         >
-          <svg width="clamp(20px, 5vw, 32px)" height="clamp(20px, 5vw, 32px)" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
-            <polyline points="9 18 15 12 9 6" />
-          </svg>
+          <Icon type="control" name="right" color="rgba(255,255,255,0.4)" size={24} />
         </motion.button>
       </motion.div>
         </>
@@ -2998,7 +3553,7 @@ export function ServerAuthMultiplayerGame({
       )}
 
       {/* Compact notifications (overlays top stats row) */}
-      {abilityNotifications.length > 0 && (
+      {!mockStatic && abilityNotifications.length > 0 && (
         <div
           style={{
             position: 'fixed',

@@ -1,6 +1,5 @@
 import { motion } from 'framer-motion';
 import type { Ability } from '@tetris-battle/game-core';
-import { isDebuffAbility } from '@tetris-battle/game-core';
 import { buttonVariants, springs } from '../../utils/animations';
 
 interface TimedEffectEntry {
@@ -16,12 +15,32 @@ interface AbilityDockProps {
   onActivate: (ability: Ability) => void;
 }
 
-function abilityIcon(ability: Ability): string {
-  if (ability.type.includes('bomb') || ability.type.includes('fire')) return '💥';
-  if (ability.type.includes('shield') || ability.type.includes('reflect')) return '🛡️';
-  if (ability.type.includes('speed') || ability.type.includes('slow')) return '⚡';
-  if (ability.type.includes('ink') || ability.type.includes('blind') || ability.type.includes('fog')) return '🌫️';
-  return isDebuffAbility(ability) ? '⚠️' : '✨';
+const ABILITY_CHARS: Record<string, string> = {
+  earthquake: '震',
+  screen_shake: '揺',
+  blind_spot: '墨',
+  ink_splash: '墨',
+  mini_blocks: '縮',
+  fill_holes: '満',
+  clear_rows: '消',
+  speed_up_opponent: '速',
+  reverse_controls: '逆',
+  rotation_lock: '鎖',
+  shrink_ceiling: '縮',
+  random_spawner: '乱',
+  gold_digger: '金',
+  deflect_shield: '盾',
+  cascade_multiplier: '倍',
+  piece_preview_plus: '視',
+  cross_firebomb: '爆',
+  circle_bomb: '円',
+  death_cross: '十',
+  row_rotate: '回',
+  weird_shapes: '奇',
+};
+
+function abilityChar(ability: Ability): string {
+  return ABILITY_CHARS[ability.type] || '✨';
 }
 
 export function AbilityDock({ abilities, stars, timedEffects, onActivate }: AbilityDockProps) {
@@ -39,10 +58,7 @@ export function AbilityDock({ abilities, stars, timedEffects, onActivate }: Abil
       {abilities.slice(0, 8).map((ability) => {
         const affordable = stars >= ability.cost;
         const activeEffect = timedEffects.find((effect) => effect.abilityType === ability.type);
-        const cooldownProgress = activeEffect
-          ? Math.max(0, Math.min(1, activeEffect.remainingMs / activeEffect.durationMs))
-          : 0;
-        const debuff = isDebuffAbility(ability);
+        const isActive = !!activeEffect;
 
         return (
           <motion.button
@@ -56,53 +72,42 @@ export function AbilityDock({ abilities, stars, timedEffects, onActivate }: Abil
             disabled={!affordable}
             title={`${ability.name}: ${ability.description}`}
             style={{
-              border: `1px solid ${debuff ? 'rgba(255, 0, 110, 0.35)' : 'rgba(0, 212, 255, 0.35)'}`,
-              borderRadius: '9px',
-              background: affordable ? 'rgba(9, 12, 30, 0.82)' : 'rgba(9, 12, 30, 0.35)',
-              color: '#fff',
-              padding: '6px 5px',
-              opacity: affordable ? 1 : 0.45,
+              width: 44,
+              height: 52,
               display: 'flex',
               flexDirection: 'column',
-              alignItems: 'stretch',
-              gap: '4px',
-              boxShadow: affordable
-                ? debuff
-                  ? '0 0 10px rgba(255, 0, 110, 0.18)'
-                  : '0 0 10px rgba(0, 212, 255, 0.18)'
-                : 'none',
+              alignItems: 'center',
+              justifyContent: 'center',
+              cursor: affordable ? 'pointer' : 'default',
+              opacity: isActive ? 1 : affordable ? 0.3 : 0.12,
+              transition: 'all 0.25s ease',
+              border: 'none',
+              background: 'transparent',
+              padding: 0,
             }}
           >
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '4px' }}>
-              <span style={{ fontSize: '12px' }}>{abilityIcon(ability)}</span>
-              <span style={{ fontSize: '9px', fontWeight: 700, color: debuff ? '#ff7ca8' : '#7de3ff' }}>
-                {ability.cost}
-              </span>
+            <div
+              style={{
+                fontSize: 24,
+                color: isActive ? '#00f0f0' : '#ffffff',
+                fontFamily: "'Noto Sans SC', sans-serif",
+                lineHeight: 1,
+                textShadow: isActive ? '0 0 16px #00f0f088, 0 0 30px #00f0f044' : 'none',
+                transition: 'all 0.25s',
+              }}
+            >
+              {abilityChar(ability)}
             </div>
             <div
               style={{
-                fontSize: '8px',
-                fontWeight: 700,
-                letterSpacing: '0.2px',
-                overflow: 'hidden',
-                textOverflow: 'ellipsis',
-                whiteSpace: 'nowrap',
-                textAlign: 'left',
+                fontSize: 8,
+                color: isActive ? '#00f0f088' : '#ffffff33',
+                marginTop: 3,
+                fontFamily: "'Orbitron'",
+                letterSpacing: 1,
               }}
             >
-              {ability.shortName}
-            </div>
-            <div style={{ height: '3px', borderRadius: '999px', background: 'rgba(255, 255, 255, 0.12)', overflow: 'hidden' }}>
-              <div
-                style={{
-                  height: '100%',
-                  width: `${cooldownProgress * 100}%`,
-                  background: debuff
-                    ? 'linear-gradient(90deg, #ff2f7c 0%, #ff8a74 100%)'
-                    : 'linear-gradient(90deg, #00d4ff 0%, #7effd7 100%)',
-                  transition: 'width 120ms linear',
-                }}
-              />
+              ★{ability.cost}
             </div>
           </motion.button>
         );

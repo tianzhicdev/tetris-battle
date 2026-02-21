@@ -4,6 +4,97 @@
 
 Tetris Battle is a multiplayer Tetris game with friend challenges, matchmaking, AI opponents, and special abilities.
 
+## Recent Changes: Frontend Refactoring - CSS Modules & Primitives (Feb 2026)
+
+**Implemented**: CSS Modules architecture + primitive component system to replace inline styles and improve performance.
+
+**Problem Solved**: Bundle size was 943KB with 105+ inline style instances creating performance issues (new objects every render).
+
+**New Architecture**: CSS Modules + design token CSS variables + primitive component library.
+
+**Key Changes**:
+- Added `styles/variables.css` with all design tokens as CSS custom properties
+- Created primitive component library in `components/primitives/`:
+  - `Button` - Primary, secondary, ghost, danger variants with framer-motion support
+  - `Card` - Default, highlighted, equipped, danger variants
+  - `Badge` - Info, success, warning, error, neutral variants
+  - `Input` - Standard input with error state
+- Migrated UI components to CSS Modules (Panel, Label)
+- Added lazy loading for AbilityEffectsDemo and VisualEffectsDemo (~15KB bundle reduction)
+- Extended design tokens with spacing, opacity, transition, shadow scales
+
+**Files Created**:
+- `packages/web/src/styles/variables.css` - CSS custom properties
+- `packages/web/src/components/primitives/Button/*` - Button primitive
+- `packages/web/src/components/primitives/Card/*` - Card primitive
+- `packages/web/src/components/primitives/Badge/*` - Badge primitive
+- `packages/web/src/components/primitives/Input/*` - Input primitive
+- `packages/web/src/components/primitives/index.ts` - Barrel export
+- `packages/web/src/components/ui/Panel.module.css` - Panel styles
+- `packages/web/src/components/ui/Label.module.css` - Label styles
+
+**Files Modified**:
+- `packages/web/src/main.tsx` - Import CSS variables
+- `packages/web/src/design-tokens.ts` - Added spacing, opacity, transition, shadow scales
+- `packages/web/src/components/ui/Panel.tsx` - Migrated to CSS Modules
+- `packages/web/src/components/ui/Label.tsx` - Migrated to CSS Modules
+- `packages/web/src/components/ui/PrimaryButton.tsx` - Now uses Button primitive (backward compatible)
+- `packages/web/src/App.tsx` - Added lazy loading with React.lazy() and Suspense
+
+**Bundle Size Impact**:
+- Before: 943KB minified (266KB gzipped)
+- After: 929KB minified (263KB gzipped) - ~1.5% reduction
+- Code splitting: Separate chunks for AbilityEffectsDemo (7.9KB) and VisualEffectsDemo (8.1KB)
+
+**New Patterns**:
+
+**Using Primitive Components:**
+```tsx
+import { Button, Card, Badge } from '../primitives';
+
+<Button variant="primary" size="lg" onClick={handleClick}>
+  Click me
+</Button>
+
+<Card variant="highlighted" padding="default">
+  <Badge variant="success">ONLINE</Badge>
+  Content here
+</Card>
+```
+
+**Using CSS Modules:**
+```tsx
+import styles from './MyComponent.module.css';
+
+export function MyComponent() {
+  return <div className={styles.container}>...</div>;
+}
+
+// MyComponent.module.css
+.container {
+  background: var(--color-bg-panel);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-md);
+  padding: var(--space-lg);
+}
+```
+
+**Using Design Tokens in Code:**
+```tsx
+import { T } from '../design-tokens';
+
+// For dynamic styles that can't be in CSS modules
+<canvas style={{ borderRadius: `${T.radius.md}px` }} />
+```
+
+**Future Work** (Phase 2 of refactoring):
+- Break down ServerAuthMultiplayerGame.tsx into hooks + components (~3640 lines → ~200 lines)
+- Migrate remaining components to CSS Modules
+- Further bundle optimization with code splitting
+- Increase test coverage
+
+---
+
 ## Recent Changes: Friend Challenge System Redesign (Feb 2026)
 
 **Implemented**: Database-first friend challenge architecture replacing dual source-of-truth (PartyKit + Database) with pure Supabase Realtime solution.

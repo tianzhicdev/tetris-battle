@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, lazy, Suspense } from 'react';
 import { MainMenu } from './components/MainMenu';
 import { TetrisGame } from './components/TetrisGame';
 import { Matchmaking } from './components/PartykitMatchmaking';
@@ -12,9 +12,15 @@ import { AuthWrapper } from './components/AuthWrapper';
 import { useChallenges } from './hooks/useChallenges';
 import { useFriendRequests } from './hooks/useFriendRequests';
 import { supabase } from './lib/supabase';
-import { AbilityEffectsDemo } from './components/AbilityEffectsDemo';
-import { VisualEffectsDemo } from './components/VisualEffectsDemo';
 import { TetriminoBgPreviewAll } from './components/TetriminoBgPreview';
+
+// Lazy load heavy demo components
+const AbilityEffectsDemo = lazy(() =>
+  import('./components/AbilityEffectsDemo').then((m) => ({ default: m.AbilityEffectsDemo }))
+);
+const VisualEffectsDemo = lazy(() =>
+  import('./components/VisualEffectsDemo').then((m) => ({ default: m.VisualEffectsDemo }))
+);
 import { ThemeProvider, useTheme } from './contexts/ThemeContext';
 import { toLegacyTheme } from './themes/index';
 import { progressionService } from './lib/supabase';
@@ -346,17 +352,59 @@ function MockGameDemo() {
   );
 }
 
+function StaticGameDemo() {
+  const { theme } = useTheme();
+  const currentTheme = toLegacyTheme(theme);
+  const now = Date.now();
+  const mockProfile: UserProfile = {
+    userId: 'mock_player_static_001',
+    username: 'StaticLayout',
+    coins: 99999,
+    matchmakingRating: 1460,
+    gamesPlayed: 320,
+    gamesWon: 188,
+    lastActiveAt: now,
+    unlockedAbilities: ABILITY_IDS,
+    loadout: ['earthquake', 'ink_splash', 'wide_load', 'tilt', 'magnet', 'screen_shake'],
+    createdAt: now - 1000 * 60 * 60 * 24 * 30,
+    updatedAt: now,
+  };
+
+  return (
+    <ServerAuthMultiplayerGame
+      roomId="mock_room_static"
+      playerId={mockProfile.userId}
+      opponentId="mock_opponent_static_001"
+      theme={currentTheme}
+      profile={mockProfile}
+      onExit={() => {
+        window.location.href = window.location.pathname;
+      }}
+      mockMode
+      mockStatic
+    />
+  );
+}
+
 function App() {
   // Check if demo mode is enabled via URL parameter
   const params = new URLSearchParams(window.location.search);
   const demoMode = params.get('demo');
 
   if (demoMode === 'abilities') {
-    return <AbilityEffectsDemo />;
+    return (
+      <Suspense fallback={<div style={{ color: '#fff', padding: '20px', textAlign: 'center' }}>Loading...</div>}>
+        <AbilityEffectsDemo />
+      </Suspense>
+    );
   }
 
   if (demoMode === 'effects') {
-    return <VisualEffectsDemo />;
+    return (
+      <Suspense fallback={<div style={{ color: '#fff', padding: '20px', textAlign: 'center' }}>Loading...</div>}>
+        <VisualEffectsDemo />
+      </Suspense>
+    );
   }
 
   if (demoMode === 'bg') {
@@ -371,6 +419,14 @@ function App() {
     return (
       <ThemeProvider userId="preview-game-layout">
         <MockGameDemo />
+      </ThemeProvider>
+    );
+  }
+
+  if (demoMode === 'static') {
+    return (
+      <ThemeProvider userId="preview-game-static">
+        <StaticGameDemo />
       </ThemeProvider>
     );
   }

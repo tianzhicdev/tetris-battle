@@ -1,5 +1,4 @@
 import { TETROMINO_SHAPES } from '@tetris-battle/game-core';
-import { useTheme } from '../../contexts/ThemeContext';
 
 type TetrominoType = 'I' | 'O' | 'T' | 'S' | 'Z' | 'L' | 'J';
 
@@ -7,6 +6,26 @@ interface NextPieceQueueProps {
   nextPieces: string[];
   maxItems?: number;
 }
+
+const PIECE_GRADIENT_ANGLE: Record<string, number> = {
+  I: 180,
+  O: 135,
+  T: 150,
+  S: 120,
+  Z: 160,
+  J: 140,
+  L: 130,
+};
+
+const PIECE_COLORS: Record<string, string> = {
+  I: '#00f0f0', // Cyan
+  O: '#f0f000', // Yellow
+  T: '#a000f0', // Purple
+  S: '#00f000', // Green
+  Z: '#f00000', // Red
+  L: '#f0a000', // Orange
+  J: '#0000f0', // Blue
+};
 
 function normalizeTo4x4(type: TetrominoType): number[][] {
   const shape = TETROMINO_SHAPES[type]?.[0] ?? [[0, 0, 0, 0]];
@@ -25,9 +44,10 @@ function normalizeTo4x4(type: TetrominoType): number[][] {
   return matrix;
 }
 
-export function NextPieceQueue({ nextPieces, maxItems = 5 }: NextPieceQueueProps) {
-  const { theme } = useTheme();
+export function NextPieceQueue({ nextPieces, maxItems = 3 }: NextPieceQueueProps) {
   const visiblePieces = nextPieces.slice(0, maxItems);
+  const opacities = [0.85, 0.45, 0.2];
+  const scales = [1, 0.85, 0.7];
 
   return (
     <div
@@ -35,52 +55,65 @@ export function NextPieceQueue({ nextPieces, maxItems = 5 }: NextPieceQueueProps
         height: '100%',
         display: 'flex',
         flexDirection: 'column',
-        gap: '8px',
-        padding: '8px 6px',
-        borderRadius: '10px',
-        background: 'rgba(9, 14, 30, 0.6)',
-        border: '1px solid rgba(255, 255, 255, 0.12)',
-        backdropFilter: 'blur(14px)',
+        alignItems: 'center',
+        gap: '6px',
+        paddingTop: '8px',
       }}
     >
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', overflow: 'hidden' }}>
-        {visiblePieces.map((type, idx) => {
-          const piece = type as TetrominoType;
-          const matrix = normalizeTo4x4(piece);
-          const color = (theme.colors?.pieces as Record<string, string> | undefined)?.[piece] ?? '#00d4ff';
-          return (
-            <div
-              key={`${type}-${idx}`}
-              style={{
-                width: '58px',
-                height: '58px',
-                borderRadius: '8px',
-                background: 'rgba(3, 6, 16, 0.7)',
-                border: '1px solid rgba(0, 212, 255, 0.18)',
-                display: 'grid',
-                gridTemplateColumns: 'repeat(4, 1fr)',
-                gridTemplateRows: 'repeat(4, 1fr)',
-                gap: '2px',
-                padding: '5px',
-                boxSizing: 'border-box',
-              }}
-            >
+      {/* NEXT label - tiny and dim */}
+      <div style={{ fontSize: '7px', color: '#ffffff16', letterSpacing: '3px', marginBottom: '4px' }}>
+        NEXT
+      </div>
+
+      {/* Piece stack - no containers, just fading pieces */}
+      {visiblePieces.map((type, idx) => {
+        const piece = type as TetrominoType;
+        const matrix = normalizeTo4x4(piece);
+        const color = PIECE_COLORS[piece] || '#00d4ff';
+        const gradAngle = PIECE_GRADIENT_ANGLE[piece] || 135;
+        const opacity = opacities[idx] || 0.2;
+        const scale = scales[idx] || 0.7;
+
+        return (
+          <div
+            key={`${type}-${idx}`}
+            style={{
+              opacity,
+              transform: `scale(${scale})`,
+              height: '38px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              transition: 'all 0.3s ease',
+            }}
+          >
+            {/* Mini piece grid - 12px cells with gradients */}
+            <div style={{ position: 'relative', width: '48px', height: '48px' }}>
               {matrix.flatMap((row, r) =>
-                row.map((filled, c) => (
-                  <div
-                    key={`${r}-${c}`}
-                    style={{
-                      borderRadius: '2px',
-                      background: filled ? `${color}aa` : 'rgba(255, 255, 255, 0.03)',
-                      border: filled ? `1px solid ${color}` : '1px solid rgba(255, 255, 255, 0.03)',
-                    }}
-                  />
-                ))
+                row.map((filled, c) => {
+                  if (!filled) return null;
+                  const cellSize = 12;
+                  return (
+                    <div
+                      key={`${r}-${c}`}
+                      style={{
+                        position: 'absolute',
+                        left: c * cellSize - (4 * cellSize) / 2 + 24,
+                        top: r * cellSize - (4 * cellSize) / 2 + 24,
+                        width: cellSize - 1,
+                        height: cellSize - 1,
+                        borderRadius: '2px',
+                        background: `linear-gradient(${gradAngle}deg, ${color}cc, ${color}66)`,
+                        boxShadow: `0 0 4px ${color}44`,
+                      }}
+                    />
+                  );
+                })
               )}
             </div>
-          );
-        })}
-      </div>
+          </div>
+        );
+      })}
     </div>
   );
 }

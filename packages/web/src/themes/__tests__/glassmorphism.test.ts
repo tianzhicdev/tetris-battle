@@ -33,12 +33,12 @@ describe('Glassmorphism Theme', () => {
 
   it('should have CSS variables', () => {
     expect(glassmorphismTheme.cssVars).toBeDefined();
-    expect(glassmorphismTheme.cssVars?.['--theme-bg']).toBe('#0a0a1a');
+    expect(glassmorphismTheme.cssVars?.['--theme-bg']).toBe('rgba(5, 5, 20, 0.75)');
     expect(glassmorphismTheme.cssVars?.['--theme-accent']).toBe('#00f0f0');
   });
 
   it('should have typography configuration', () => {
-    expect(glassmorphismTheme.typography.fontFamily).toContain('system-ui');
+    expect(glassmorphismTheme.typography.fontFamily).toContain('Orbitron');
     expect(glassmorphismTheme.typography.fontSize.title).toBe('3rem');
   });
 
