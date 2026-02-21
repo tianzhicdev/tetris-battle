@@ -21,6 +21,7 @@
     "@clerk/clerk-react": "^5.60.0",
     "@supabase/supabase-js": "^2.95.3",
     "@tetris-battle/game-core": "workspace:*",
+    "@tetris-battle/partykit": "workspace:*",
     "@types/howler": "^2.2.12",
     "framer-motion": "^12.34.0",
     "howler": "^2.2.4",

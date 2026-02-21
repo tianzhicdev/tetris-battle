@@ -26,7 +26,7 @@ import { progressionService } from './lib/supabase';
 import { PartykitPresence } from './services/partykit/presence';
 import { normalizePartykitHost } from './services/partykit/host';
 import { useFriendStore } from './stores/friendStore';
-import { ABILITY_IDS, type UserProfile } from '@tetris-battle/game-core';
+import { ABILITY_IDS, generateAIPersona, type UserProfile } from '@tetris-battle/game-core';
 
 type GameMode =
   | 'menu'
@@ -40,6 +40,11 @@ interface GameMatch {
   player1Id: string;
   player2Id: string;
   aiOpponent?: any;
+}
+
+interface MenuSelection {
+  mode: 'solo' | 'multiplayer' | 'defense-line';
+  aiOpponent: boolean;
 }
 
 function GameApp({ profile: initialProfile }: { profile: UserProfile }) {
@@ -180,10 +185,37 @@ function GameApp({ profile: initialProfile }: { profile: UserProfile }) {
     }
   };
 
-  const handleSelectMode = (selectedMode: 'solo' | 'multiplayer' | 'defense-line') => {
+  const createLocalAIOpponent = useCallback(() => {
+    const persona = generateAIPersona(profile.matchmakingRating);
+    return {
+      ...persona,
+      local: true,
+      difficulty: 'ai_hard',
+    };
+  }, [profile.matchmakingRating]);
+
+  const handleSelectMode = useCallback(({ mode: selectedMode, aiOpponent }: MenuSelection) => {
     if (selectedMode === 'solo') {
       setMode('solo');
-    } else if (selectedMode === 'defense-line') {
+      return;
+    }
+
+    if (aiOpponent) {
+      const ai = createLocalAIOpponent();
+      const roomPrefix = selectedMode === 'defense-line' ? 'local_defenseline' : 'local_game';
+      const roomId = `${roomPrefix}_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
+
+      setGameMatch({
+        roomId,
+        player1Id: playerId,
+        player2Id: ai.id,
+        aiOpponent: ai,
+      });
+      setMode(selectedMode === 'defense-line' ? 'defense-line' : 'multiplayer');
+      return;
+    }
+
+    if (selectedMode === 'defense-line') {
       // Defense mode uses unified matchmaking
       setMatchmakingMode('defense');
       setMode('matchmaking');
@@ -192,7 +224,7 @@ function GameApp({ profile: initialProfile }: { profile: UserProfile }) {
       setMatchmakingMode('normal');
       setMode('matchmaking');
     }
-  };
+  }, [createLocalAIOpponent, playerId]);
 
   const handleMatchFound = useCallback((roomId: string, player1Id: string, player2Id: string, gameMode?: 'normal' | 'defense', aiOpponent?: any) => {
     setGameMatch({ roomId, player1Id, player2Id, aiOpponent });
@@ -291,6 +323,7 @@ function GameApp({ profile: initialProfile }: { profile: UserProfile }) {
           roomId={gameMatch.roomId}
           theme={currentTheme}
           onExit={handleExitDefenseLine}
+          aiOpponent={gameMatch.aiOpponent}
         />
       )}
 

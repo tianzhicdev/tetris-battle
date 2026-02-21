@@ -10,7 +10,7 @@ import { useFriendStore } from '../stores/friendStore';
 import { T } from '../design-tokens';
 
 interface MainMenuProps {
-  onSelectMode: (mode: 'solo' | 'multiplayer' | 'defense-line') => void;
+  onSelectMode: (selection: { mode: 'solo' | 'multiplayer' | 'defense-line'; aiOpponent: boolean }) => void;
   theme: any;
   profile: UserProfile;
   onProfileUpdate: (profile: UserProfile) => void;
@@ -22,6 +22,7 @@ export function MainMenu({ onSelectMode, theme, profile, onProfileUpdate, onChal
   const [showProfile, setShowProfile] = useState(false);
   const [showFriends, setShowFriends] = useState(false);
   const [defenseMode, setDefenseMode] = useState(false);
+  const [aiOpponent, setAIOpponent] = useState(false);
   const pendingRequests = useFriendStore(state => state.pendingRequests);
 
   // Play menu music on mount
@@ -172,10 +173,61 @@ export function MainMenu({ onSelectMode, theme, profile, onProfileUpdate, onChal
             </button>
           </div>
 
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: '12px',
+            padding: '8px',
+          }}>
+            <span style={{
+              fontSize: 'clamp(14px, 3.5vw, 16px)',
+              color: aiOpponent ? T.accent.cyan : T.text.secondary,
+              fontFamily: T.font.display,
+              fontWeight: 600,
+              transition: 'color 0.3s ease',
+            }}>
+              AI Opponent
+            </span>
+            <button
+              onClick={() => {
+                audioManager.playSfx('button_click');
+                setAIOpponent(!aiOpponent);
+              }}
+              style={{
+                width: '56px',
+                height: '30px',
+                borderRadius: '15px',
+                background: aiOpponent ? T.accent.cyan : 'rgba(255, 255, 255, 0.15)',
+                border: aiOpponent ? `2px solid ${T.accent.cyan}` : '2px solid rgba(255, 255, 255, 0.3)',
+                cursor: 'pointer',
+                position: 'relative',
+                transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+                boxShadow: aiOpponent ? T.glow(T.accent.cyan, 0.6) : 'none',
+                padding: 0,
+              }}
+            >
+              <div style={{
+                position: 'absolute',
+                top: '2px',
+                left: aiOpponent ? 'calc(100% - 24px - 2px)' : '2px',
+                width: '24px',
+                height: '24px',
+                borderRadius: '50%',
+                background: aiOpponent ? '#fff' : 'rgba(255, 255, 255, 0.6)',
+                transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+                boxShadow: '0 2px 4px rgba(0, 0, 0, 0.2)',
+              }} />
+            </button>
+          </div>
+
           <button
             onClick={() => {
               audioManager.playSfx('button_click');
-              onSelectMode(defenseMode ? 'defense-line' : 'multiplayer');
+              onSelectMode({
+                mode: defenseMode ? 'defense-line' : 'multiplayer',
+                aiOpponent,
+              });
             }}
             style={{
               padding: '20px 50px',

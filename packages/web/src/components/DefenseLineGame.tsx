@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import PartySocket from 'partysocket';
 import { TETROMINO_SHAPES, type TetrominoType } from '@tetris-battle/game-core';
 import { normalizePartykitHost } from '../services/partykit/host';
+import { createLocalPartySocket, type PartySocketLike } from '../services/partykit/localRuntime';
 import { NextPiecePanel } from './NextPiecePanel';
 import { FloatingBackground } from './FloatingBackground';
 import { audioManager } from '../services/audioManager';
@@ -39,6 +40,10 @@ interface DefenseLineGameProps {
   roomId: string;
   theme: any;
   onExit: () => void;
+  aiOpponent?: {
+    local?: boolean;
+    reactionCadenceMs?: number;
+  };
 }
 
 const BOARD_ROWS = 20;
@@ -171,7 +176,7 @@ function playClearSound(clearedRows: number): void {
   }
 }
 
-export function DefenseLineGame({ playerId, roomId, theme, onExit }: DefenseLineGameProps) {
+export function DefenseLineGame({ playerId, roomId, theme, onExit, aiOpponent }: DefenseLineGameProps) {
   const opponentMiniBoardWidth = 'clamp(72px, 18vw, 98px)';
   const [state, setState] = useState<DefenseLineGameState | null>(null);
   const [playerSide, setPlayerSide] = useState<DefenseLinePlayer | null>(null);
@@ -183,7 +188,7 @@ export function DefenseLineGame({ playerId, roomId, theme, onExit }: DefenseLine
   const [selfBoardKick, setSelfBoardKick] = useState(false);
   const [layoutBlast, setLayoutBlast] = useState(false);
 
-  const socketRef = useRef<PartySocket | null>(null);
+  const socketRef = useRef<PartySocketLike | null>(null);
   const playerSideRef = useRef<DefenseLinePlayer | null>(null);
   const selfKickTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const layoutBlastTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -325,17 +330,25 @@ export function DefenseLineGame({ playerId, roomId, theme, onExit }: DefenseLine
   }, []);
 
   useEffect(() => {
-    const host = normalizePartykitHost(import.meta.env.VITE_PARTYKIT_HOST);
-    const socket = new PartySocket({
-      host,
-      party: 'defenseline',
-      room: roomId,
-    });
+    const socket: PartySocketLike = aiOpponent?.local
+      ? createLocalPartySocket('defenseline', roomId)
+      : new PartySocket({
+          host: normalizePartykitHost(import.meta.env.VITE_PARTYKIT_HOST),
+          party: 'defenseline',
+          room: roomId,
+        });
     socketRef.current = socket;
 
     socket.addEventListener('open', () => {
       setIsConnected(true);
-      socket.send(JSON.stringify({ type: 'join', playerId }));
+      socket.send(JSON.stringify({
+        type: 'join',
+        playerId,
+        aiOpponent: aiOpponent?.local ? {
+          enabled: true,
+          reactionCadenceMs: aiOpponent.reactionCadenceMs,
+        } : undefined,
+      }));
     });
 
     socket.addEventListener('close', () => {
@@ -392,7 +405,7 @@ export function DefenseLineGame({ playerId, roomId, theme, onExit }: DefenseLine
       socket.close();
       socketRef.current = null;
     };
-  }, [playerId, roomId, triggerClearBlast]);
+  }, [aiOpponent, playerId, roomId, triggerClearBlast]);
 
   useEffect(() => {
     if (!state || !playerSide) return;

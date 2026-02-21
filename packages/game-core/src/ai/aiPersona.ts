@@ -2,6 +2,7 @@ export interface AIPersona {
   id: string; // "bot_<name>"
   name: string;
   rank: number;
+  reactionCadenceMs: number;
   isBot: true; // Flag for internal use only
 }
 
@@ -30,10 +31,21 @@ export function generateAIPersona(targetRank?: number): AIPersona {
     rank = 800 + Math.floor(Math.random() * 400);
   }
 
+  const reactionCadenceMs = rank <= 700
+    ? 320
+    : rank <= 950
+      ? 260
+      : rank <= 1200
+        ? 210
+        : rank <= 1500
+          ? 170
+          : 140;
+
   return {
     id: `bot_${name}_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
     name,
     rank,
+    reactionCadenceMs,
     isBot: true,
   };
 }

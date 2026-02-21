@@ -3,6 +3,7 @@ import type { PlayerInputType } from '@tetris-battle/game-core';
 import { ABILITIES } from '@tetris-battle/game-core';
 import type { DebugLogger } from '../debug/DebugLogger';
 import { ConnectionMonitor, type ConnectionStats } from '../ConnectionMonitor';
+import { createLocalPartySocket, type PartySocketLike } from './localRuntime';
 
 export interface GameStateUpdate {
   timestamp: number;
@@ -58,7 +59,7 @@ export interface AbilityActivationResult {
  * Sends inputs to server, receives state updates from server.
  */
 export class ServerAuthGameClient {
-  private socket: PartySocket;
+  private socket: PartySocketLike;
   private playerId: string;
   private roomId: string;
   private loadout: string[];
@@ -73,11 +74,15 @@ export class ServerAuthGameClient {
     this.aiOpponent = _aiOpponent;
     this.debugLogger = debugLogger || null;
 
-    this.socket = new PartySocket({
-      host,
-      party: 'game',
-      room: roomId,
-    });
+    if (this.aiOpponent?.local) {
+      this.socket = createLocalPartySocket('game', roomId);
+    } else {
+      this.socket = new PartySocket({
+        host,
+        party: 'game',
+        room: roomId,
+      });
+    }
 
     // Initialize connection monitor
     this.connectionMonitor = new ConnectionMonitor((timestamp) => {

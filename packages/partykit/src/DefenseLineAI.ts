@@ -1,6 +1,5 @@
 import {
   TETROMINO_SHAPES,
-  type TetrominoType,
 } from '@tetris-battle/game-core';
 import {
   DEFENSE_BOARD_ROWS,
@@ -18,43 +17,26 @@ interface AIPlacement {
 }
 
 /**
- * Simple AI for Defense Line mode.
- * Evaluates all possible placements and picks the best one
- * (with occasional intentional mistakes for balance).
+ * Deterministic AI for Defense Line mode.
+ * Evaluates all possible placements and always picks the strongest score.
  */
 export class DefenseLineAI {
-  private mistakeRate = 0.30; // 30% mistake rate
-
-  /**
-   * Decide which input to emit next for the AI player.
-   * Returns a sequence of normalized inputs to reach the target placement.
-   */
   findBestPlacement(
     board: DefenseLineCell[][],
     player: DefenseLinePlayer,
     piece: DefenseLinePiece,
   ): { targetRotation: number; targetCol: number } {
-    const shouldMistake = Math.random() < this.mistakeRate;
-
     const placements = this.getAllPlacements(board, player, piece);
     if (placements.length === 0) {
       return { targetRotation: piece.rotation, targetCol: piece.col };
     }
 
-    // Sort by score descending
-    placements.sort((a, b) => b.score - a.score);
-
-    if (shouldMistake && placements.length > 1) {
-      // Pick a random non-optimal placement from the bottom half
-      const bottomHalf = placements.slice(Math.floor(placements.length / 2));
-      const pick = bottomHalf[Math.floor(Math.random() * bottomHalf.length)];
-      return { targetRotation: pick.rotation, targetCol: pick.col };
-    }
-
-    // Pick the best (with slight randomness among top 2)
-    if (placements.length >= 2 && Math.random() < 0.3) {
-      return { targetRotation: placements[1].rotation, targetCol: placements[1].col };
-    }
+    // Sort by score descending with deterministic tie-breakers.
+    placements.sort((a, b) => {
+      if (b.score !== a.score) return b.score - a.score;
+      if (a.rotation !== b.rotation) return a.rotation - b.rotation;
+      return a.col - b.col;
+    });
 
     return { targetRotation: placements[0].rotation, targetCol: placements[0].col };
   }

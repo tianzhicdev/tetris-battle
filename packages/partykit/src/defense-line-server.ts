@@ -8,6 +8,10 @@ import { DefenseLineAI } from './DefenseLineAI';
 
 interface JoinPayload {
   playerId: string;
+  aiOpponent?: {
+    enabled?: boolean;
+    reactionCadenceMs?: number;
+  };
 }
 
 type DefenseLineInput =
@@ -18,9 +22,10 @@ type DefenseLineInput =
 
 const TICK_MS = 700;
 const AI_FALLBACK_MS = 10_000; // 10 seconds before AI joins
-const AI_MOVE_INTERVAL_MS = 300; // AI makes a move every 300ms
+const DEFAULT_AI_MOVE_INTERVAL_MS = 180;
 
 export default class DefenseLineServer implements Party.Server {
+  readonly room: Party.Room;
   private gameState: DefenseLineGameState;
   private readonly sideToConnection = new Map<DefenseLinePlayer, Party.Connection>();
   private readonly sideToPlayerId = new Map<DefenseLinePlayer, string>();
@@ -37,8 +42,10 @@ export default class DefenseLineServer implements Party.Server {
   private aiSide: DefenseLinePlayer | null = null;
   private readonly ai = new DefenseLineAI();
   private aiMoveQueue: Array<'move_left' | 'move_right' | 'rotate_cw' | 'hard_drop'> = [];
+  private aiMoveIntervalMs: number = DEFAULT_AI_MOVE_INTERVAL_MS;
 
-  constructor(readonly room: Party.Room) {
+  constructor(room: Party.Room) {
+    this.room = room;
     const seed = parseInt(room.id.substring(0, 8), 36) || Date.now();
     this.gameState = new DefenseLineGameState(seed);
   }
@@ -139,8 +146,16 @@ export default class DefenseLineServer implements Party.Server {
     this.broadcastState();
 
     // Check if both sides are filled (human or AI)
+    const aiOpponentOptions = payload.aiOpponent;
+    const immediateAIRequested =
+      aiOpponentOptions?.enabled === true &&
+      this.room.id.startsWith('local_defenseline_');
+
     if (this.sideToPlayerId.has('a') && this.sideToPlayerId.has('b')) {
       this.maybeStartCountdown();
+    } else if (immediateAIRequested) {
+      this.aiMoveIntervalMs = this.sanitizeAIMoveInterval(aiOpponentOptions?.reactionCadenceMs);
+      this.spawnAI();
     } else {
       // Only one human player — start AI fallback timer
       this.scheduleAIFallback();
@@ -391,7 +406,7 @@ export default class DefenseLineServer implements Party.Server {
       }
 
       this.executeAIMove();
-    }, AI_MOVE_INTERVAL_MS);
+    }, this.aiMoveIntervalMs);
   }
 
   private executeAIMove(): void {
@@ -561,5 +576,13 @@ export default class DefenseLineServer implements Party.Server {
     this.gameState = new DefenseLineGameState(seed + Date.now());
     this.aiSide = null;
     this.aiMoveQueue = [];
+    this.aiMoveIntervalMs = DEFAULT_AI_MOVE_INTERVAL_MS;
+  }
+
+  private sanitizeAIMoveInterval(value: number | undefined): number {
+    if (typeof value !== 'number' || !Number.isFinite(value)) {
+      return DEFAULT_AI_MOVE_INTERVAL_MS;
+    }
+    return Math.max(60, Math.min(1200, Math.round(value)));
   }
 }

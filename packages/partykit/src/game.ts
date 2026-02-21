@@ -1,7 +1,7 @@
 import type * as Party from "partykit/server";
 import {
   createInitialPlayerMetrics,
-  AdaptiveAI,
+  DeterministicBattleAI,
   ABILITIES,
   getAbilityTargeting,
   isDebuffAbility,
@@ -49,6 +49,7 @@ interface AbilityActivationResult {
 }
 
 export default class GameRoomServer implements Party.Server {
+  readonly room: Party.Room;
   players: Map<string, PlayerState> = new Map();
   roomStatus: 'waiting' | 'playing' | 'finished' = 'waiting';
   winnerId: string | null = null;
@@ -58,7 +59,7 @@ export default class GameRoomServer implements Party.Server {
   aiInterval: ReturnType<typeof setInterval> | null = null;
   aiMoveQueue: AIMove[] = [];
   aiLastMoveTime: number = 0;
-  adaptiveAI: AdaptiveAI | null = null;
+  battleAI: DeterministicBattleAI | null = null;
   aiAbilityLoadout: string[] = [];
   aiLastAbilityUse: number = 0;
   aiIsExecuting: boolean = false; // Prevent overlapping AI executions
@@ -72,12 +73,14 @@ export default class GameRoomServer implements Party.Server {
   roomSeed: number = 0; // Deterministic seed for this room
   lastPlayerBroadcasts: Map<string, number> = new Map();
 
-  constructor(readonly room: Party.Room) {
+  constructor(room: Party.Room) {
+    this.room = room;
     // Generate deterministic seed from room ID
     this.roomSeed = parseInt(room.id.substring(0, 8), 36) || 12345;
   }
 
   onConnect(conn: Party.Connection, ctx: Party.ConnectionContext) {
+    void ctx;
     console.log(`Player connected to game room ${this.room.id}: ${conn.id}`);
 
     // Send current room state
@@ -346,19 +349,21 @@ export default class GameRoomServer implements Party.Server {
   startAIGameLoop() {
     if (!this.aiPlayer) return;
 
-    // Get human player for metrics
-    const humanPlayer = Array.from(this.players.values()).find(p => p.playerId !== this.aiPlayer!.id);
-    if (!humanPlayer) return;
     const aiState = this.serverGameStates.get(this.aiPlayer.id);
     if (!aiState) return;
 
-    // Initialize adaptive AI with player metrics
-    this.adaptiveAI = new AdaptiveAI(humanPlayer.metrics);
+    const reactionCadenceMs = this.resolveAIReactionCadenceMs();
+    this.battleAI = new DeterministicBattleAI(reactionCadenceMs);
 
     // Set AI ability loadout from current debuff catalog (v2 source of truth).
     this.aiAbilityLoadout = Object.values(ABILITIES)
       .filter((ability) => isDebuffAbility(ability))
-      .map((ability) => ability.type);
+      .map((ability) => ability.type)
+      .sort((a, b) => {
+        const costDiff = this.getAbilityCost(b) - this.getAbilityCost(a);
+        if (costDiff !== 0) return costDiff;
+        return a.localeCompare(b);
+      });
     aiState.loadout = [...this.aiAbilityLoadout];
     this.aiLastAbilityUse = Date.now();
 
@@ -382,7 +387,7 @@ export default class GameRoomServer implements Party.Server {
 
       // AI gets slower under visual disruption debuffs to mirror human impact.
       const activeEffects = new Set(currentAIState.getActiveEffects());
-      let moveDelay = this.adaptiveAI ? this.adaptiveAI.decideMoveDelay() : 300;
+      let moveDelay = this.battleAI ? this.battleAI.decideMoveDelay() : 200;
       if (activeEffects.has('blind_spot')) moveDelay *= 1.2;
       if (activeEffects.has('screen_shake')) moveDelay *= 1.2;
       if (activeEffects.has('shrink_ceiling')) moveDelay *= 1.1;
@@ -392,9 +397,9 @@ export default class GameRoomServer implements Party.Server {
         return;
       }
 
-      // If no moves queued, decide next placement using adaptive AI
-      if (this.aiMoveQueue.length === 0 && this.adaptiveAI) {
-        const decision = this.adaptiveAI.findMove(
+      // If no moves queued, decide next placement using deterministic AI core.
+      if (this.aiMoveQueue.length === 0 && this.battleAI) {
+        const decision = this.battleAI.findMove(
           currentAIState.gameState.board,
           currentAIState.gameState.currentPiece
         );
@@ -436,7 +441,13 @@ export default class GameRoomServer implements Party.Server {
 
       this.aiLastMoveTime = now;
       this.aiIsExecuting = false; // Mark as complete
-    }, 200); // Increased from 50ms to 200ms to prevent event loop blocking
+    }, 50);
+  }
+
+  private resolveAIReactionCadenceMs(): number {
+    const cadence = this.aiPlayer?.reactionCadenceMs;
+    if (typeof cadence !== 'number' || !Number.isFinite(cadence)) return 180;
+    return Math.max(60, Math.min(1200, Math.round(cadence)));
   }
 
   private aiMoveToPlayerInput(moveType: AIMove['type']): PlayerInputType {
@@ -711,10 +722,8 @@ export default class GameRoomServer implements Party.Server {
     const now = Date.now();
     const timeSinceLastAbility = now - this.aiLastAbilityUse;
 
-    // Cooldown: 10-30 seconds between abilities
-    const minCooldown = 10000;
-    const cooldownVariance = 20000;
-    const cooldown = minCooldown + Math.random() * cooldownVariance;
+    // Fixed cadence for deterministic behavior.
+    const cooldown = 12000;
 
     if (timeSinceLastAbility < cooldown) {
       return;
@@ -727,45 +736,35 @@ export default class GameRoomServer implements Party.Server {
     if (!humanPlayer) {
       return;
     }
-    const humanState = this.serverGameStates.get(humanPlayer.playerId);
-    if (!humanState) {
+
+    const aiBoardHeight = this.calculateBoardHeight(aiState.gameState.board);
+
+    const pickAffordableAbility = (): string | null => {
+      for (const abilityType of this.aiAbilityLoadout) {
+        if (aiState.gameState.stars >= this.getAbilityCost(abilityType)) {
+          return abilityType;
+        }
+      }
+      return null;
+    };
+
+    let selectedAbility = pickAffordableAbility();
+
+    // AI star management: if stars too low and board is high, grant bonus stars
+    if (!selectedAbility && aiBoardHeight > 10) {
+      const highestCost = this.aiAbilityLoadout.length > 0
+        ? this.getAbilityCost(this.aiAbilityLoadout[0])
+        : 0;
+      // "Cheat slightly" per spec to maintain balance
+      aiState.gameState.stars += Math.floor(highestCost * 0.5);
+      selectedAbility = pickAffordableAbility();
+    }
+
+    if (!selectedAbility) {
       return;
     }
 
-    const aiBoardHeight = this.calculateBoardHeight(aiState.gameState.board);
-    const playerBoardHeight = this.calculateBoardHeight(humanState.gameState.board);
-
-    // Strategic ability selection
-    let selectedAbility: string | null = null;
-    const offensiveOptions = this.aiAbilityLoadout.filter((ability) => {
-      const metadata = ABILITIES[ability as keyof typeof ABILITIES];
-      return !!metadata && isDebuffAbility(metadata);
-    });
-
-    // AI losing (board high) — pick an offensive debuff to disrupt player
-    if (aiBoardHeight > 12 || playerBoardHeight < 6) {
-      if (offensiveOptions.length > 0) {
-        selectedAbility = offensiveOptions[Math.floor(Math.random() * offensiveOptions.length)];
-      }
-    }
-
-    // If no strategic choice, 30% chance to use random ability
-    if (!selectedAbility) {
-      if (Math.random() < 0.3) {
-        selectedAbility = this.aiAbilityLoadout[Math.floor(Math.random() * this.aiAbilityLoadout.length)];
-      }
-    }
-
-    if (!selectedAbility) return;
-
     const abilityCost = this.getAbilityCost(selectedAbility);
-
-    // AI star management: if stars too low and board is high, grant bonus stars
-    if (aiState.gameState.stars < abilityCost && aiBoardHeight > 10) {
-      // "Cheat slightly" per spec to maintain balance
-      aiState.gameState.stars += Math.floor(abilityCost * 0.5);
-    }
-
     if (aiState.gameState.stars < abilityCost) {
       return;
     }

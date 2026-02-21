@@ -84,6 +84,9 @@ importers:
       '@tetris-battle/game-core':
         specifier: workspace:*
         version: link:../game-core
+      '@tetris-battle/partykit':
+        specifier: workspace:*
+        version: link:../partykit
       '@types/howler':
         specifier: ^2.2.12
         version: 2.2.12
