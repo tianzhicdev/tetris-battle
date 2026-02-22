@@ -52,45 +52,91 @@ const TETRIMINO_SHAPES: Record<string, { shape: number[][]; color: string }> = {
 
 type FloatingPieceConfig = {
   type: keyof typeof TETRIMINO_SHAPES;
-  x: string;
   size: number;
   duration: number;
   delay: number;
   rotation: number;
-  driftX: number;
+  rotationDelta: number;
+  startX: string;
+  startY: string;
+  endX: string;
+  endY: string;
   opacity: number;
 };
 
 const PIECE_TYPES = ['I', 'O', 'T', 'S', 'Z', 'J', 'L'] as const;
-const LANE_X = ['4%', '10%', '16%', '22%', '29%', '36%', '43%', '50%', '57%', '64%', '71%', '78%', '85%', '92%'] as const;
+const TRAJECTORY_POINTS = [8, 14, 20, 26, 32, 38, 44, 56, 62, 68, 74, 80, 86, 92] as const;
 
-const FLOATING_PIECES: FloatingPieceConfig[] = LANE_X.flatMap((x, laneIndex) => {
-  const primaryDuration = 2.8 + (laneIndex % 4) * 0.45; // 2.8-4.15s (FLY!)
-  const secondaryDuration = 3.1 + ((laneIndex + 2) % 4) * 0.45; // 3.1-4.45s
-  const phase = laneIndex * 0.24;
-  const primaryDrift = (laneIndex % 2 === 0 ? 1 : -1) * (24 + (laneIndex % 4) * 7);
-  const secondaryDrift = -primaryDrift * 0.9;
+type PieceTrajectory = {
+  startX: string;
+  startY: string;
+  endX: string;
+  endY: string;
+};
+
+function createTrajectory(laneIndex: number, variant: 'primary' | 'secondary'): PieceTrajectory {
+  const side = (laneIndex + (variant === 'secondary' ? 1 : 0)) % 4;
+  const point = TRAJECTORY_POINTS[(laneIndex * 2 + (variant === 'secondary' ? 3 : 0)) % TRAJECTORY_POINTS.length];
+  const axisOffset = point - 50;
+  const sway = (laneIndex % 2 === 0 ? 1 : -1) * (7 + (laneIndex % 4) * 3);
+
+  switch (side) {
+    case 0: // top -> bottom
+      return {
+        startX: `${axisOffset}vw`,
+        startY: '-72vh',
+        endX: `${axisOffset + sway}vw`,
+        endY: '72vh',
+      };
+    case 1: // right -> left
+      return {
+        startX: '72vw',
+        startY: `${axisOffset}vh`,
+        endX: '-72vw',
+        endY: `${axisOffset + sway}vh`,
+      };
+    case 2: // bottom -> top
+      return {
+        startX: `${axisOffset}vw`,
+        startY: '72vh',
+        endX: `${axisOffset - sway}vw`,
+        endY: '-72vh',
+      };
+    default: // left -> right
+      return {
+        startX: '-72vw',
+        startY: `${axisOffset}vh`,
+        endX: '72vw',
+        endY: `${axisOffset - sway}vh`,
+      };
+  }
+}
+
+const FLOATING_PIECES: FloatingPieceConfig[] = TRAJECTORY_POINTS.flatMap((_, laneIndex) => {
+  const primaryDuration = 6.2 + (laneIndex % 4) * 0.7;
+  const secondaryDuration = 6.8 + ((laneIndex + 2) % 4) * 0.75;
+  const phase = laneIndex * 0.38;
 
   return [
     {
       type: PIECE_TYPES[laneIndex % PIECE_TYPES.length],
-      x,
       size: 13 + (laneIndex % 5) * 2,
       duration: primaryDuration,
       delay: -phase,
       rotation: -24 + (laneIndex % 7) * 8,
-      driftX: primaryDrift,
+      rotationDelta: 28 + (laneIndex % 4) * 6,
       opacity: 0.82 + (laneIndex % 3) * 0.05,
+      ...createTrajectory(laneIndex, 'primary'),
     },
     {
       type: PIECE_TYPES[(laneIndex + 3) % PIECE_TYPES.length],
-      x,
       size: 12 + ((laneIndex + 2) % 5) * 2,
       duration: secondaryDuration,
       delay: -(phase + primaryDuration / 2),
       rotation: 18 - (laneIndex % 6) * 7,
-      driftX: secondaryDrift,
+      rotationDelta: 24 + ((laneIndex + 1) % 4) * 7,
       opacity: 0.78 + ((laneIndex + 1) % 3) * 0.05,
+      ...createTrajectory(laneIndex, 'secondary'),
     },
   ];
 });
@@ -143,7 +189,7 @@ export function FloatingBackground() {
       <style>{`
         @keyframes ${keyframesId}-fall {
           0% {
-            transform: translate3d(0, -150vh, 0) rotate(var(--start-rotation));
+            transform: translate3d(var(--start-x), var(--start-y), 0) rotate(var(--start-rotation));
             opacity: 0;
           }
           2% {
@@ -153,12 +199,12 @@ export function FloatingBackground() {
             opacity: var(--piece-opacity);
           }
           100% {
-            transform: translate3d(var(--drift-x), 150vh, 0) rotate(calc(var(--start-rotation) + 34deg));
+            transform: translate3d(var(--end-x), var(--end-y), 0) rotate(calc(var(--start-rotation) + var(--rotation-delta)));
             opacity: 0;
           }
         }
         @media (prefers-reduced-motion: reduce) {
-          .floating-tetrimino { animation: none !important; opacity: 0.6 !important; }
+          .floating-tetrimino { animation-duration: 14s !important; opacity: 0.5 !important; }
         }
       `}</style>
       {FLOATING_PIECES.map((piece, i) => {
@@ -169,12 +215,20 @@ export function FloatingBackground() {
             className="floating-tetrimino"
             style={{
               position: 'absolute',
-              left: piece.x,
-              top: '-16vh',
+              left: '50%',
+              top: '50%',
               // @ts-ignore - CSS custom property
               '--start-rotation': `${piece.rotation}deg`,
               // @ts-ignore - CSS custom property
-              '--drift-x': `${piece.driftX}px`,
+              '--rotation-delta': `${piece.rotationDelta}deg`,
+              // @ts-ignore - CSS custom property
+              '--start-x': piece.startX,
+              // @ts-ignore - CSS custom property
+              '--start-y': piece.startY,
+              // @ts-ignore - CSS custom property
+              '--end-x': piece.endX,
+              // @ts-ignore - CSS custom property
+              '--end-y': piece.endY,
               // @ts-ignore - CSS custom property
               '--piece-opacity': `${piece.opacity}`,
               animation: `${keyframesId}-fall ${piece.duration}s linear infinite`,
