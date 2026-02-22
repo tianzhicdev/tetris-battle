@@ -176,7 +176,6 @@ const BLACKHOLE_MAX_DURATION_MS = 7000;
 const BLACKHOLE_GRAVITY_TICK_MS = 1000;
 const BLACKHOLE_MAX_MOVES = 220;
 const BLACKHOLE_FALLBACK_CELL_SIZE = 20;
-const BLACKHOLE_HARD_DROP_SETTLE_MS = 180;
 
 function clampNumber(value: number, min: number, max: number): number {
   if (Number.isNaN(value)) return min;
@@ -754,7 +753,6 @@ export function ServerAuthMultiplayerGame({
   const prevOpponentBoardRef = useRef<any[][] | null>(null);
   const blackholeStateRef = useRef<BlackholeClientState | null>(null);
   const blackholeTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const blackholeEndTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pendingBoardAbilityFxRef = useRef<{ self: PendingBoardAbilityFx | null; opponent: PendingBoardAbilityFx | null }>({
     self: null,
     opponent: null,
