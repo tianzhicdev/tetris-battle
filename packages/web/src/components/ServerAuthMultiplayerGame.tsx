@@ -22,8 +22,9 @@ import {
   getHardDropPosition,
   getAbilityTargeting,
   isDebuffAbility,
+  rotatePiece,
 } from '@tetris-battle/game-core';
-import type { Ability, UserProfile } from '@tetris-battle/game-core';
+import type { Ability, PlayerInputType, Tetromino, UserProfile } from '@tetris-battle/game-core';
 import { awardMatchRewards, type MatchRewards } from '../lib/rewards';
 import type { Theme } from '../themes';
 import { audioManager } from '../services/audioManager';
@@ -51,6 +52,7 @@ interface ServerAuthMultiplayerGameProps {
   aiOpponent?: any;
   mockMode?: boolean;
   mockStatic?: boolean;
+  mockScenario?: 'default' | 'cylinder';
 }
 
 const BOMB_ABILITY_TYPES = new Set<string>(['circle_bomb', 'cross_firebomb']);
@@ -153,6 +155,145 @@ type LockFlash = {
   color: string;
   expiresAt: number;
 };
+
+type BlackholeEndReason = 'edge_contact' | 'timeout_cap';
+
+type BlackholeClientState = {
+  piece: Tetromino;
+  cols: number;
+  rows: number;
+  cellSize: number;
+  startedAt: number;
+  moves: number;
+  ending: boolean;
+};
+
+const BLACKHOLE_MIN_COLS = 18;
+const BLACKHOLE_MAX_COLS = 44;
+const BLACKHOLE_MIN_ROWS = 20;
+const BLACKHOLE_MAX_ROWS = 88;
+const BLACKHOLE_MAX_DURATION_MS = 7000;
+const BLACKHOLE_MAX_MOVES = 220;
+const BLACKHOLE_FALLBACK_CELL_SIZE = 20;
+
+function clampNumber(value: number, min: number, max: number): number {
+  if (Number.isNaN(value)) return min;
+  return Math.max(min, Math.min(max, value));
+}
+
+function createEmptyBoardGrid(width: number, height: number): (string | null)[][] {
+  const safeWidth = Math.max(1, Math.floor(width));
+  const safeHeight = Math.max(1, Math.floor(height));
+  return Array.from({ length: safeHeight }, () => Array.from({ length: safeWidth }, () => null));
+}
+
+function normalizeServerPiece(raw: any): Tetromino | null {
+  if (!raw || !Array.isArray(raw.shape) || raw.shape.length === 0) return null;
+  const shape = raw.shape
+    .filter((row: any) => Array.isArray(row))
+    .map((row: any[]) => row.map((cell) => (cell ? 1 : 0)));
+  if (shape.length === 0 || !Array.isArray(shape[0]) || shape[0].length === 0) return null;
+
+  const rawX = Number(raw.position?.x ?? raw.x ?? 0);
+  const rawY = Number(raw.position?.y ?? raw.y ?? 0);
+  const rawRotation = Number(raw.rotation ?? 0);
+
+  return {
+    type: (typeof raw.type === 'string' ? raw.type : 'T') as Tetromino['type'],
+    shape,
+    rotation: Number.isFinite(rawRotation) ? Math.round(rawRotation) : 0,
+    position: {
+      x: Number.isFinite(rawX) ? Math.round(rawX) : 0,
+      y: Number.isFinite(rawY) ? Math.round(rawY) : 0,
+    },
+  };
+}
+
+function computeBlackholeBounds(cellSize: number): { cols: number; rows: number; cellSize: number } {
+  const safeCellSize = clampNumber(
+    Number.isFinite(cellSize) && cellSize > 0 ? Math.round(cellSize) : BLACKHOLE_FALLBACK_CELL_SIZE,
+    10,
+    48
+  );
+
+  const rawWidth =
+    typeof window !== 'undefined' && Number.isFinite(window.innerWidth) && window.innerWidth > 0
+      ? window.innerWidth
+      : safeCellSize * 24;
+  const rawHeight =
+    typeof window !== 'undefined' && Number.isFinite(window.innerHeight) && window.innerHeight > 0
+      ? window.innerHeight
+      : safeCellSize * 32;
+
+  const cols = clampNumber(
+    Math.floor(rawWidth / safeCellSize),
+    BLACKHOLE_MIN_COLS,
+    BLACKHOLE_MAX_COLS
+  );
+  const rows = clampNumber(
+    Math.floor(rawHeight / safeCellSize),
+    BLACKHOLE_MIN_ROWS,
+    BLACKHOLE_MAX_ROWS
+  );
+
+  return { cols, rows, cellSize: safeCellSize };
+}
+
+function centerPieceForBlackhole(piece: Tetromino, cols: number, rows: number): Tetromino {
+  const pieceWidth = piece.shape[0]?.length ?? 1;
+  const pieceHeight = piece.shape.length || 1;
+  const x = Math.max(1, Math.floor((cols - pieceWidth) / 2));
+  const y = Math.max(1, Math.floor((rows - pieceHeight) / 3));
+
+  return {
+    ...piece,
+    position: { x, y },
+  };
+}
+
+function getOccupiedCells(piece: Tetromino): Array<{ x: number; y: number }> {
+  const cells: Array<{ x: number; y: number }> = [];
+  for (let y = 0; y < piece.shape.length; y++) {
+    for (let x = 0; x < piece.shape[y].length; x++) {
+      if (!piece.shape[y][x]) continue;
+      cells.push({
+        x: piece.position.x + x,
+        y: piece.position.y + y,
+      });
+    }
+  }
+  return cells;
+}
+
+function touchesBlackholeEdge(piece: Tetromino, cols: number, rows: number): boolean {
+  const maxX = cols - 1;
+  const maxY = rows - 1;
+
+  for (const cell of getOccupiedCells(piece)) {
+    if (cell.x <= 0 || cell.x >= maxX || cell.y <= 0 || cell.y >= maxY) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+function movePieceToBlackholeBottom(piece: Tetromino, rows: number): Tetromino {
+  let delta = Number.POSITIVE_INFINITY;
+
+  for (const cell of getOccupiedCells(piece)) {
+    delta = Math.min(delta, rows - 1 - cell.y);
+  }
+
+  const safeDelta = Number.isFinite(delta) ? Math.max(0, Math.floor(delta)) : 0;
+  return {
+    ...piece,
+    position: {
+      ...piece.position,
+      y: piece.position.y + safeDelta,
+    },
+  };
+}
 
 function hexToRgbaColor(hex: string, alpha: number): string {
   const r = parseInt(hex.slice(1, 3), 16);
@@ -551,6 +692,7 @@ export function ServerAuthMultiplayerGame({
   aiOpponent,
   mockMode = false,
   mockStatic = false,
+  mockScenario = 'default',
 }: ServerAuthMultiplayerGameProps) {
   const opponentMiniBoardWidth = 'clamp(72px, 18vw, 98px)';
   const topUiInset = 'max(12px, calc(env(safe-area-inset-top) + 8px))';
@@ -608,6 +750,8 @@ export function ServerAuthMultiplayerGame({
   const prevYourPieceRef = useRef<any | null>(null);
   const prevSelfBoardRef = useRef<any[][] | null>(null);
   const prevOpponentBoardRef = useRef<any[][] | null>(null);
+  const blackholeStateRef = useRef<BlackholeClientState | null>(null);
+  const blackholeTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pendingBoardAbilityFxRef = useRef<{ self: PendingBoardAbilityFx | null; opponent: PendingBoardAbilityFx | null }>({
     self: null,
     opponent: null,
@@ -618,6 +762,7 @@ export function ServerAuthMultiplayerGame({
   const [connectionStats, setConnectionStats] = useState<ConnectionStats | null>(null);
   const [effectClockMs, setEffectClockMs] = useState(() => Date.now());
   const [lastStateFrameMs, setLastStateFrameMs] = useState(() => Date.now());
+  const [blackholeState, setBlackholeState] = useState<BlackholeClientState | null>(null);
   const statsBlastControls = useAnimationControls();
   const rightPanelBlastControls = useAnimationControls();
   const abilitiesBlastControls = useAnimationControls();
@@ -713,6 +858,14 @@ export function ServerAuthMultiplayerGame({
     () => stateHasEffect(opponentState, 'cylinder_vision'),
     [opponentState]
   );
+  const yourBlackholeActive = useMemo(
+    () => stateHasEffect(yourState, 'blackhole'),
+    [yourState]
+  );
+  const opponentBlackholeActive = useMemo(
+    () => stateHasEffect(opponentState, 'blackhole'),
+    [opponentState]
+  );
 
   const selfBoardTheme = useMemo(
     () => ({
@@ -752,6 +905,19 @@ export function ServerAuthMultiplayerGame({
     console.log('[SERVER-AUTH] Setting player loadout:', profile.loadout);
     setLoadout(profile.loadout);
   }, [profile.loadout, setLoadout]);
+
+  useEffect(() => {
+    blackholeStateRef.current = blackholeState;
+  }, [blackholeState]);
+
+  useEffect(() => {
+    return () => {
+      if (blackholeTimeoutRef.current) {
+        clearTimeout(blackholeTimeoutRef.current);
+        blackholeTimeoutRef.current = null;
+      }
+    };
+  }, []);
 
   useEffect(() => {
     if (mockStatic) return;
@@ -1203,6 +1369,7 @@ export function ServerAuthMultiplayerGame({
     setIsConnected(true);
     const startMs = Date.now();
     let tickCount = 0;
+    const cylinderScenario = mockScenario === 'cylinder';
 
     if (mockStatic) {
       const now = Date.now();
@@ -1214,6 +1381,10 @@ export function ServerAuthMultiplayerGame({
         { abilityType: 'blind_spot', remainingMs: 3600, durationMs: 5000 },
         { abilityType: 'reverse_controls', remainingMs: 5200, durationMs: 6000 },
       ];
+      if (cylinderScenario) {
+        staticYourTimedEffects.push({ abilityType: 'cylinder_vision', remainingMs: 27000, durationMs: 30000 });
+        staticOpponentTimedEffects.push({ abilityType: 'cylinder_vision', remainingMs: 24000, durationMs: 30000 });
+      }
 
       const yourStateMock: MockStatePayload = {
         board: createMockBoard(12, 20, 18),
@@ -1300,6 +1471,15 @@ export function ServerAuthMultiplayerGame({
         { abilityType: 'reverse_controls', durationMs: 6000, cadenceMs: 20000 },
         { abilityType: 'blind_spot', durationMs: 5000, cadenceMs: 17000 },
       ]);
+      if (cylinderScenario) {
+        const cycleRemainingMs = 30000 - (elapsed % 30000);
+        yourTimedEffects.push({ abilityType: 'cylinder_vision', remainingMs: cycleRemainingMs, durationMs: 30000 });
+        opponentTimedEffects.push({
+          abilityType: 'cylinder_vision',
+          remainingMs: Math.max(1000, cycleRemainingMs - 2200),
+          durationMs: 30000,
+        });
+      }
 
       const yourActiveEffects = yourTimedEffects.map((entry) => entry.abilityType);
       const opponentActiveEffects = opponentTimedEffects.map((entry) => entry.abilityType);
@@ -1368,7 +1548,7 @@ export function ServerAuthMultiplayerGame({
       setIsConnected(false);
       setConnectionStats(null);
     };
-  }, [mockMode, mockStatic, queueNotification, triggerBoardAbilityVisual]);
+  }, [mockMode, mockScenario, mockStatic, queueNotification, triggerBoardAbilityVisual]);
 
   const applyBoardDiffAnimations = useCallback((
     renderer: TetrisRenderer,
@@ -1510,6 +1690,12 @@ export function ServerAuthMultiplayerGame({
         overlayCtx.clearRect(0, 0, overlayCanvas.width, overlayCanvas.height);
       }
       pendingBoardAbilityFxRef.current = { self: null, opponent: null };
+      if (blackholeTimeoutRef.current) {
+        clearTimeout(blackholeTimeoutRef.current);
+        blackholeTimeoutRef.current = null;
+      }
+      blackholeStateRef.current = null;
+      setBlackholeState(null);
       client.disconnect();
       audioManager.stopMusic(true);
     };
@@ -1534,19 +1720,37 @@ export function ServerAuthMultiplayerGame({
   useEffect(() => {
     if (rendererRef.current && yourState) {
       rendererRef.current.setTheme(selfBoardTheme);
-      applyBoardDiffAnimations(
-        rendererRef.current,
-        'self',
-        yourState.board,
-        yourState.activeEffects
-      );
+      const blackholeActive = stateHasEffect(yourState, 'blackhole');
+      if (!blackholeActive) {
+        applyBoardDiffAnimations(
+          rendererRef.current,
+          'self',
+          yourState.board,
+          yourState.activeEffects
+        );
+      } else {
+        prevSelfBoardRef.current = null;
+      }
+
+      const boardGrid = blackholeActive
+        ? createEmptyBoardGrid(yourBoardWidth, yourBoardHeight)
+        : yourState.board;
 
       const board = {
-        grid: yourState.board,
+        grid: boardGrid,
         width: yourBoardWidth,
         height: yourBoardHeight,
       };
       rendererRef.current.setBlockSize(yourBoardDisplay.cellSize);
+
+      if (blackholeActive) {
+        rendererRef.current.render(board, null, null, {
+          showGrid: false,
+          showGhost: false,
+        });
+        prevYourPieceRef.current = yourState.currentPiece;
+        return;
+      }
 
       // Check active effects from server
       const blindSpotActive = yourState.activeEffects?.includes('blind_spot');
@@ -1592,23 +1796,37 @@ export function ServerAuthMultiplayerGame({
   useEffect(() => {
     if (opponentRendererRef.current && opponentState) {
       opponentRendererRef.current.setTheme(theme);
-      applyBoardDiffAnimations(
-        opponentRendererRef.current,
-        'opponent',
-        opponentState.board,
-        opponentState.activeEffects
-      );
+      const blackholeActive = stateHasEffect(opponentState, 'blackhole');
+      if (!blackholeActive) {
+        applyBoardDiffAnimations(
+          opponentRendererRef.current,
+          'opponent',
+          opponentState.board,
+          opponentState.activeEffects
+        );
+      } else {
+        prevOpponentBoardRef.current = null;
+      }
+
+      const boardGrid = blackholeActive
+        ? createEmptyBoardGrid(opponentBoardWidth, opponentBoardHeight)
+        : opponentState.board;
 
       const opponentBoard = {
-        grid: opponentState.board,
+        grid: boardGrid,
         width: opponentBoardWidth,
         height: opponentBoardHeight,
       };
       opponentRendererRef.current.setBlockSize(opponentBoardDisplay.cellSize);
-      opponentRendererRef.current.render(opponentBoard, opponentState.currentPiece, opponentState.magnetGhost ?? null, {
-        showGrid: true,
-        showGhost: !!opponentState.magnetGhost,
-      });
+      opponentRendererRef.current.render(
+        opponentBoard,
+        opponentState.currentPiece,
+        blackholeActive ? null : opponentState.magnetGhost ?? null,
+        {
+        showGrid: !blackholeActive,
+        showGhost: !blackholeActive && !!opponentState.magnetGhost,
+        }
+      );
     }
   }, [
     opponentState,
@@ -2068,8 +2286,171 @@ export function ServerAuthMultiplayerGame({
     }
   }, [profile, opponentId, aiOpponent]);
 
+  const endBlackholeEffect = useCallback((reason: BlackholeEndReason) => {
+    if (!yourBlackholeActive) return;
+    const current = blackholeStateRef.current;
+    if (!current || current.ending) return;
+
+    const endingState: BlackholeClientState = {
+      ...current,
+      ending: true,
+    };
+    blackholeStateRef.current = endingState;
+    setBlackholeState(endingState);
+    gameClientRef.current?.sendBlackholePieceEnded(reason);
+  }, [yourBlackholeActive]);
+
+  useEffect(() => {
+    if (!yourBlackholeActive || !yourState) {
+      if (blackholeTimeoutRef.current) {
+        clearTimeout(blackholeTimeoutRef.current);
+        blackholeTimeoutRef.current = null;
+      }
+      if (blackholeStateRef.current) {
+        blackholeStateRef.current = null;
+        setBlackholeState(null);
+      }
+      return;
+    }
+
+    const sourcePiece = normalizeServerPiece(yourState.currentPiece);
+    if (!sourcePiece) return;
+
+    const bounds = computeBlackholeBounds(yourBoardDisplay.cellSize);
+    const current = blackholeStateRef.current;
+
+    if (
+      current &&
+      current.piece.type === sourcePiece.type &&
+      current.cols === bounds.cols &&
+      current.rows === bounds.rows &&
+      current.cellSize === bounds.cellSize
+    ) {
+      return;
+    }
+
+    const nextState: BlackholeClientState =
+      current && current.piece.type === sourcePiece.type
+        ? {
+            ...current,
+            cols: bounds.cols,
+            rows: bounds.rows,
+            cellSize: bounds.cellSize,
+          }
+        : {
+            piece: centerPieceForBlackhole(sourcePiece, bounds.cols, bounds.rows),
+            cols: bounds.cols,
+            rows: bounds.rows,
+            cellSize: bounds.cellSize,
+            startedAt: Date.now(),
+            moves: 0,
+            ending: false,
+          };
+
+    blackholeStateRef.current = nextState;
+    setBlackholeState(nextState);
+  }, [yourBlackholeActive, yourBoardDisplay.cellSize, yourState?.currentPiece]);
+
+  useEffect(() => {
+    if (!yourBlackholeActive || !blackholeState || blackholeState.ending) return;
+
+    if (blackholeTimeoutRef.current) {
+      clearTimeout(blackholeTimeoutRef.current);
+      blackholeTimeoutRef.current = null;
+    }
+
+    const elapsedMs = Date.now() - blackholeState.startedAt;
+    const remainingMs = Math.max(0, BLACKHOLE_MAX_DURATION_MS - elapsedMs);
+    if (remainingMs <= 0) {
+      endBlackholeEffect('timeout_cap');
+      return;
+    }
+
+    blackholeTimeoutRef.current = setTimeout(() => {
+      endBlackholeEffect('timeout_cap');
+    }, remainingMs);
+
+    return () => {
+      if (blackholeTimeoutRef.current) {
+        clearTimeout(blackholeTimeoutRef.current);
+        blackholeTimeoutRef.current = null;
+      }
+    };
+  }, [yourBlackholeActive, blackholeState?.startedAt, blackholeState?.ending, endBlackholeEffect]);
+
+  const applyBlackholeInput = useCallback((input: PlayerInputType): boolean => {
+    const current = blackholeStateRef.current;
+    if (!current || current.ending) return false;
+
+    let nextPiece = current.piece;
+    switch (input) {
+      case 'move_left':
+        nextPiece = {
+          ...current.piece,
+          position: { ...current.piece.position, x: current.piece.position.x - 1 },
+        };
+        break;
+      case 'move_right':
+        nextPiece = {
+          ...current.piece,
+          position: { ...current.piece.position, x: current.piece.position.x + 1 },
+        };
+        break;
+      case 'soft_drop':
+        nextPiece = {
+          ...current.piece,
+          position: { ...current.piece.position, y: current.piece.position.y + 1 },
+        };
+        break;
+      case 'hard_drop':
+        nextPiece = movePieceToBlackholeBottom(current.piece, current.rows);
+        break;
+      case 'rotate_cw':
+        nextPiece = rotatePiece(current.piece, true);
+        break;
+      case 'rotate_ccw':
+        nextPiece = rotatePiece(current.piece, false);
+        break;
+      default:
+        return false;
+    }
+
+    const nextMoves = current.moves + 1;
+    const touchedEdge = touchesBlackholeEdge(nextPiece, current.cols, current.rows);
+    const exceededMoveCap = nextMoves >= BLACKHOLE_MAX_MOVES;
+    const shouldEnd = touchedEdge || exceededMoveCap;
+
+    const nextState: BlackholeClientState = {
+      ...current,
+      piece: nextPiece,
+      moves: nextMoves,
+      ending: current.ending || shouldEnd,
+    };
+
+    blackholeStateRef.current = nextState;
+    setBlackholeState(nextState);
+
+    if (shouldEnd) {
+      endBlackholeEffect(touchedEdge ? 'edge_contact' : 'timeout_cap');
+    }
+
+    return true;
+  }, [endBlackholeEffect]);
+
+  const dispatchGameplayInput = useCallback((input: PlayerInputType): boolean => {
+    if (!yourState || yourState.isGameOver || gameFinished) return false;
+
+    if (yourBlackholeActive) {
+      return applyBlackholeInput(input);
+    }
+
+    if (!gameClientRef.current) return false;
+    gameClientRef.current.sendInput(input);
+    return true;
+  }, [applyBlackholeInput, gameFinished, yourBlackholeActive, yourState]);
+
   const sendMobileInput = useCallback((input: 'move_left' | 'move_right' | 'soft_drop' | 'hard_drop' | 'rotate_cw') => {
-    if (!gameClientRef.current || !yourState || yourState.isGameOver || gameFinished) return;
+    if (!yourState || yourState.isGameOver || gameFinished) return;
 
     switch (input) {
       case 'move_left':
@@ -2087,8 +2468,10 @@ export function ServerAuthMultiplayerGame({
       case 'hard_drop':
         haptics.medium();
         audioManager.playSfx('hard_drop');
-        triggerHardDropBounce();
-        triggerHardDropTrailImpact();
+        if (!yourBlackholeActive) {
+          triggerHardDropBounce();
+          triggerHardDropTrailImpact();
+        }
         break;
       case 'rotate_cw':
         haptics.light();
@@ -2096,8 +2479,8 @@ export function ServerAuthMultiplayerGame({
         break;
     }
 
-    gameClientRef.current.sendInput(input);
-  }, [yourState, gameFinished, triggerHardDropBounce, triggerHardDropTrailImpact]);
+    dispatchGameplayInput(input);
+  }, [yourState, gameFinished, yourBlackholeActive, triggerHardDropBounce, triggerHardDropTrailImpact, dispatchGameplayInput]);
 
   const handleMoveLeft = useCallback(() => sendMobileInput('move_left'), [sendMobileInput]);
   const handleMoveRight = useCallback(() => sendMobileInput('move_right'), [sendMobileInput]);
@@ -2109,38 +2492,40 @@ export function ServerAuthMultiplayerGame({
   // Keyboard controls - send inputs to server
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (!gameClientRef.current || !yourState || yourState.isGameOver || gameFinished) return;
+      if (!yourState || yourState.isGameOver || gameFinished) return;
 
       switch (e.key) {
         case 'ArrowLeft':
           e.preventDefault();
           audioManager.playSfx('piece_move_left', 0.3);
-          gameClientRef.current.sendInput('move_left');
+          dispatchGameplayInput('move_left');
           break;
         case 'ArrowRight':
           e.preventDefault();
           audioManager.playSfx('piece_move_right', 0.3);
-          gameClientRef.current.sendInput('move_right');
+          dispatchGameplayInput('move_right');
           break;
         case 'ArrowDown':
           e.preventDefault();
           audioManager.playSfx('soft_drop', 0.4);
-          gameClientRef.current.sendInput('soft_drop');
+          dispatchGameplayInput('soft_drop');
           break;
         case 'ArrowUp':
         case 'x':
         case 'X':
           e.preventDefault();
           audioManager.playSfx('piece_rotate', 0.5);
-          gameClientRef.current.sendInput('rotate_cw');
+          dispatchGameplayInput('rotate_cw');
           break;
         case ' ':
           e.preventDefault();
           audioManager.playSfx('hard_drop');
           haptics.medium();
-          triggerHardDropBounce();
-          triggerHardDropTrailImpact();
-          gameClientRef.current.sendInput('hard_drop');
+          if (!yourBlackholeActive) {
+            triggerHardDropBounce();
+            triggerHardDropTrailImpact();
+          }
+          dispatchGameplayInput('hard_drop');
           break;
         case '1':
         case '2':
@@ -2156,7 +2541,7 @@ export function ServerAuthMultiplayerGame({
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [yourState, gameFinished, availableAbilities, triggerHardDropBounce, triggerHardDropTrailImpact]);
+  }, [yourState, gameFinished, availableAbilities, triggerHardDropBounce, triggerHardDropTrailImpact, yourBlackholeActive, dispatchGameplayInput]);
 
   // Calculate rewards when game finishes
   useEffect(() => {
@@ -2212,6 +2597,58 @@ export function ServerAuthMultiplayerGame({
       }}
     >
       <FloatingBackground />
+      {yourBlackholeActive && blackholeState && (
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            pointerEvents: 'none',
+            zIndex: 18,
+          }}
+        >
+          <div
+            style={{
+              position: 'absolute',
+              inset: 0,
+              background:
+                'radial-gradient(circle at 50% 45%, rgba(255,255,255,0.06) 0%, rgba(5,8,18,0.45) 45%, rgba(0,0,0,0.9) 100%)',
+            }}
+          />
+          {getOccupiedCells(blackholeState.piece).map((cell, index) => (
+            <div
+              key={`blackhole-piece-cell-${index}-${cell.x}-${cell.y}`}
+              style={{
+                position: 'absolute',
+                left: `${cell.x * blackholeState.cellSize}px`,
+                top: `${cell.y * blackholeState.cellSize}px`,
+                width: `${blackholeState.cellSize}px`,
+                height: `${blackholeState.cellSize}px`,
+                borderRadius: '3px',
+                background:
+                  (theme.colors as Record<string, string>)[blackholeState.piece.type] || '#8be9ff',
+                boxShadow:
+                  '0 0 0 1px rgba(255,255,255,0.3), 0 0 12px rgba(120, 220, 255, 0.5), inset 0 0 10px rgba(255,255,255,0.18)',
+              }}
+            />
+          ))}
+          <div
+            style={{
+              position: 'absolute',
+              left: '50%',
+              top: '8%',
+              transform: 'translateX(-50%)',
+              color: '#e4ecff',
+              fontSize: '12px',
+              letterSpacing: '2px',
+              fontWeight: 700,
+              textTransform: 'uppercase',
+              textShadow: '0 0 14px rgba(148, 189, 255, 0.85)',
+            }}
+          >
+            Blackhole
+          </div>
+        </div>
+      )}
       {useLegacyMobileLayout && isMobilePortrait ? (
         <MobileGameLayout
           header={(
@@ -2287,9 +2724,9 @@ export function ServerAuthMultiplayerGame({
                   transform: getTiltAngle(yourState) ? `rotate(${getTiltAngle(yourState)}deg) scale(0.96)` : 'none',
                   transition: 'transform 200ms ease-out',
                   position: 'relative',
-                  background: selfBoardShellBackground,
-                  backdropFilter: 'blur(6px)',
-                  WebkitBackdropFilter: 'blur(6px)',
+                  background: yourBlackholeActive ? 'transparent' : selfBoardShellBackground,
+                  backdropFilter: yourBlackholeActive ? 'none' : 'blur(6px)',
+                  WebkitBackdropFilter: yourBlackholeActive ? 'none' : 'blur(6px)',
                   borderRadius: '9px',
                 }}
               >
@@ -2306,13 +2743,17 @@ export function ServerAuthMultiplayerGame({
                     width: `${yourBoardDisplay.pixelWidth}px`,
                     maxWidth: '100%',
                     borderRadius: '9px',
-                    border: `1px solid ${selfBoardFx?.borderColor || 'rgba(0, 240, 240, 0.09)'}`,
+                    border: yourBlackholeActive
+                      ? '1px solid rgba(255, 255, 255, 0.04)'
+                      : `1px solid ${selfBoardFx?.borderColor || 'rgba(0, 240, 240, 0.09)'}`,
                     backgroundColor: 'transparent',
-                    boxShadow: selfBoardFx?.glow || '0 0 30px rgba(0, 240, 240, 0.03)',
-                    visibility: selfCylinderVisionActive ? 'hidden' : 'visible',
+                    boxShadow: yourBlackholeActive
+                      ? 'none'
+                      : selfBoardFx?.glow || '0 0 30px rgba(0, 240, 240, 0.03)',
+                    visibility: selfCylinderVisionActive || yourBlackholeActive ? 'hidden' : 'visible',
                   }}
                 />
-                {selfCylinderVisionActive && yourState && (
+                {selfCylinderVisionActive && yourState && !yourBlackholeActive && (
                   <CylinderBoardView
                     board={{
                       grid: yourState.board,
@@ -2337,6 +2778,7 @@ export function ServerAuthMultiplayerGame({
                     pointerEvents: 'none',
                     zIndex: 2,
                     background: 'radial-gradient(ellipse at 50% 45%, transparent 35%, rgba(3,3,15,0.65) 100%)',
+                    display: yourBlackholeActive ? 'none' : 'block',
                   }}
                 />
                 <canvas
@@ -2350,6 +2792,7 @@ export function ServerAuthMultiplayerGame({
                     height: '100%',
                     pointerEvents: 'none',
                     zIndex: 3,
+                    visibility: yourBlackholeActive ? 'hidden' : 'visible',
                   }}
                 />
                 <CyberpunkParticles
@@ -2357,7 +2800,7 @@ export function ServerAuthMultiplayerGame({
                   width={yourBoardDisplay.pixelWidth}
                   height={yourBoardDisplay.pixelHeight}
                 />
-                {stateHasEffect(yourState, 'ink_splash') && !mockMode && (
+                {stateHasEffect(yourState, 'ink_splash') && !mockMode && !yourBlackholeActive && (
                   <InkSplashMask idPrefix="mobile-self" borderRadius="9px" />
                 )}
               </div>
@@ -2729,9 +3172,9 @@ export function ServerAuthMultiplayerGame({
                     ? `rotate(${getTiltAngle(yourState)}deg) scale(0.96)`
                     : 'none',
                   transition: 'transform 200ms ease-out',
-                  background: selfBoardShellBackground,
-                  backdropFilter: 'blur(4px)',
-                  WebkitBackdropFilter: 'blur(4px)',
+                  background: yourBlackholeActive ? 'transparent' : selfBoardShellBackground,
+                  backdropFilter: yourBlackholeActive ? 'none' : 'blur(4px)',
+                  WebkitBackdropFilter: yourBlackholeActive ? 'none' : 'blur(4px)',
                   borderRadius: 'clamp(6px, 1.5vw, 10px)',
                 }}
               >
@@ -2748,13 +3191,17 @@ export function ServerAuthMultiplayerGame({
                     width: `${yourBoardDisplay.pixelWidth}px`,
                     objectFit: 'contain',
                     borderRadius: 'clamp(6px, 1.5vw, 10px)',
-                    border: `1px solid ${selfBoardFx?.borderColor || 'rgba(0, 240, 240, 0.15)'}`,
+                    border: yourBlackholeActive
+                      ? '1px solid rgba(255, 255, 255, 0.04)'
+                      : `1px solid ${selfBoardFx?.borderColor || 'rgba(0, 240, 240, 0.15)'}`,
                     backgroundColor: 'transparent',
-                    boxShadow: selfBoardFx?.glow || '0 0 20px rgba(0, 240, 240, 0.08), 0 0 60px rgba(0, 240, 240, 0.03)',
-                    visibility: selfCylinderVisionActive ? 'hidden' : 'visible',
+                    boxShadow: yourBlackholeActive
+                      ? 'none'
+                      : selfBoardFx?.glow || '0 0 20px rgba(0, 240, 240, 0.08), 0 0 60px rgba(0, 240, 240, 0.03)',
+                    visibility: selfCylinderVisionActive || yourBlackholeActive ? 'hidden' : 'visible',
                   }}
                 />
-                {selfCylinderVisionActive && yourState && (
+                {selfCylinderVisionActive && yourState && !yourBlackholeActive && (
                   <CylinderBoardView
                     board={{
                       grid: yourState.board,
@@ -2779,6 +3226,7 @@ export function ServerAuthMultiplayerGame({
                     pointerEvents: 'none',
                     zIndex: 2,
                     background: 'radial-gradient(ellipse at center, transparent 40%, rgba(10,10,24,0.6) 100%)',
+                    display: yourBlackholeActive ? 'none' : 'block',
                   }}
                 />
                 <canvas
@@ -2792,9 +3240,10 @@ export function ServerAuthMultiplayerGame({
                     height: '100%',
                     pointerEvents: 'none',
                     zIndex: 3,
+                    visibility: yourBlackholeActive ? 'hidden' : 'visible',
                   }}
                 />
-                {stateHasEffect(yourState, 'ink_splash') && !mockMode && (
+                {stateHasEffect(yourState, 'ink_splash') && !mockMode && !yourBlackholeActive && (
                   <InkSplashMask idPrefix="self" borderRadius="clamp(6px, 1.5vw, 10px)" />
                 )}
               </div>
@@ -2911,16 +3360,20 @@ export function ServerAuthMultiplayerGame({
 	                height={opponentBoardDisplay.pixelHeight}
 	                style={{
 	                  display: 'block',
-	                  border: `1px solid ${opponentBoardFx?.borderColor || 'rgba(255, 255, 255, 0.1)'}`,
-	                  backgroundColor: 'rgba(5, 5, 20, 0.72)',
+	                  border: opponentBlackholeActive
+                      ? '1px dashed rgba(255, 255, 255, 0.28)'
+                      : `1px solid ${opponentBoardFx?.borderColor || 'rgba(255, 255, 255, 0.1)'}`,
+	                  backgroundColor: opponentBlackholeActive ? 'rgba(0, 0, 0, 0.88)' : 'rgba(5, 5, 20, 0.72)',
 	                  width: `${opponentBoardDisplay.pixelWidth}px`,
 	                  height: `${opponentBoardDisplay.pixelHeight}px`,
 	                  borderRadius: 'clamp(4px, 1vw, 6px)',
-	                  boxShadow: opponentBoardFx?.glow || '0 0 8px rgba(255, 255, 255, 0.08)',
-                    visibility: opponentCylinderVisionActive ? 'hidden' : 'visible',
-	                }}
-	              />
-                {opponentCylinderVisionActive && opponentState && (
+	                  boxShadow: opponentBlackholeActive
+                      ? '0 0 14px rgba(0, 0, 0, 0.6)'
+                      : opponentBoardFx?.glow || '0 0 8px rgba(255, 255, 255, 0.08)',
+                    visibility: opponentCylinderVisionActive && !opponentBlackholeActive ? 'hidden' : 'visible',
+                  }}
+                />
+                {opponentCylinderVisionActive && opponentState && !opponentBlackholeActive && (
                   <CylinderBoardView
                     board={{
                       grid: opponentState.board,
@@ -2937,8 +3390,31 @@ export function ServerAuthMultiplayerGame({
                     borderRadius="clamp(4px, 1vw, 6px)"
                   />
                 )}
-                {stateHasEffect(opponentState, 'ink_splash') && !mockMode && (
+                {stateHasEffect(opponentState, 'ink_splash') && !mockMode && !opponentBlackholeActive && (
                   <InkSplashMask idPrefix="opponent" borderRadius="clamp(4px, 1vw, 6px)" />
+                )}
+                {opponentBlackholeActive && (
+                  <div
+                    style={{
+                      position: 'absolute',
+                      inset: 0,
+                      borderRadius: 'clamp(4px, 1vw, 6px)',
+                      pointerEvents: 'none',
+                      zIndex: 4,
+                      display: 'flex',
+                      alignItems: 'flex-end',
+                      justifyContent: 'center',
+                      paddingBottom: '4px',
+                      background:
+                        'radial-gradient(circle at 50% 45%, rgba(255,255,255,0.05) 0%, rgba(0,0,0,0.75) 68%, rgba(0,0,0,0.95) 100%)',
+                      color: '#c5ccff',
+                      fontSize: '7px',
+                      fontWeight: 700,
+                      letterSpacing: '1px',
+                    }}
+                  >
+                    BLACKHOLE
+                  </div>
                 )}
 	            </div>
 		            {opponentState && (
@@ -3216,10 +3692,9 @@ export function ServerAuthMultiplayerGame({
           transition={springs.snappy}
           onPointerDown={(e) => {
             e.preventDefault();
-            if (!gameClientRef.current) return;
             haptics.light();
             audioManager.playSfx('piece_move_left', 0.3);
-            gameClientRef.current.sendInput('move_left');
+            dispatchGameplayInput('move_left');
           }}
           style={{
             flex: 1,
@@ -3245,12 +3720,13 @@ export function ServerAuthMultiplayerGame({
           transition={springs.snappy}
           onPointerDown={(e) => {
             e.preventDefault();
-            if (!gameClientRef.current) return;
             audioManager.playSfx('hard_drop');
             haptics.medium();
-            triggerHardDropBounce();
-            triggerHardDropTrailImpact();
-            gameClientRef.current.sendInput('hard_drop');
+            if (!yourBlackholeActive) {
+              triggerHardDropBounce();
+              triggerHardDropTrailImpact();
+            }
+            dispatchGameplayInput('hard_drop');
           }}
           style={{
             flex: 1,
@@ -3276,10 +3752,9 @@ export function ServerAuthMultiplayerGame({
           transition={springs.snappy}
           onPointerDown={(e) => {
             e.preventDefault();
-            if (!gameClientRef.current) return;
             haptics.light();
             audioManager.playSfx('soft_drop', 0.4);
-            gameClientRef.current.sendInput('soft_drop');
+            dispatchGameplayInput('soft_drop');
           }}
           style={{
             flex: 1,
@@ -3305,10 +3780,9 @@ export function ServerAuthMultiplayerGame({
           transition={springs.snappy}
           onPointerDown={(e) => {
             e.preventDefault();
-            if (!gameClientRef.current) return;
             haptics.light();
             audioManager.playSfx('piece_rotate', 0.5);
-            gameClientRef.current.sendInput('rotate_cw');
+            dispatchGameplayInput('rotate_cw');
           }}
           style={{
             flex: 1,
@@ -3334,10 +3808,9 @@ export function ServerAuthMultiplayerGame({
           transition={springs.snappy}
           onPointerDown={(e) => {
             e.preventDefault();
-            if (!gameClientRef.current) return;
             haptics.light();
             audioManager.playSfx('piece_move_right', 0.3);
-            gameClientRef.current.sendInput('move_right');
+            dispatchGameplayInput('move_right');
           }}
           style={{
             flex: 1,

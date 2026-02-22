@@ -27,9 +27,11 @@ type CylinderScene = {
 };
 
 const TAU = Math.PI * 2;
-const CYLINDER_RADIUS = 1;
+const BASE_CYLINDER_RADIUS = 1;
+const BASE_CYLINDER_HEIGHT = 1;
 const CYLINDER_SEGMENTS = 96;
 const TEXELS_PER_CELL = 20;
+const CYLINDER_FIT_PADDING = 1.08;
 
 function clampDimension(value: number): number {
   if (!Number.isFinite(value)) return 1;
@@ -92,6 +94,43 @@ function resizeTextureCanvas(scene: CylinderScene, board: Board): number {
   return cellSize;
 }
 
+function getCylinderDimensions(board: Board): {
+  radius: number;
+  height: number;
+  halfWidth: number;
+  halfHeight: number;
+} {
+  const boardWidth = Math.max(1, board.width);
+  const boardHeight = Math.max(1, board.height);
+
+  // Keep one board cell approximately square on the unwrapped cylinder surface:
+  // (cylinder circumference / columns) === (cylinder height / rows)
+  const radius = BASE_CYLINDER_RADIUS;
+  const cellWorldSize = (TAU * radius) / boardWidth;
+  const height = cellWorldSize * boardHeight;
+
+  return {
+    radius,
+    height,
+    halfWidth: radius,
+    halfHeight: height * 0.5,
+  };
+}
+
+function getCameraDistanceToFit(
+  camera: THREE.PerspectiveCamera,
+  halfWidth: number,
+  halfHeight: number
+): number {
+  const halfFovY = THREE.MathUtils.degToRad(camera.fov * 0.5);
+  const halfFovX = Math.atan(Math.tan(halfFovY) * Math.max(0.0001, camera.aspect));
+
+  const byHeight = halfHeight / Math.max(0.0001, Math.tan(halfFovY));
+  const byWidth = halfWidth / Math.max(0.0001, Math.tan(halfFovX));
+
+  return Math.max(byHeight, byWidth) * CYLINDER_FIT_PADDING;
+}
+
 function disposeScene(scene: CylinderScene): void {
   scene.mesh.geometry.dispose();
   scene.mesh.material.map?.dispose();
@@ -132,9 +171,9 @@ export function CylinderBoardView({
     texture.colorSpace = THREE.SRGBColorSpace;
 
     const geometry = new THREE.CylinderGeometry(
-      CYLINDER_RADIUS,
-      CYLINDER_RADIUS,
-      2,
+      BASE_CYLINDER_RADIUS,
+      BASE_CYLINDER_RADIUS,
+      BASE_CYLINDER_HEIGHT,
       CYLINDER_SEGMENTS,
       1,
       true
@@ -211,15 +250,20 @@ export function CylinderBoardView({
     drawBoundaryGuide(scene.offscreenCanvas, cellSize);
     scene.texture.needsUpdate = true;
 
-    const boardAspect = board.height / Math.max(1, board.width);
-    scene.mesh.scale.set(1, boardAspect, 1);
+    const dimensions = getCylinderDimensions(board);
+    scene.mesh.scale.set(
+      dimensions.radius / BASE_CYLINDER_RADIUS,
+      dimensions.height / BASE_CYLINDER_HEIGHT,
+      dimensions.radius / BASE_CYLINDER_RADIUS
+    );
 
     // Keep active piece centered toward the viewer by rotating around Y.
     const centerX = getPieceCenterX(currentPiece, board.width);
     const normalized = ((centerX % board.width) + board.width) / board.width;
     scene.mesh.rotation.y = -normalized * TAU;
 
-    scene.camera.position.z = 2.6 + boardAspect * 0.95;
+    const fitDistance = getCameraDistanceToFit(scene.camera, dimensions.halfWidth, dimensions.halfHeight);
+    scene.camera.position.z = fitDistance;
     scene.camera.lookAt(0, 0, 0);
     scene.renderer.render(scene.scene, scene.camera);
   }, [board, currentPiece, ghostPiece, theme, showGrid, showGhost]);

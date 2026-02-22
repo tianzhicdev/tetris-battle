@@ -412,6 +412,41 @@ function StaticGameDemo() {
   );
 }
 
+function CylinderGameDemo() {
+  const { theme } = useTheme();
+  const currentTheme = toLegacyTheme(theme);
+  const now = Date.now();
+  const mockProfile: UserProfile = {
+    userId: 'mock_player_cylinder_001',
+    username: 'CylinderTuner',
+    coins: 99999,
+    matchmakingRating: 1500,
+    gamesPlayed: 300,
+    gamesWon: 182,
+    lastActiveAt: now,
+    unlockedAbilities: ABILITY_IDS,
+    loadout: ['cylinder_vision', 'snake_board', 'ink_splash', 'tilt', 'screen_shake', 'wide_load'],
+    createdAt: now - 1000 * 60 * 60 * 24 * 30,
+    updatedAt: now,
+  };
+
+  return (
+    <ServerAuthMultiplayerGame
+      roomId="mock_room_cylinder"
+      playerId={mockProfile.userId}
+      opponentId="mock_opponent_cylinder_001"
+      theme={currentTheme}
+      profile={mockProfile}
+      onExit={() => {
+        window.location.href = window.location.pathname;
+      }}
+      mockMode
+      mockStatic
+      mockScenario="cylinder"
+    />
+  );
+}
+
 function App() {
   // Check if demo mode is enabled via URL parameter
   const params = new URLSearchParams(window.location.search);
@@ -453,6 +488,14 @@ function App() {
     return (
       <ThemeProvider userId="preview-game-static">
         <StaticGameDemo />
+      </ThemeProvider>
+    );
+  }
+
+  if (demoMode === 'cylinder') {
+    return (
+      <ThemeProvider userId="preview-game-cylinder">
+        <CylinderGameDemo />
       </ThemeProvider>
     );
   }

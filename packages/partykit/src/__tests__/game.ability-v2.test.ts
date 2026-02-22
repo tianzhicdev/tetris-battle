@@ -152,4 +152,37 @@ describe('GameRoomServer v2 ability behaviors', () => {
     expect(cylinderResult?.appliedAbilityType).toBe('cylinder_vision');
     expect(p2State.getActiveEffects()).toContain('cylinder_vision');
   });
+
+  it('resolves blackhole when target client reports piece end', () => {
+    const { server, p1Conn, p2Conn } = createTwoPlayerServer('game_v2_blackhole');
+
+    const p1State = new ServerGameState('p1', 12345, ['blackhole']);
+    const p2State = new ServerGameState('p2', 12345, ['earthquake']);
+    p1State.gameState.stars = 300;
+    server.serverGameStates.set('p1', p1State);
+    server.serverGameStates.set('p2', p2State);
+
+    server.handleAbilityActivation('p1', 'blackhole', 'p2', 'req_blackhole');
+    expect(p2State.getActiveEffects()).toContain('blackhole');
+
+    server.onMessage(
+      JSON.stringify({
+        type: 'blackhole_piece_end',
+        playerId: 'p2',
+        reason: 'edge_contact',
+      }),
+      p2Conn as any
+    );
+
+    expect(p2State.getActiveEffects()).not.toContain('blackhole');
+    const ack = getMessages(p2Conn, 'blackhole_piece_end_ack');
+    expect(ack.length).toBeGreaterThan(0);
+    expect(ack[ack.length - 1]?.reason).toBe('edge_contact');
+
+    const casterResult = getMessages(p1Conn, 'ability_activation_result').find(
+      (result) => result.requestId === 'req_blackhole'
+    );
+    expect(casterResult?.accepted).toBe(true);
+    expect(casterResult?.appliedAbilityType).toBe('blackhole');
+  });
 });

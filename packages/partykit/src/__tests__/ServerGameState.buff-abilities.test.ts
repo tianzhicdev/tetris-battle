@@ -161,6 +161,27 @@ describe('ServerGameState - Buff Abilities', () => {
     });
   });
 
+  describe('Blackhole', () => {
+    it('freezes server-side movement while active and resolves on explicit end', () => {
+      const pieceBefore = state.gameState.currentPiece!;
+      const yBefore = pieceBefore.position.y;
+
+      state.applyAbility('blackhole');
+      expect(state.getActiveEffects()).toContain('blackhole');
+
+      state.processInput('move_left');
+      state.processInput('soft_drop');
+      state.tick();
+
+      expect(state.gameState.currentPiece?.position.y).toBe(yBefore);
+
+      const resolved = state.resolveBlackholePiece();
+      expect(resolved).toBe(true);
+      expect(state.getActiveEffects()).not.toContain('blackhole');
+      expect(state.gameState.currentPiece).not.toBeNull();
+    });
+  });
+
   describe('Weird Shapes - Fixed', () => {
     it('should stay pending across state broadcasts until consumed', () => {
       state.applyAbility('weird_shapes');

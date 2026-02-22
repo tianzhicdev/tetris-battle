@@ -447,9 +447,9 @@
       "type": "cylinder_vision",
       "name": "Cylinder Vision",
       "shortName": "CYL",
-      "description": "Warp opponent's board into a rotating cylinder for 8 seconds",
+      "description": "Warp opponent's board into a rotating cylinder for 30 seconds",
       "cost": 110,
-      "duration": 8000,
+      "duration": 30000,
       "category": "debuff_visual",
       "unlockTier": 4,
       "unlockCost": 600,
@@ -569,6 +569,20 @@
       "balance_notes": "Board geometry mutation. Strong tempo debuff: 20% more cells needed per line clear. The extra 2 columns add maneuvering space, but line completion pressure still rises sharply. When the effect expires, blocks in the extra columns are destroyed. 15-second duration is long enough to force adaptation without making recovery impossible.",
       "implementation": "Expand opponent's board to 12 columns. Existing blocks stay left-aligned. 2 new empty columns appear on the right. Row clears now require 12 filled cells. After 15s, rightmost 2 columns and any blocks in them are removed. Remaining blocks are unaffected."
     },
+    "blackhole": {
+      "id": "blackhole",
+      "type": "blackhole",
+      "name": "Blackhole",
+      "shortName": "VOID",
+      "description": "Erase opponent's board view. They can only steer a stray tetrimino until it touches a screen edge (max 7s).",
+      "cost": 130,
+      "duration": 7000,
+      "category": "debuff_geometry",
+      "unlockTier": 5,
+      "unlockCost": 1200,
+      "balance_notes": "Extreme disruption and disorientation. The target temporarily loses all board context and must pilot a free-floating piece in empty space. The effect ends on edge contact, so fast players can recover quickly. A built-in max duration prevents stalemates on unusual displays.",
+      "implementation": "Client-only visual/control mode on target: hide board and allow unconstrained piece motion in screen-cell space. When any occupied cell touches a screen edge (or cap expires), client sends an end event. Server receives event, ends effect, discards that piece, and resumes normal spawn."
+    },
     "tilt": {
       "id": "tilt",
       "type": "tilt",
@@ -684,7 +698,7 @@
     }
   },
   "summary": {
-    "total_abilities": 34,
+    "total_abilities": 35,
     "by_tier": {
       "tier_1_free": [
         "earthquake",
@@ -730,6 +744,7 @@
         "shapeshifter",
         "shrink_ceiling",
         "wide_load",
+        "blackhole",
         "tilt",
         "flip_board",
         "death_cross"
@@ -765,7 +780,8 @@
       ],
       "debuff_geometry": [
         "shrink_ceiling(110)",
-        "wide_load(120)"
+        "wide_load(120)",
+        "blackhole(130)"
       ],
       "buff_board": [
         "fill_holes(75)",
@@ -829,7 +845,8 @@
         "shapeshifter(110)",
         "shrink_ceiling(110)",
         "quicksand(110)",
-        "wide_load(120)"
+        "wide_load(120)",
+        "blackhole(130)"
       ],
       "ultimate_160_250": [
         "tilt(160)",
@@ -970,8 +987,8 @@
       "tier_2": "100 coins × 8 = 800 coins",
       "tier_3": "300 coins × 10 = 3,000 coins",
       "tier_4": "600 coins × 8 = 4,800 coins",
-      "tier_5": "1,200 coins × 7 = 8,400 coins",
-      "grand_total": "17,000 coins for full collection (32 abilities)"
+      "tier_5": "1,200 coins × 8 = 9,600 coins",
+      "grand_total": "18,200 coins for full collection (35 abilities)"
     }
   }
 }

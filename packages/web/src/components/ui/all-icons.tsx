@@ -434,6 +434,18 @@ export const abilityIcons: Record<string, (c: string, s: number) => JSX.Element>
       <text x="16" y="18" fontFamily="system-ui" fontSize="8" fontWeight="800" fill={c} opacity="0.4" textAnchor="middle">12</text>
     </svg>
   ),
+  blackhole: (c = "#fff", s = 32) => (
+    <svg width={s} height={s} viewBox="0 0 32 32" fill="none">
+      <circle cx="16" cy="16" r="11" stroke={c} strokeWidth="1.1" opacity="0.25" strokeDasharray="3 2" />
+      <circle cx="16" cy="16" r="7.5" stroke={c} strokeWidth="0.9" opacity="0.2" strokeDasharray="2 2" />
+      <circle cx="16" cy="16" r="4.5" fill={c} opacity="0.75" />
+      <circle cx="16" cy="16" r="2" fill="#000" opacity="0.8" />
+      <rect x="5" y="22" width="3.5" height="3.5" rx="0.6" fill={c} opacity="0.45" />
+      <rect x="22.5" y="5.5" width="3.5" height="3.5" rx="0.6" fill={c} opacity="0.45" />
+      <path d="M8 22L12.5 19" stroke={c} strokeWidth="1.2" strokeLinecap="round" opacity="0.4" />
+      <path d="M23 9L19 12" stroke={c} strokeWidth="1.2" strokeLinecap="round" opacity="0.4" />
+    </svg>
+  ),
   tilt: (c = "#fff", s = 32) => (
     <svg width={s} height={s} viewBox="0 0 32 32" fill="none">
       <rect x="6" y="3" width="20" height="26" rx="1.5" stroke={c} strokeWidth="1" opacity="0.2" />

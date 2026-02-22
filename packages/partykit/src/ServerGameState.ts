@@ -34,6 +34,7 @@ import {
 
 const INFINITE_EFFECT = Number.POSITIVE_INFINITY;
 const BASE_TICK_RATE_MS = 1000;
+const BLACKHOLE_FALLBACK_DURATION_MS = 7000;
 const STANDARD_BOARD_WIDTH = 10;
 const WIDE_LOAD_BOARD_WIDTH = 12;
 const SNAKE_START_LENGTH = 3;
@@ -151,6 +152,11 @@ export class ServerGameState {
       return snakeChanged || effectsChanged;
     }
 
+    if (this.isBlackholeActive(now)) {
+      // Blackhole piece movement is client-side only; server waits for explicit end signal.
+      return effectsChanged;
+    }
+
     if (!this.gameState.currentPiece) {
       return effectsChanged;
     }
@@ -221,6 +227,10 @@ export class ServerGameState {
     if (this.isSnakeBoardActive(this.lastTickTime)) {
       const snakeMoved = this.advanceSnakeOneCell();
       return snakeMoved || effectsChanged;
+    }
+
+    if (this.isBlackholeActive(this.lastTickTime)) {
+      return effectsChanged;
     }
 
     const moved = this.movePieceInGravityDirection(this.lastTickTime);
@@ -616,6 +626,16 @@ export class ServerGameState {
     return cleared;
   }
 
+  resolveBlackholePiece(now: number = Date.now()): boolean {
+    const endTime = this.activeEffects.get('blackhole');
+    if (typeof endTime !== 'number') return false;
+    if (endTime !== INFINITE_EFFECT && endTime <= now) return false;
+
+    this.activeEffects.delete('blackhole');
+    this.finishBlackholePiece(now);
+    return true;
+  }
+
   /**
    * Apply ability effect (can be buff or debuff).
    * To add a new ability: add one switch-case branch.
@@ -669,7 +689,7 @@ export class ServerGameState {
         this.setTimedEffect('blind_spot', 5000, now);
         break;
       case 'cylinder_vision':
-        this.setTimedEffect('cylinder_vision', 8000, now);
+        this.setTimedEffect('cylinder_vision', 30000, now);
         break;
       case 'weird_shapes':
         this.weirdShapesRemaining = 1;
@@ -684,6 +704,9 @@ export class ServerGameState {
         break;
       case 'wide_load':
         this.activateWideLoad(now);
+        break;
+      case 'blackhole':
+        this.setTimedEffect('blackhole', BLACKHOLE_FALLBACK_DURATION_MS, now);
         break;
       case 'tilt':
         this.tiltDirection = this.rng.nextInt(2) === 0 ? -1 : 1;
@@ -906,6 +929,9 @@ export class ServerGameState {
         break;
       case 'wide_load':
         this.collapseWideLoad();
+        break;
+      case 'blackhole':
+        this.finishBlackholePiece(Date.now());
         break;
       case 'snake_board':
         this.deactivateSnakeBoard();
@@ -1164,6 +1190,23 @@ export class ServerGameState {
     if (typeof endTime !== 'number') return false;
     if (endTime === INFINITE_EFFECT) return true;
     return endTime > now;
+  }
+
+  private isBlackholeActive(now: number): boolean {
+    return this.isEffectActive('blackhole', now);
+  }
+
+  private finishBlackholePiece(now: number): void {
+    if (this.gameState.isGameOver) {
+      this.gameState.currentPiece = null;
+      return;
+    }
+
+    this.spawnNextPiece(now);
+    if (!this.gameState.currentPiece || !isValidPosition(this.gameState.board, this.gameState.currentPiece)) {
+      this.gameState.isGameOver = true;
+      this.gameState.currentPiece = null;
+    }
   }
 
   private getSnakeCellKey(cell: SnakeCell): string {

@@ -303,6 +303,8 @@ describe('ServerGameState', () => {
         state.applyAbility('cylinder_vision');
 
         expect(state.getActiveEffects()).toContain('cylinder_vision');
+        const effect = state.getTimedEffectSnapshots().find((entry) => entry.abilityType === 'cylinder_vision');
+        expect(effect?.durationMs).toBe(30000);
 
         const publicState = state.getPublicState();
         expect(publicState.activeEffects).toContain('cylinder_vision');

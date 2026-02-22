@@ -246,6 +246,15 @@ export class ServerAuthGameClient {
     return sent ? requestId : null;
   }
 
+  sendBlackholePieceEnded(reason: 'edge_contact' | 'timeout_cap' = 'edge_contact'): boolean {
+    return this.send({
+      type: 'blackhole_piece_end',
+      playerId: this.playerId,
+      reason,
+      timestamp: Date.now(),
+    });
+  }
+
   private send(data: any): boolean {
     if (this.socket.readyState === WebSocket.OPEN) {
       this.debugLogger?.logOutgoing(data);

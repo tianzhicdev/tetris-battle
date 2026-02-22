@@ -126,6 +126,9 @@ export default class GameRoomServer implements Party.Server {
       case 'ability_activation':
         this.handleAbilityActivation(data.playerId, data.abilityType, data.targetPlayerId, data.requestId);
         break;
+      case 'blackhole_piece_end':
+        this.handleBlackholePieceEnd(data.playerId, data.reason);
+        break;
       case 'game_over':
         this.handleGameOver(data.playerId);
         break;
@@ -251,6 +254,26 @@ export default class GameRoomServer implements Party.Server {
         });
       }
     }
+  }
+
+  private handleBlackholePieceEnd(playerId: string, reason?: string): void {
+    const serverState = this.serverGameStates.get(playerId);
+    if (!serverState) {
+      console.warn(`[BLACKHOLE] No server state for player ${playerId}`);
+      return;
+    }
+
+    const resolved = serverState.resolveBlackholePiece(Date.now());
+    if (!resolved) {
+      return;
+    }
+
+    this.sendToPlayer(playerId, {
+      type: 'blackhole_piece_end_ack',
+      reason: typeof reason === 'string' ? reason : 'edge_contact',
+      serverTime: Date.now(),
+    });
+    this.broadcastState();
   }
 
   private startGameLoop(playerId: string): void {
