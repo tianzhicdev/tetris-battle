@@ -519,9 +519,7 @@ export class ServerGameState {
         this.setTimedEffect('mirage', 5000, now);
         break;
       case 'gold_digger': {
-        let board = applyGoldDigger(this.gameState.board, 6, this.rng);
-        board = this.applyGravityToBoard(board);
-        this.gameState.board = this.clearLinesWithoutRewards(board, false);
+        this.gameState.board = applyGoldDigger(this.gameState.board, 3, this.rng);
         break;
       }
       case 'column_swap': {

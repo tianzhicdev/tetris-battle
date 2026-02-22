@@ -18,6 +18,25 @@ function randomCellType(rng?: SeededRandom): CellValue {
   return CELL_TYPES[randomInt(CELL_TYPES.length, rng)];
 }
 
+function hasOrthogonalFilledNeighbor(grid: CellValue[][], x: number, y: number): boolean {
+  const deltas = [
+    { dx: 1, dy: 0 },
+    { dx: -1, dy: 0 },
+    { dx: 0, dy: 1 },
+    { dx: 0, dy: -1 },
+  ];
+
+  for (const { dx, dy } of deltas) {
+    const nx = x + dx;
+    const ny = y + dy;
+    if (ny < 0 || ny >= grid.length) continue;
+    if (nx < 0 || nx >= grid[ny].length) continue;
+    if (grid[ny][nx]) return true;
+  }
+
+  return false;
+}
+
 // BUFF EFFECTS (Self-Enhancement)
 
 export function applySpeedBoost(currentSpeed: number): number {
@@ -140,28 +159,24 @@ export function applyWeirdShapes(piece: Tetromino): Tetromino {
 }
 
 export function applyRandomSpawner(board: Board, blockCount: number = 5, rng?: SeededRandom): Board {
-  // One-shot: fill up to blockCount empty cells that are at least 2 Manhattan-distance
-  // away from every existing filled cell. Skips the top 5 rows.
+  // One-shot: fill up to blockCount empty cells that are either on the bottom row
+  // or directly adjacent to an existing filled cell. Skips the top 5 rows.
   const newGrid = board.grid.map(row => [...row]);
+  const sourceGrid = board.grid;
 
   // Collect valid candidate cells
   const candidates: { x: number; y: number }[] = [];
 
   for (let y = 5; y < board.height; y++) {
     for (let x = 0; x < board.width; x++) {
-      if (newGrid[y][x]) continue; // already filled
+      if (sourceGrid[y][x]) continue; // already filled
 
-      // Check Manhattan distance ≥ 2 from every filled cell
-      let tooClose = false;
-      outer: for (let fy = 0; fy < board.height; fy++) {
-        for (let fx = 0; fx < board.width; fx++) {
-          if (newGrid[fy][fx] && Math.abs(fy - y) + Math.abs(fx - x) < 2) {
-            tooClose = true;
-            break outer;
-          }
-        }
+      const isBottomRow = y === board.height - 1;
+      const isAdjacentToFilled = hasOrthogonalFilledNeighbor(sourceGrid, x, y);
+
+      if (isBottomRow || isAdjacentToFilled) {
+        candidates.push({ x, y });
       }
-      if (!tooClose) candidates.push({ x, y });
     }
   }
 
@@ -252,7 +267,7 @@ export function applyDeathCross(board: Board): Board {
   return { ...board, grid: newGrid };
 }
 
-export function applyGoldDigger(board: Board, blockCount: number = 5, rng?: SeededRandom): Board {
+export function applyGoldDigger(board: Board, blockCount: number = 3, rng?: SeededRandom): Board {
   // One-shot: randomly clear up to blockCount filled cells. Skips the top 5 rows.
   const newGrid = board.grid.map(row => [...row]);
 

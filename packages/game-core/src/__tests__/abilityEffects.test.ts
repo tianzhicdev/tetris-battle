@@ -1,7 +1,10 @@
 import { describe, it, expect } from 'vitest';
 import { createBoard } from '../engine';
+import { SeededRandom } from '../SeededRandom';
 import {
   applyAddJunkRows,
+  applyGoldDigger,
+  applyRandomSpawner,
   applyScrambleBoard,
   applyGravityFlip,
 } from '../abilityEffects';
@@ -139,6 +142,98 @@ describe('Ability Effects', () => {
 
       expect(doubleFlipped.grid[19][3]).toBe('S');
       expect(doubleFlipped.grid[15][7]).toBe('Z');
+    });
+  });
+
+  describe('applyRandomSpawner', () => {
+    it('spawns on the bottom row when no adjacent support exists', () => {
+      const board = createBoard(10, 20);
+      const result = applyRandomSpawner(board, 4, new SeededRandom(123));
+      const spawnedCells: Array<{ x: number; y: number }> = [];
+
+      for (let y = 0; y < board.height; y++) {
+        for (let x = 0; x < board.width; x++) {
+          if (board.grid[y][x] === null && result.grid[y][x] !== null) {
+            spawnedCells.push({ x, y });
+          }
+        }
+      }
+
+      expect(spawnedCells).toHaveLength(4);
+      expect(spawnedCells.every(({ y }) => y === board.height - 1)).toBe(true);
+    });
+
+    it('only spawns in supported cells (bottom row or adjacent to existing filled cells)', () => {
+      const board = createBoard(10, 20);
+      for (let x = 0; x < board.width; x++) {
+        board.grid[board.height - 1][x] = 'I';
+      }
+
+      const result = applyRandomSpawner(board, 6, new SeededRandom(456));
+      const spawnedCells: Array<{ x: number; y: number }> = [];
+
+      for (let y = 0; y < board.height; y++) {
+        for (let x = 0; x < board.width; x++) {
+          if (board.grid[y][x] === null && result.grid[y][x] !== null) {
+            spawnedCells.push({ x, y });
+          }
+        }
+      }
+
+      const hasOriginalNeighbor = (x: number, y: number): boolean => {
+        const neighbors = [
+          { dx: 1, dy: 0 },
+          { dx: -1, dy: 0 },
+          { dx: 0, dy: 1 },
+          { dx: 0, dy: -1 },
+        ];
+
+        return neighbors.some(({ dx, dy }) => {
+          const nx = x + dx;
+          const ny = y + dy;
+          return (
+            ny >= 0 &&
+            ny < board.height &&
+            nx >= 0 &&
+            nx < board.width &&
+            board.grid[ny][nx] !== null
+          );
+        });
+      };
+
+      expect(spawnedCells).toHaveLength(6);
+      expect(
+        spawnedCells.every(({ x, y }) => y === board.height - 1 || hasOriginalNeighbor(x, y))
+      ).toBe(true);
+    });
+  });
+
+  describe('applyGoldDigger', () => {
+    it('removes only the requested number of cells without moving other cells', () => {
+      const board = createBoard(10, 20);
+      for (let x = 0; x < board.width; x++) {
+        board.grid[10][x] = 'T';
+      }
+
+      const result = applyGoldDigger(board, 3, new SeededRandom(789));
+
+      let changedCellCount = 0;
+      let filledCount = 0;
+      for (let y = 0; y < board.height; y++) {
+        for (let x = 0; x < board.width; x++) {
+          if (board.grid[y][x] !== result.grid[y][x]) {
+            changedCellCount++;
+          }
+          if (result.grid[y][x] !== null) {
+            filledCount++;
+          }
+        }
+      }
+
+      expect(changedCellCount).toBe(3);
+      expect(filledCount).toBe(7);
+      expect(result.grid[10].filter(cell => cell !== null).length).toBe(7);
+      expect(result.grid[19].every(cell => cell === null)).toBe(true);
     });
   });
 });

@@ -235,14 +235,14 @@
       "type": "random_spawner",
       "name": "Random Spawner",
       "shortName": "RND",
-      "description": "Spawn 4 random isolated blocks on opponent's board",
+      "description": "Spawn 4 random supported blocks on opponent's board",
       "cost": 45,
       "duration": 0,
       "category": "debuff_board",
       "unlockTier": 2,
       "unlockCost": 100,
-      "balance_notes": "Cheap harass. Blocks spawn in positions that are hard to clear (isolated from existing structures). Can occasionally help opponent if blocks land in useful spots — the randomness creates variance. Think of it as 'sand in the gears'.",
-      "implementation": "Find 4 empty cells that have no filled neighbors within Manhattan distance 1. Fill them with gray blocks. If fewer than 4 such cells exist, fill what's available."
+      "balance_notes": "Cheap harass. Blocks only appear on the floor or attached to existing stacks, so the pressure is real but not random floating chaos. Can occasionally help opponent if blocks land in useful spots — the randomness creates variance. Think of it as 'sand in the gears'.",
+      "implementation": "Find up to 4 empty cells that are either on the bottom row or orthogonally adjacent to an existing filled cell. Fill them with gray blocks."
     },
     "garbage_rain": {
       "id": "garbage_rain",
@@ -362,14 +362,14 @@
       "type": "gold_digger",
       "name": "Gold Digger",
       "shortName": "DIG",
-      "description": "Remove 6 random filled cells from opponent's board",
+      "description": "Remove 3 random filled cells from opponent's board",
       "cost": 75,
       "duration": 0,
       "category": "debuff_board",
       "unlockTier": 3,
       "unlockCost": 300,
-      "balance_notes": "High variance ability. Can break nearly-complete rows (devastating), create unreachable holes (annoying), or accidentally help opponent by clearing clutter (backfire). The randomness is the design feature, not a bug — it creates memorable moments. 6 cells = potentially ruining 1-2 row completions.",
-      "implementation": "Select 6 random filled cells on opponent's board. Remove them (leave empty). Apply gravity (floating blocks fall). Check for any row clears that result from gravity settling."
+      "balance_notes": "High variance ability. Can break nearly-complete rows (devastating), create awkward holes (annoying), or accidentally help opponent by clearing clutter (backfire). The randomness is the design feature, not a bug — it creates memorable moments. 3 cells keeps it disruptive without board-wide swings.",
+      "implementation": "Select 3 random filled cells on opponent's board and remove them. Leave resulting gaps in place (no gravity cascade)."
     },
     "column_swap": {
       "id": "column_swap",

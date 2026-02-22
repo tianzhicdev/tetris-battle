@@ -219,15 +219,33 @@ describe('ServerGameState', () => {
       });
 
       it('should apply gold_digger - removes random blocks', () => {
-        const blockCountBefore = countBlocks(state.gameState.board.grid);
-        const boardBefore = JSON.stringify(state.gameState.board.grid);
+        const emptyGrid = Array.from({ length: state.gameState.board.height }, () =>
+          Array(state.gameState.board.width).fill(null)
+        );
+        state.gameState.board.grid = emptyGrid;
+
+        for (let x = 0; x < state.gameState.board.width; x++) {
+          state.gameState.board.grid[10][x] = 'T';
+        }
+
+        const boardBefore = JSON.parse(JSON.stringify(state.gameState.board.grid));
+        const blockCountBefore = countBlocks(boardBefore);
         state.applyAbility('gold_digger');
         const blockCountAfter = countBlocks(state.gameState.board.grid);
-        const boardAfter = JSON.stringify(state.gameState.board.grid);
+        const boardAfter = state.gameState.board.grid;
 
-        // One-shot board mutation.
-        expect(boardAfter).not.toBe(boardBefore);
-        expect(blockCountAfter).toBeLessThanOrEqual(blockCountBefore);
+        let changedCellCount = 0;
+        for (let y = 0; y < state.gameState.board.height; y++) {
+          for (let x = 0; x < state.gameState.board.width; x++) {
+            if (boardBefore[y][x] !== boardAfter[y][x]) {
+              changedCellCount++;
+            }
+          }
+        }
+
+        // Gold Digger should remove only a few cells and avoid full-board reshaping.
+        expect(blockCountAfter).toBe(blockCountBefore - 3);
+        expect(changedCellCount).toBe(3);
       });
     });
 
