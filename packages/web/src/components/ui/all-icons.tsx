@@ -505,6 +505,7 @@ export const abilityIcons: Record<string, (c: string, s: number) => JSX.Element>
 // Add alias for shield (abilities.json uses "shield" but design system uses "deflect_shield")
 abilityIcons.shield = abilityIcons.deflect_shield;
 abilityIcons.cylinder_vision = abilityIcons.blind_spot;
+abilityIcons.snake_board = abilityIcons.weird_shapes;
 
 export const controlIcons: Record<string, (c: string, s: number) => JSX.Element> = {
   left: (c = "#fff", s = 32) => (

@@ -456,6 +456,20 @@
       "balance_notes": "Severe perception disruption. The target can only see a narrow curved window of their board while the cylinder rotates to keep the active piece facing forward. This keeps piece control readable but destroys peripheral awareness. The board's true left/right boundaries still exist and are marked by a seam guide.",
       "implementation": "Apply timed visual debuff. On target client, render board on a 3D cylinder and rotate around Y based on active piece X so the active tetrimino stays front-facing. Show seam line for true boundaries."
     },
+    "snake_board": {
+      "id": "snake_board",
+      "type": "snake_board",
+      "name": "Snake Board",
+      "shortName": "SNAKE",
+      "description": "For 10 seconds, your board becomes Snake. Left/Right turn, Hard Drop dashes to obstacle.",
+      "cost": 120,
+      "duration": 10000,
+      "category": "buff_board",
+      "unlockTier": 4,
+      "unlockCost": 600,
+      "balance_notes": "Mode-shift survival buff. During Snake Board, normal tetromino gravity and line clears are paused. Existing filled cells become fruit that increase snake length, and the snake itself remains on the board after the mode ends. Collision with wall/body does not end the effect; movement simply stops until a new direction is chosen or the timer ends.",
+      "implementation": "On cast: pause tetromino gameplay, initialize a 3-cell snake, and convert current filled cells into fruit. Every tick, snake auto-moves forward. move_left/move_right rotate heading 90 degrees; hard_drop repeatedly advances until the next step would hit wall/body. On timeout, keep resulting snake cells on board, end snake state, and resume normal tetromino spawn."
+    },
     "cross_firebomb": {
       "id": "cross_firebomb",
       "type": "cross_firebomb",
@@ -670,7 +684,7 @@
     }
   },
   "summary": {
-    "total_abilities": 33,
+    "total_abilities": 34,
     "by_tier": {
       "tier_1_free": [
         "earthquake",
@@ -704,6 +718,7 @@
         "rotation_lock",
         "blind_spot",
         "cylinder_vision",
+        "snake_board",
         "cross_firebomb",
         "weird_shapes",
         "narrow_escape",
@@ -755,6 +770,7 @@
       "buff_board": [
         "fill_holes(75)",
         "circle_bomb(65)",
+        "snake_board(120)",
         "cross_firebomb(100)",
         "clear_rows(100)",
         "narrow_escape(100)"

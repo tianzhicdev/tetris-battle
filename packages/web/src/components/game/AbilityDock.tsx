@@ -20,6 +20,7 @@ const ABILITY_CHARS: Record<string, string> = {
   screen_shake: '揺',
   blind_spot: '墨',
   cylinder_vision: '筒',
+  snake_board: '蛇',
   ink_splash: '墨',
   mini_blocks: '縮',
   fill_holes: '満',

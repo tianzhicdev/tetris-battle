@@ -374,6 +374,72 @@ describe('ServerGameState', () => {
 
         expect(state.gameState.board.grid[7][0]).toBe('I');
       });
+
+      it('should apply snake_board and initialize snake mode', () => {
+        state.gameState.board.grid[0][0] = 'T';
+        state.applyAbility('snake_board');
+
+        expect(state.getActiveEffects()).toContain('snake_board');
+        expect(state.gameState.currentPiece).toBeNull();
+        expect((state as any).snakeBody.length).toBe(3);
+      });
+
+      it('should grow snake when consuming fruit during auto movement', () => {
+        state.gameState.board.grid[10][6] = 'L';
+        state.applyAbility('snake_board');
+
+        const lengthBefore = (state as any).snakeBody.length;
+        state.tick();
+
+        expect((state as any).snakeBody.length).toBe(lengthBefore + 1);
+      });
+
+      it('should turn left/right and hard-drop dash in snake mode', () => {
+        state.applyAbility('snake_board');
+        (state as any).snakeBody = [
+          { x: 2, y: 5 },
+          { x: 1, y: 5 },
+          { x: 0, y: 5 },
+        ];
+        (state as any).snakeDirection = 'right';
+        (state as any).snakeFruits = new Map();
+        (state as any).renderSnakeBoard();
+
+        const turnedLeft = state.processInput('move_left');
+        expect(turnedLeft).toBe(true);
+        expect((state as any).snakeDirection).toBe('up');
+
+        const turnedRight = state.processInput('move_right');
+        expect(turnedRight).toBe(true);
+        expect((state as any).snakeDirection).toBe('right');
+
+        const dashed = state.processInput('hard_drop');
+        expect(dashed).toBe(true);
+        expect((state as any).snakeBody[0].x).toBe(state.gameState.board.width - 1);
+      });
+
+      it('should keep snake mode active on collision, then resume tetris on timer expiry', () => {
+        state.applyAbility('snake_board');
+        (state as any).snakeBody = [
+          { x: state.gameState.board.width - 1, y: 5 },
+          { x: state.gameState.board.width - 2, y: 5 },
+          { x: state.gameState.board.width - 3, y: 5 },
+        ];
+        (state as any).snakeDirection = 'right';
+        (state as any).snakeFruits = new Map();
+        (state as any).renderSnakeBoard();
+
+        state.tick(); // blocked by wall; effect should remain active
+        expect(state.getActiveEffects()).toContain('snake_board');
+
+        state.activeEffects.set('snake_board', Date.now() - 1000);
+        const changed = state.tick();
+
+        expect(changed).toBe(true);
+        expect(state.getActiveEffects()).not.toContain('snake_board');
+        expect((state as any).snakeBody.length).toBe(0);
+        expect(state.gameState.currentPiece).not.toBeNull();
+      });
     });
 
     describe('Effect Duration and Cleanup', () => {

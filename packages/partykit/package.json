@@ -4,9 +4,12 @@
   "type": "module",
   "main": "./src/server.ts",
   "scripts": {
+    "predev": "pnpm --filter @tetris-battle/game-core build",
     "dev": "partykit dev",
+    "prebuild": "pnpm --filter @tetris-battle/game-core build",
     "build": "tsc --noEmit",
     "deploy": "partykit deploy",
+    "pretest": "pnpm --filter @tetris-battle/game-core build",
     "test": "vitest run"
   },
   "dependencies": {

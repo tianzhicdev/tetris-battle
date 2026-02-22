@@ -120,6 +120,8 @@ describe('Ability catalog integrity', () => {
       'tilt',
       'flip_board',
       'ink_splash',
+      'cylinder_vision',
+      'snake_board',
     ];
     for (const id of required) {
       expect(ABILITY_IDS, `Missing v2 ability: ${id}`).toContain(id);

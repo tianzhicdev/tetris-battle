@@ -36,6 +36,20 @@ const INFINITE_EFFECT = Number.POSITIVE_INFINITY;
 const BASE_TICK_RATE_MS = 1000;
 const STANDARD_BOARD_WIDTH = 10;
 const WIDE_LOAD_BOARD_WIDTH = 12;
+const SNAKE_START_LENGTH = 3;
+const SNAKE_HEAD_CELL: TetrominoType = 'I';
+const SNAKE_BODY_CELL: TetrominoType = 'S';
+
+type SnakeDirection = 'up' | 'right' | 'down' | 'left';
+type SnakeCell = { x: number; y: number };
+
+const SNAKE_DIRECTION_ORDER: SnakeDirection[] = ['up', 'right', 'down', 'left'];
+const SNAKE_DELTAS: Record<SnakeDirection, { dx: number; dy: number }> = {
+  up: { dx: 0, dy: -1 },
+  right: { dx: 1, dy: 0 },
+  down: { dx: 0, dy: 1 },
+  left: { dx: -1, dy: 0 },
+};
 
 /**
  * ServerGameState manages the authoritative game state for one player
@@ -79,6 +93,11 @@ export class ServerGameState {
   // Geometry effect state
   private narrowEscapeStoredColumns: CellValue[][] | null = null;
 
+  // Snake Board mode state
+  private snakeBody: SnakeCell[] = [];
+  private snakeDirection: SnakeDirection = 'right';
+  private snakeFruits: Map<string, TetrominoType> = new Map();
+
   constructor(playerId: string, seed: number, loadout: string[]) {
     this.playerId = playerId;
     this.rng = new SeededRandom(seed + playerId.charCodeAt(0)); // Unique seed per player
@@ -105,21 +124,35 @@ export class ServerGameState {
    * Process player input and return true if state changed
    */
   processInput(input: PlayerInputType): boolean {
-    if (!this.gameState.currentPiece || this.gameState.isGameOver) {
+    if (this.gameState.isGameOver) {
       return false;
     }
 
     const now = Date.now();
+    const effectKeysBeforeRefresh = this.getEffectKeySnapshot();
     this.currentPieceLastManualInputAtMs = now;
     this.applyPassiveStarRegen(now);
     this.refreshEffects(now);
     this.maybeMorphCurrentPiece(now);
+    const effectsChanged = this.haveEffectKeysChanged(
+      effectKeysBeforeRefresh,
+      this.getEffectKeySnapshot()
+    );
 
     // Check for reverse controls
     let effectiveInput = input;
     if (this.isEffectActive('reverse_controls', now)) {
       if (input === 'move_left') effectiveInput = 'move_right';
       else if (input === 'move_right') effectiveInput = 'move_left';
+    }
+
+    if (this.isSnakeBoardActive(now)) {
+      const snakeChanged = this.processSnakeInput(effectiveInput);
+      return snakeChanged || effectsChanged;
+    }
+
+    if (!this.gameState.currentPiece) {
+      return effectsChanged;
     }
 
     // Rotation lock prevents both clockwise/counter-clockwise rotation.
@@ -177,9 +210,107 @@ export class ServerGameState {
    */
   tick(): boolean {
     this.lastTickTime = Date.now();
+    const effectKeysBeforeRefresh = this.getEffectKeySnapshot();
     this.applyPassiveStarRegen(this.lastTickTime);
     this.refreshEffects(this.lastTickTime);
-    return this.movePieceInGravityDirection(this.lastTickTime);
+    const effectsChanged = this.haveEffectKeysChanged(
+      effectKeysBeforeRefresh,
+      this.getEffectKeySnapshot()
+    );
+
+    if (this.isSnakeBoardActive(this.lastTickTime)) {
+      const snakeMoved = this.advanceSnakeOneCell();
+      return snakeMoved || effectsChanged;
+    }
+
+    const moved = this.movePieceInGravityDirection(this.lastTickTime);
+    return moved || effectsChanged;
+  }
+
+  private processSnakeInput(input: PlayerInputType): boolean {
+    switch (input) {
+      case 'move_left':
+        return this.turnSnake('left');
+      case 'move_right':
+        return this.turnSnake('right');
+      case 'hard_drop':
+        return this.dashSnakeToObstacle();
+      // Snake mode is auto-moving; these controls are intentionally disabled.
+      case 'soft_drop':
+      case 'rotate_cw':
+      case 'rotate_ccw':
+      default:
+        return false;
+    }
+  }
+
+  private turnSnake(turn: 'left' | 'right'): boolean {
+    if (this.snakeBody.length === 0) return false;
+    const currentIndex = SNAKE_DIRECTION_ORDER.indexOf(this.snakeDirection);
+    if (currentIndex < 0) return false;
+
+    const delta = turn === 'left' ? -1 : 1;
+    const nextIndex =
+      (currentIndex + delta + SNAKE_DIRECTION_ORDER.length) % SNAKE_DIRECTION_ORDER.length;
+    this.snakeDirection = SNAKE_DIRECTION_ORDER[nextIndex];
+    return true;
+  }
+
+  private dashSnakeToObstacle(): boolean {
+    let moved = false;
+    while (this.advanceSnakeOneCell()) {
+      moved = true;
+    }
+    return moved;
+  }
+
+  private advanceSnakeOneCell(): boolean {
+    const head = this.snakeBody[0];
+    if (!head) return false;
+
+    const delta = SNAKE_DELTAS[this.snakeDirection];
+    const nextHead: SnakeCell = {
+      x: head.x + delta.dx,
+      y: head.y + delta.dy,
+    };
+    const fruitKey = this.getSnakeCellKey(nextHead);
+    const willGrow = this.snakeFruits.has(fruitKey);
+
+    if (this.isSnakeBlocked(nextHead, willGrow)) {
+      return false;
+    }
+
+    this.snakeBody.unshift(nextHead);
+    if (willGrow) {
+      this.snakeFruits.delete(fruitKey);
+    } else {
+      this.snakeBody.pop();
+    }
+
+    this.renderSnakeBoard();
+    return true;
+  }
+
+  private isSnakeBlocked(nextHead: SnakeCell, willGrow: boolean): boolean {
+    if (
+      nextHead.x < 0 ||
+      nextHead.x >= this.gameState.board.width ||
+      nextHead.y < 0 ||
+      nextHead.y >= this.gameState.board.height
+    ) {
+      return true;
+    }
+
+    const tailIndex = this.snakeBody.length - 1;
+    for (let i = 0; i < this.snakeBody.length; i++) {
+      if (!willGrow && i === tailIndex) continue; // Tail moves away this step.
+      const segment = this.snakeBody[i];
+      if (segment.x === nextHead.x && segment.y === nextHead.y) {
+        return true;
+      }
+    }
+
+    return false;
   }
 
   private movePieceInGravityDirection(now: number): boolean {
@@ -612,6 +743,9 @@ export class ServerGameState {
       case 'narrow_escape':
         this.activateNarrowEscape(now);
         break;
+      case 'snake_board':
+        this.activateSnakeBoard(now);
+        break;
       case 'overcharge':
         this.overchargeCharges = this.getPieceCount('overcharge', 3);
         this.syncCounterEffect('overcharge', this.overchargeCharges);
@@ -773,6 +907,9 @@ export class ServerGameState {
       case 'wide_load':
         this.collapseWideLoad();
         break;
+      case 'snake_board':
+        this.deactivateSnakeBoard();
+        break;
       case 'quicksand':
         this.quicksandRemainingSinks = 0;
         this.quicksandNextSinkAtMs = 0;
@@ -926,6 +1063,123 @@ export class ServerGameState {
       grid: this.gameState.board.grid.map((row) => row.slice(0, STANDARD_BOARD_WIDTH)),
     };
     this.ensureCurrentPieceWithinBoard();
+  }
+
+  private activateSnakeBoard(now: number): void {
+    const durationMs = this.getDurationMs('snake_board', 10000);
+    const currentEndTime = this.activeEffects.get('snake_board');
+    if (typeof currentEndTime === 'number' && this.snakeBody.length > 0) {
+      this.activeEffects.set('snake_board', now + durationMs);
+      return;
+    }
+
+    this.snakeFruits.clear();
+    for (let y = 0; y < this.gameState.board.height; y++) {
+      for (let x = 0; x < this.gameState.board.width; x++) {
+        const cell = this.gameState.board.grid[y][x];
+        if (cell === null) continue;
+        this.snakeFruits.set(this.getSnakeCellKey({ x, y }), cell);
+      }
+    }
+
+    this.snakeBody = this.createInitialSnakeBody();
+    this.snakeDirection = 'right';
+    for (const cell of this.snakeBody) {
+      this.snakeFruits.delete(this.getSnakeCellKey(cell));
+    }
+
+    this.gameState.currentPiece = null;
+    this.currentPieceIsShapeshifter = false;
+    this.currentPieceIsMagnetized = false;
+    this.currentPieceMagnetTarget = null;
+    this.currentPieceRowsMovedSinceSpawn = 0;
+
+    this.activeEffects.set('snake_board', now + durationMs);
+    this.renderSnakeBoard();
+  }
+
+  private deactivateSnakeBoard(): void {
+    if (this.snakeBody.length > 0 || this.snakeFruits.size > 0) {
+      this.renderSnakeBoard();
+    }
+
+    this.snakeBody = [];
+    this.snakeFruits.clear();
+    this.snakeDirection = 'right';
+
+    if (this.gameState.isGameOver) return;
+    this.spawnNextPiece(Date.now());
+    if (!this.gameState.currentPiece || !isValidPosition(this.gameState.board, this.gameState.currentPiece)) {
+      this.gameState.isGameOver = true;
+      this.gameState.currentPiece = null;
+    }
+  }
+
+  private renderSnakeBoard(): void {
+    const grid: CellValue[][] = Array.from({ length: this.gameState.board.height }, () =>
+      Array(this.gameState.board.width).fill(null)
+    );
+
+    for (const [key, fruitType] of this.snakeFruits) {
+      const [xRaw, yRaw] = key.split(',');
+      const x = Number.parseInt(xRaw, 10);
+      const y = Number.parseInt(yRaw, 10);
+      if (!Number.isFinite(x) || !Number.isFinite(y)) continue;
+      if (x < 0 || x >= this.gameState.board.width) continue;
+      if (y < 0 || y >= this.gameState.board.height) continue;
+      grid[y][x] = fruitType;
+    }
+
+    for (let i = this.snakeBody.length - 1; i >= 0; i--) {
+      const { x, y } = this.snakeBody[i];
+      if (x < 0 || x >= this.gameState.board.width) continue;
+      if (y < 0 || y >= this.gameState.board.height) continue;
+      grid[y][x] = i === 0 ? SNAKE_HEAD_CELL : SNAKE_BODY_CELL;
+    }
+
+    this.gameState.board = {
+      ...this.gameState.board,
+      grid,
+    };
+  }
+
+  private createInitialSnakeBody(): SnakeCell[] {
+    const width = this.gameState.board.width;
+    const height = this.gameState.board.height;
+    if (width <= 0 || height <= 0) return [];
+
+    const length = Math.max(1, Math.min(SNAKE_START_LENGTH, width));
+    const headX = Math.min(width - 1, Math.max(length - 1, Math.floor(width / 2)));
+    const headY = Math.max(0, Math.min(height - 1, Math.floor(height / 2)));
+
+    const cells: SnakeCell[] = [];
+    for (let i = 0; i < length; i++) {
+      cells.push({ x: headX - i, y: headY });
+    }
+    return cells;
+  }
+
+  private isSnakeBoardActive(now: number): boolean {
+    const endTime = this.activeEffects.get('snake_board');
+    if (typeof endTime !== 'number') return false;
+    if (endTime === INFINITE_EFFECT) return true;
+    return endTime > now;
+  }
+
+  private getSnakeCellKey(cell: SnakeCell): string {
+    return `${cell.x},${cell.y}`;
+  }
+
+  private getEffectKeySnapshot(): Set<string> {
+    return new Set(this.activeEffects.keys());
+  }
+
+  private haveEffectKeysChanged(before: Set<string>, after: Set<string>): boolean {
+    if (before.size !== after.size) return true;
+    for (const key of before) {
+      if (!after.has(key)) return true;
+    }
+    return false;
   }
 
   private syncMagnetCounterEffect(): void {

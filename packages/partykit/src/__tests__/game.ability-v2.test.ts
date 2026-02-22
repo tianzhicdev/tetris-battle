@@ -133,4 +133,23 @@ describe('GameRoomServer v2 ability behaviors', () => {
     expect(purgeResult?.accepted).toBe(true);
     expect(purgeResult?.appliedAbilityType).toBe('purge');
   });
+
+  it('accepts cylinder_vision and applies it to opponent', () => {
+    const { server, p1Conn } = createTwoPlayerServer('game_v2_cylinder_vision');
+
+    const p1State = new ServerGameState('p1', 12345, ['cylinder_vision']);
+    const p2State = new ServerGameState('p2', 12345, ['earthquake']);
+    p1State.gameState.stars = 300;
+    server.serverGameStates.set('p1', p1State);
+    server.serverGameStates.set('p2', p2State);
+
+    server.handleAbilityActivation('p1', 'cylinder_vision', 'p2', 'req_cylinder');
+
+    const results = getMessages(p1Conn, 'ability_activation_result');
+    const cylinderResult = results.find((result) => result.requestId === 'req_cylinder');
+
+    expect(cylinderResult?.accepted).toBe(true);
+    expect(cylinderResult?.appliedAbilityType).toBe('cylinder_vision');
+    expect(p2State.getActiveEffects()).toContain('cylinder_vision');
+  });
 });
