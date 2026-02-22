@@ -11,6 +11,8 @@ interface CylinderBoardViewProps {
   theme: Theme;
   width: number;
   height: number;
+  sourceCanvas?: HTMLCanvasElement | null;
+  overlayCanvas?: HTMLCanvasElement | null;
   showGrid?: boolean;
   showGhost?: boolean;
   borderRadius?: string;
@@ -32,6 +34,7 @@ const BASE_CYLINDER_HEIGHT = 1;
 const CYLINDER_SEGMENTS = 96;
 const TEXELS_PER_CELL = 20;
 const CYLINDER_FIT_PADDING = 1.08;
+const CYLINDER_TILT_X = -0.12;
 
 function clampDimension(value: number): number {
   if (!Number.isFinite(value)) return 1;
@@ -146,6 +149,8 @@ export function CylinderBoardView({
   theme,
   width,
   height,
+  sourceCanvas = null,
+  overlayCanvas = null,
   showGrid = true,
   showGhost = true,
   borderRadius = '8px',
@@ -241,13 +246,37 @@ export function CylinderBoardView({
     const scene = sceneRef.current;
     if (!scene) return;
 
-    const cellSize = resizeTextureCanvas(scene, board);
-    scene.boardRenderer.setTheme(theme);
-    scene.boardRenderer.render(board, currentPiece, ghostPiece, {
-      showGrid,
-      showGhost,
-    });
-    drawBoundaryGuide(scene.offscreenCanvas, cellSize);
+    const sourceWidth = sourceCanvas?.width ?? 0;
+    const sourceHeight = sourceCanvas?.height ?? 0;
+    const hasSource = sourceWidth > 0 && sourceHeight > 0;
+
+    if (hasSource) {
+      if (scene.offscreenCanvas.width !== sourceWidth || scene.offscreenCanvas.height !== sourceHeight) {
+        scene.offscreenCanvas.width = sourceWidth;
+        scene.offscreenCanvas.height = sourceHeight;
+      }
+
+      const ctx = scene.offscreenCanvas.getContext('2d');
+      if (ctx) {
+        ctx.clearRect(0, 0, scene.offscreenCanvas.width, scene.offscreenCanvas.height);
+        ctx.drawImage(sourceCanvas!, 0, 0, sourceWidth, sourceHeight);
+        if ((overlayCanvas?.width ?? 0) > 0 && (overlayCanvas?.height ?? 0) > 0) {
+          ctx.drawImage(overlayCanvas!, 0, 0, sourceWidth, sourceHeight);
+        }
+      }
+
+      const seamCellSize = sourceWidth / Math.max(1, board.width);
+      drawBoundaryGuide(scene.offscreenCanvas, seamCellSize);
+    } else {
+      const cellSize = resizeTextureCanvas(scene, board);
+      scene.boardRenderer.setTheme(theme);
+      scene.boardRenderer.render(board, currentPiece, ghostPiece, {
+        showGrid,
+        showGhost,
+      });
+      drawBoundaryGuide(scene.offscreenCanvas, cellSize);
+    }
+
     scene.texture.needsUpdate = true;
 
     const dimensions = getCylinderDimensions(board);
@@ -260,13 +289,13 @@ export function CylinderBoardView({
     // Keep active piece centered toward the viewer by rotating around Y.
     const centerX = getPieceCenterX(currentPiece, board.width);
     const normalized = ((centerX % board.width) + board.width) / board.width;
-    scene.mesh.rotation.y = -normalized * TAU;
+    scene.mesh.rotation.set(CYLINDER_TILT_X, -normalized * TAU, 0);
 
     const fitDistance = getCameraDistanceToFit(scene.camera, dimensions.halfWidth, dimensions.halfHeight);
     scene.camera.position.z = fitDistance;
     scene.camera.lookAt(0, 0, 0);
     scene.renderer.render(scene.scene, scene.camera);
-  }, [board, currentPiece, ghostPiece, theme, showGrid, showGhost]);
+  }, [board, currentPiece, ghostPiece, theme, sourceCanvas, overlayCanvas, showGrid, showGhost]);
 
   return (
     <div

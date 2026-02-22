@@ -162,7 +162,7 @@ describe('ServerGameState - Buff Abilities', () => {
   });
 
   describe('Blackhole', () => {
-    it('freezes server-side movement while active and resolves on explicit end', () => {
+    it('keeps normal server movement while active and resolves on explicit end', () => {
       const pieceBefore = state.gameState.currentPiece!;
       const yBefore = pieceBefore.position.y;
 
@@ -173,7 +173,7 @@ describe('ServerGameState - Buff Abilities', () => {
       state.processInput('soft_drop');
       state.tick();
 
-      expect(state.gameState.currentPiece?.position.y).toBe(yBefore);
+      expect(state.gameState.currentPiece?.position.y).toBeGreaterThan(yBefore);
 
       const resolved = state.resolveBlackholePiece();
       expect(resolved).toBe(true);

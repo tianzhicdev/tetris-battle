@@ -152,11 +152,6 @@ export class ServerGameState {
       return snakeChanged || effectsChanged;
     }
 
-    if (this.isBlackholeActive(now)) {
-      // Blackhole piece movement is client-side only; server waits for explicit end signal.
-      return effectsChanged;
-    }
-
     if (!this.gameState.currentPiece) {
       return effectsChanged;
     }
@@ -227,10 +222,6 @@ export class ServerGameState {
     if (this.isSnakeBoardActive(this.lastTickTime)) {
       const snakeMoved = this.advanceSnakeOneCell();
       return snakeMoved || effectsChanged;
-    }
-
-    if (this.isBlackholeActive(this.lastTickTime)) {
-      return effectsChanged;
     }
 
     const moved = this.movePieceInGravityDirection(this.lastTickTime);
@@ -632,7 +623,7 @@ export class ServerGameState {
     if (endTime !== INFINITE_EFFECT && endTime <= now) return false;
 
     this.activeEffects.delete('blackhole');
-    this.finishBlackholePiece(now);
+    this.refreshEffects(now);
     return true;
   }
 
@@ -930,9 +921,6 @@ export class ServerGameState {
       case 'wide_load':
         this.collapseWideLoad();
         break;
-      case 'blackhole':
-        this.finishBlackholePiece(Date.now());
-        break;
       case 'snake_board':
         this.deactivateSnakeBoard();
         break;
@@ -1190,23 +1178,6 @@ export class ServerGameState {
     if (typeof endTime !== 'number') return false;
     if (endTime === INFINITE_EFFECT) return true;
     return endTime > now;
-  }
-
-  private isBlackholeActive(now: number): boolean {
-    return this.isEffectActive('blackhole', now);
-  }
-
-  private finishBlackholePiece(now: number): void {
-    if (this.gameState.isGameOver) {
-      this.gameState.currentPiece = null;
-      return;
-    }
-
-    this.spawnNextPiece(now);
-    if (!this.gameState.currentPiece || !isValidPosition(this.gameState.board, this.gameState.currentPiece)) {
-      this.gameState.isGameOver = true;
-      this.gameState.currentPiece = null;
-    }
   }
 
   private getSnakeCellKey(cell: SnakeCell): string {
