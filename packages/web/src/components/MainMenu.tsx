@@ -129,21 +129,19 @@ export function MainMenu({ onSelectMode, theme, profile, onProfileUpdate, onChal
                 setShowFriends(true);
               }}
               style={{
-                padding: '10px 18px',
+                padding: '8px 10px',
                 fontSize: '13px',
                 color: T.accent.cyan,
                 cursor: 'pointer',
+                appearance: 'none',
                 fontFamily: T.font.display,
                 fontWeight: 700,
                 letterSpacing: '1px',
                 minWidth: '88px',
                 touchAction: 'manipulation',
-                borderRadius: `${T.radius.md}px`,
-                background: T.bg.button,
-                border: `1px solid ${T.accent.cyan}33`,
-                boxShadow: T.glow(T.accent.cyan, 0.5),
+                border: 'none',
+                background: 'transparent',
                 textShadow: T.glow(T.accent.cyan, 1),
-                backdropFilter: 'blur(20px)',
                 transition: 'all 0.2s ease',
                 position: 'relative' as const,
               }}
@@ -175,21 +173,19 @@ export function MainMenu({ onSelectMode, theme, profile, onProfileUpdate, onChal
                 setShowProfile(true);
               }}
               style={{
-                padding: '10px 18px',
+                padding: '8px 10px',
                 fontSize: '13px',
                 color: T.accent.cyan,
                 cursor: 'pointer',
+                appearance: 'none',
                 fontFamily: T.font.display,
                 fontWeight: 700,
                 letterSpacing: '1px',
                 minWidth: '88px',
                 touchAction: 'manipulation',
-                borderRadius: `${T.radius.md}px`,
-                background: T.bg.button,
-                border: `1px solid ${T.accent.cyan}33`,
-                boxShadow: T.glow(T.accent.cyan, 0.5),
+                border: 'none',
+                background: 'transparent',
                 textShadow: T.glow(T.accent.cyan, 1),
-                backdropFilter: 'blur(20px)',
                 transition: 'all 0.2s ease',
               }}
             >
@@ -202,21 +198,19 @@ export function MainMenu({ onSelectMode, theme, profile, onProfileUpdate, onChal
                 setShowAbilities(true);
               }}
               style={{
-                padding: '10px 18px',
+                padding: '8px 10px',
                 fontSize: '13px',
                 color: T.accent.green,
                 cursor: 'pointer',
+                appearance: 'none',
                 fontFamily: T.font.display,
                 fontWeight: 700,
                 letterSpacing: '1px',
                 minWidth: '88px',
                 touchAction: 'manipulation',
-                borderRadius: `${T.radius.md}px`,
-                background: T.bg.button,
-                border: `1px solid ${T.accent.green}33`,
-                boxShadow: T.glow(T.accent.green, 0.5),
+                border: 'none',
+                background: 'transparent',
                 textShadow: T.glow(T.accent.green, 1),
-                backdropFilter: 'blur(20px)',
                 transition: 'all 0.2s ease',
               }}
             >

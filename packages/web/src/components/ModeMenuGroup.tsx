@@ -28,13 +28,8 @@ export function ModeMenuGroup({ onSelectMode }: ModeMenuGroupProps) {
       style={{
         width: '100%',
         display: 'grid',
-        gap: '10px',
-        padding: '14px',
-        borderRadius: `${T.radius.xl}px`,
-        background: T.bg.panel,
-        border: `1px solid ${T.accent.cyan}33`,
-        boxShadow: `${T.glow(T.accent.cyan, 0.35)}, inset 0 1px 0 rgba(255,255,255,0.08)`,
-        backdropFilter: 'blur(14px)',
+        gap: '8px',
+        justifyItems: 'center',
       }}
     >
       {!activeGroup && (
@@ -42,18 +37,19 @@ export function ModeMenuGroup({ onSelectMode }: ModeMenuGroupProps) {
           <button
             onClick={() => openGroup('pve')}
             style={{
-              padding: '14px 16px',
-              borderRadius: `${T.radius.lg}px`,
-              border: `1px solid ${T.accent.green}44`,
-              background: 'rgba(0, 240, 140, 0.08)',
+              width: '100%',
+              padding: '12px 8px',
+              border: 'none',
+              borderBottom: `1px solid ${T.accent.green}44`,
+              background: 'transparent',
               color: T.accent.green,
               cursor: 'pointer',
+              appearance: 'none',
               fontFamily: T.font.display,
               fontWeight: 700,
               letterSpacing: '2px',
               fontSize: 'clamp(16px, 3.8vw, 20px)',
               textShadow: T.glow(T.accent.green, 0.8),
-              boxShadow: T.glow(T.accent.green, 0.35),
               transition: T.transition.normal,
             }}
           >
@@ -63,18 +59,19 @@ export function ModeMenuGroup({ onSelectMode }: ModeMenuGroupProps) {
           <button
             onClick={() => openGroup('pvp')}
             style={{
-              padding: '14px 16px',
-              borderRadius: `${T.radius.lg}px`,
-              border: `1px solid ${T.accent.cyan}44`,
-              background: 'rgba(0, 240, 240, 0.08)',
+              width: '100%',
+              padding: '12px 8px',
+              border: 'none',
+              borderBottom: `1px solid ${T.accent.cyan}44`,
+              background: 'transparent',
               color: T.accent.cyan,
               cursor: 'pointer',
+              appearance: 'none',
               fontFamily: T.font.display,
               fontWeight: 700,
               letterSpacing: '2px',
               fontSize: 'clamp(16px, 3.8vw, 20px)',
               textShadow: T.glow(T.accent.cyan, 0.8),
-              boxShadow: T.glow(T.accent.cyan, 0.35),
               transition: T.transition.normal,
             }}
           >
@@ -118,18 +115,19 @@ export function ModeMenuGroup({ onSelectMode }: ModeMenuGroupProps) {
           <button
             onClick={() => onSelectMode({ mode: 'multiplayer', aiOpponent: activeGroup === 'pve' })}
             style={{
-              padding: '13px 14px',
-              borderRadius: `${T.radius.lg}px`,
-              border: `1px solid ${T.accent.purple}55`,
-              background: 'rgba(176, 64, 240, 0.12)',
+              width: '100%',
+              padding: '12px 8px',
+              border: 'none',
+              borderBottom: `1px solid ${T.accent.purple}44`,
+              background: 'transparent',
               color: T.accent.purple,
               cursor: 'pointer',
+              appearance: 'none',
               fontFamily: T.font.display,
               fontWeight: 700,
               letterSpacing: '1.3px',
               fontSize: 'clamp(14px, 3.5vw, 18px)',
               textShadow: T.glow(T.accent.purple, 0.6),
-              boxShadow: T.glow(T.accent.purple, 0.25),
               transition: T.transition.normal,
             }}
           >
@@ -139,18 +137,19 @@ export function ModeMenuGroup({ onSelectMode }: ModeMenuGroupProps) {
           <button
             onClick={() => onSelectMode({ mode: 'defense-line', aiOpponent: activeGroup === 'pve' })}
             style={{
-              padding: '13px 14px',
-              borderRadius: `${T.radius.lg}px`,
-              border: `1px solid ${T.accent.cyan}55`,
-              background: 'rgba(0, 240, 240, 0.1)',
+              width: '100%',
+              padding: '12px 8px',
+              border: 'none',
+              borderBottom: `1px solid ${T.accent.cyan}44`,
+              background: 'transparent',
               color: T.accent.cyan,
               cursor: 'pointer',
+              appearance: 'none',
               fontFamily: T.font.display,
               fontWeight: 700,
               letterSpacing: '1.3px',
               fontSize: 'clamp(14px, 3.5vw, 18px)',
               textShadow: T.glow(T.accent.cyan, 0.6),
-              boxShadow: T.glow(T.accent.cyan, 0.25),
               transition: T.transition.normal,
             }}
           >
@@ -163,13 +162,13 @@ export function ModeMenuGroup({ onSelectMode }: ModeMenuGroupProps) {
               setActiveGroup(null);
             }}
             style={{
-              padding: '8px 10px',
-              marginTop: '2px',
-              borderRadius: `${T.radius.md}px`,
-              border: `1px solid ${T.border.subtle}`,
-              background: T.bg.button,
+              padding: '6px 8px',
+              marginTop: '4px',
+              border: 'none',
+              background: 'transparent',
               color: T.text.secondary,
               cursor: 'pointer',
+              appearance: 'none',
               fontFamily: T.font.display,
               fontWeight: 600,
               letterSpacing: '1px',
@@ -177,7 +176,7 @@ export function ModeMenuGroup({ onSelectMode }: ModeMenuGroupProps) {
               transition: T.transition.fast,
             }}
           >
-            Back
+            ← Back
           </button>
         </>
       )}
