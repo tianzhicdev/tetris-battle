@@ -13,6 +13,13 @@ export interface GameStateUpdate {
     boardHeight: number;
     currentPiece: any;
     magnetGhost?: any | null;
+    snakeOverlay?: {
+      active: boolean;
+      head: { x: number; y: number; direction: 'up' | 'right' | 'down' | 'left' } | null;
+      body: Array<{ x: number; y: number }>;
+      tail: { x: number; y: number; direction: 'up' | 'right' | 'down' | 'left' } | null;
+      eggs: Array<{ x: number; y: number }>;
+    } | null;
     nextPieces: string[];
     score: number;
     stars: number;
@@ -29,6 +36,13 @@ export interface GameStateUpdate {
     boardHeight: number;
     currentPiece: any;
     magnetGhost?: any | null;
+    snakeOverlay?: {
+      active: boolean;
+      head: { x: number; y: number; direction: 'up' | 'right' | 'down' | 'left' } | null;
+      body: Array<{ x: number; y: number }>;
+      tail: { x: number; y: number; direction: 'up' | 'right' | 'down' | 'left' } | null;
+      eggs: Array<{ x: number; y: number }>;
+    } | null;
     nextPieces: string[];
     score: number;
     stars: number;

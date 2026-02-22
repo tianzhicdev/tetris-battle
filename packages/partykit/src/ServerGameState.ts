@@ -43,6 +43,13 @@ const SNAKE_BODY_CELL: TetrominoType = 'S';
 
 type SnakeDirection = 'up' | 'right' | 'down' | 'left';
 type SnakeCell = { x: number; y: number };
+type SnakeOverlaySnapshot = {
+  active: boolean;
+  head: { x: number; y: number; direction: SnakeDirection } | null;
+  body: SnakeCell[];
+  tail: { x: number; y: number; direction: SnakeDirection } | null;
+  eggs: SnakeCell[];
+};
 
 const SNAKE_DIRECTION_ORDER: SnakeDirection[] = ['up', 'right', 'down', 'left'];
 const SNAKE_DELTAS: Record<SnakeDirection, { dx: number; dy: number }> = {
@@ -63,6 +70,7 @@ export class ServerGameState {
   rng: SeededRandom;
   tickRate: number = BASE_TICK_RATE_MS;
   lastTickTime: number = Date.now();
+  private matchStartTimeMs: number = Date.now();
   loadout: string[] = [];
   activeEffects: Map<string, number> = new Map(); // abilityType → endTime
 
@@ -966,7 +974,17 @@ export class ServerGameState {
   }
 
   private updateTickRate(now: number): void {
-    let gravityMultiplier = 1;
+    if (this.isSnakeBoardActive(now)) {
+      const snakeMultiplier = 4;
+      this.tickRate = Math.max(80, Math.round(BASE_TICK_RATE_MS / snakeMultiplier));
+      return;
+    }
+
+    const elapsedMs = Math.max(0, now - this.matchStartTimeMs);
+    const elapsedMinutes = Math.floor(elapsedMs / 60000);
+    const timeRampMultiplier = Math.min(4, elapsedMinutes + 1);
+
+    let gravityMultiplier = timeRampMultiplier;
 
     if (this.isEffectActive('speed_up_opponent', now)) {
       gravityMultiplier *= 2.5;
@@ -1182,6 +1200,62 @@ export class ServerGameState {
 
   private getSnakeCellKey(cell: SnakeCell): string {
     return `${cell.x},${cell.y}`;
+  }
+
+  private getSnakeDirectionFromDelta(dx: number, dy: number): SnakeDirection | null {
+    if (dx === 1 && dy === 0) return 'right';
+    if (dx === -1 && dy === 0) return 'left';
+    if (dx === 0 && dy === 1) return 'down';
+    if (dx === 0 && dy === -1) return 'up';
+    return null;
+  }
+
+  private getOppositeSnakeDirection(direction: SnakeDirection): SnakeDirection {
+    switch (direction) {
+      case 'up':
+        return 'down';
+      case 'down':
+        return 'up';
+      case 'left':
+        return 'right';
+      case 'right':
+      default:
+        return 'left';
+    }
+  }
+
+  private getSnakeOverlaySnapshot(now: number): SnakeOverlaySnapshot | null {
+    if (!this.isSnakeBoardActive(now) || this.snakeBody.length === 0) {
+      return null;
+    }
+
+    const head = this.snakeBody[0];
+    const tail = this.snakeBody[this.snakeBody.length - 1];
+    const body = this.snakeBody.slice(1, -1).map((cell) => ({ x: cell.x, y: cell.y }));
+    const eggs: SnakeCell[] = [];
+
+    for (const key of this.snakeFruits.keys()) {
+      const [xRaw, yRaw] = key.split(',');
+      const x = Number.parseInt(xRaw, 10);
+      const y = Number.parseInt(yRaw, 10);
+      if (!Number.isFinite(x) || !Number.isFinite(y)) continue;
+      eggs.push({ x, y });
+    }
+
+    let tailDirection = this.getOppositeSnakeDirection(this.snakeDirection);
+    if (this.snakeBody.length > 1) {
+      const beforeTail = this.snakeBody[this.snakeBody.length - 2];
+      const inferred = this.getSnakeDirectionFromDelta(beforeTail.x - tail.x, beforeTail.y - tail.y);
+      if (inferred) tailDirection = inferred;
+    }
+
+    return {
+      active: true,
+      head: { x: head.x, y: head.y, direction: this.snakeDirection },
+      body,
+      tail: { x: tail.x, y: tail.y, direction: tailDirection },
+      eggs,
+    };
   }
 
   private getEffectKeySnapshot(): Set<string> {
@@ -1501,6 +1575,7 @@ export class ServerGameState {
       boardHeight: this.gameState.board.height,
       currentPiece: this.gameState.currentPiece,
       magnetGhost,
+      snakeOverlay: this.getSnakeOverlaySnapshot(now),
       nextPieces: this.gameState.nextPieces.slice(0, 5),
       score: this.gameState.score,
       stars: this.gameState.stars,

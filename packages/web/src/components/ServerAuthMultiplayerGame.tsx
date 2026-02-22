@@ -252,6 +252,43 @@ function centerPieceForBlackhole(piece: Tetromino, cols: number, rows: number): 
   };
 }
 
+function getActivePieceHardDropGhost(
+  board: { grid: any[][]; width: number; height: number },
+  piece: any
+): any | null {
+  if (!piece || !Array.isArray(piece.shape)) return null;
+
+  const position = piece.position ?? { x: piece.x, y: piece.y };
+  const rawX = Number(position?.x);
+  const rawY = Number(position?.y);
+  if (!Number.isFinite(rawX) || !Number.isFinite(rawY)) return null;
+
+  const normalizedPiece = {
+    ...piece,
+    position: {
+      x: Math.round(rawX),
+      y: Math.round(rawY),
+    },
+  };
+
+  const dropPosition = getHardDropPosition(board as any, normalizedPiece as any);
+  if (!dropPosition) return null;
+  if (
+    dropPosition.x === normalizedPiece.position.x &&
+    dropPosition.y === normalizedPiece.position.y
+  ) {
+    return null;
+  }
+
+  return {
+    ...normalizedPiece,
+    position: {
+      x: dropPosition.x,
+      y: dropPosition.y,
+    },
+  };
+}
+
 function getOccupiedCells(piece: Tetromino): Array<{ x: number; y: number }> {
   const cells: Array<{ x: number; y: number }> = [];
   for (let y = 0; y < piece.shape.length; y++) {
@@ -1756,13 +1793,16 @@ export function ServerAuthMultiplayerGame({
       // Check active effects from server
       const blindSpotActive = yourState.activeEffects?.includes('blind_spot');
       const shrinkCeilingActive = yourState.activeEffects?.includes('shrink_ceiling');
+      const hardDropGhost = getActivePieceHardDropGhost(board, yourState.currentPiece);
+      const previewGhost = yourState.magnetGhost ?? hardDropGhost;
 
-      rendererRef.current.render(board, yourState.currentPiece, yourState.magnetGhost ?? null, {
+      rendererRef.current.render(board, yourState.currentPiece, previewGhost, {
         showGrid: true,
-        showGhost: !!yourState.magnetGhost,
+        showGhost: !!previewGhost,
         isBomb: pendingBombVisualRef.current !== null,
         bombType: pendingBombVisualRef.current as 'circle_bomb' | 'cross_firebomb' | undefined,
         blindSpotRows: blindSpotActive ? 4 : 0,
+        snakeOverlay: yourState.snakeOverlay ?? null,
       });
 
       // Draw shrink ceiling overlay
@@ -1818,14 +1858,17 @@ export function ServerAuthMultiplayerGame({
         width: opponentBoardWidth,
         height: opponentBoardHeight,
       };
+      const hardDropGhost = getActivePieceHardDropGhost(opponentBoard, opponentState.currentPiece);
+      const previewGhost = blackholeActive ? null : opponentState.magnetGhost ?? hardDropGhost;
       opponentRendererRef.current.setBlockSize(opponentBoardDisplay.cellSize);
       opponentRendererRef.current.render(
         opponentBoard,
         opponentState.currentPiece,
-        blackholeActive ? null : opponentState.magnetGhost ?? null,
+        previewGhost,
         {
         showGrid: !blackholeActive,
-        showGhost: !blackholeActive && !!opponentState.magnetGhost,
+        showGhost: !blackholeActive && !!previewGhost,
+        snakeOverlay: opponentState.snakeOverlay ?? null,
         }
       );
     }

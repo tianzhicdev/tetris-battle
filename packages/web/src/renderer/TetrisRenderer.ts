@@ -3,11 +3,63 @@ import type { Theme } from '../themes';
 import { DEFAULT_THEME } from '../themes';
 import { BlockAnimationManager } from './BlockAnimationManager';
 
+type SnakeDirection = 'up' | 'right' | 'down' | 'left';
+type SnakeCell = { x: number; y: number };
+type SnakeOverlay = {
+  active: boolean;
+  head: { x: number; y: number; direction: SnakeDirection } | null;
+  body: SnakeCell[];
+  tail: { x: number; y: number; direction: SnakeDirection } | null;
+  eggs: SnakeCell[];
+};
+
 export interface RenderOptions {
   theme?: Theme;
   showGrid?: boolean;
   showGhost?: boolean;
   blindSpotRows?: number; // Number of bottom rows to hide (for blind_spot ability)
+  snakeOverlay?: SnakeOverlay | null;
+}
+
+const SNAKE_SVG_BY_KIND = {
+  egg: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+    <ellipse cx="32" cy="35" rx="16" ry="20" fill="#f6f1d7"/>
+    <ellipse cx="27" cy="30" rx="5" ry="7" fill="#ffffff88"/>
+    <ellipse cx="32" cy="35" rx="16" ry="20" fill="none" stroke="#c8bf95" stroke-width="4"/>
+  </svg>`,
+  body: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+    <rect x="8" y="8" width="48" height="48" rx="16" fill="#3ddc84"/>
+    <circle cx="24" cy="24" r="6" fill="#7df0ae"/>
+    <rect x="8" y="8" width="48" height="48" rx="16" fill="none" stroke="#1a7d4a" stroke-width="4"/>
+  </svg>`,
+  head: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+    <path d="M10 12h28c9 0 16 7 16 16v8c0 9-7 16-16 16H10z" fill="#40e991"/>
+    <circle cx="36" cy="24" r="5" fill="#0f1f16"/>
+    <circle cx="37" cy="23" r="2" fill="#ffffff"/>
+    <path d="M50 32h10" stroke="#173d2b" stroke-width="4" stroke-linecap="round"/>
+    <path d="M10 12h28c9 0 16 7 16 16v8c0 9-7 16-16 16H10z" fill="none" stroke="#1a7d4a" stroke-width="4"/>
+  </svg>`,
+  tail: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+    <path d="M10 32c10-11 20-15 44-16v32c-24-1-34-5-44-16z" fill="#2db56c"/>
+    <path d="M10 32c10-11 20-15 44-16v32c-24-1-34-5-44-16z" fill="none" stroke="#1a7d4a" stroke-width="4"/>
+  </svg>`,
+} as const;
+
+type SnakeSpriteKind = keyof typeof SNAKE_SVG_BY_KIND;
+
+const snakeSpriteCache: Map<SnakeSpriteKind, HTMLImageElement | null> = new Map();
+
+function getSnakeSprite(kind: SnakeSpriteKind): HTMLImageElement | null {
+  if (typeof Image === 'undefined') return null;
+  if (snakeSpriteCache.has(kind)) {
+    return snakeSpriteCache.get(kind) ?? null;
+  }
+
+  const image = new Image();
+  image.decoding = 'async';
+  image.src = `data:image/svg+xml;utf8,${encodeURIComponent(SNAKE_SVG_BY_KIND[kind])}`;
+  snakeSpriteCache.set(kind, image);
+  return image;
 }
 
 export class TetrisRenderer {
@@ -72,6 +124,127 @@ export class TetrisRenderer {
             cell
           );
         }
+      }
+    }
+  }
+
+  private getSnakeDirectionAngle(direction: SnakeDirection): number {
+    switch (direction) {
+      case 'up':
+        return -Math.PI / 2;
+      case 'down':
+        return Math.PI / 2;
+      case 'left':
+        return Math.PI;
+      case 'right':
+      default:
+        return 0;
+    }
+  }
+
+  private drawSnakeFallbackCell(kind: SnakeSpriteKind, x: number, y: number, rotation: number): void {
+    const px = x * this.blockSize;
+    const py = y * this.blockSize;
+    const cx = px + this.blockSize / 2;
+    const cy = py + this.blockSize / 2;
+    const radius = this.blockSize * 0.32;
+
+    this.ctx.save();
+    this.ctx.translate(cx, cy);
+    this.ctx.rotate(rotation);
+
+    if (kind === 'egg') {
+      this.ctx.fillStyle = '#f6f1d7';
+      this.ctx.beginPath();
+      this.ctx.ellipse(0, 0, radius * 0.85, radius, 0, 0, Math.PI * 2);
+      this.ctx.fill();
+      this.ctx.strokeStyle = '#c8bf95';
+      this.ctx.lineWidth = Math.max(1, this.blockSize * 0.08);
+      this.ctx.stroke();
+    } else if (kind === 'body') {
+      const size = this.blockSize * 0.62;
+      this.ctx.fillStyle = '#3ddc84';
+      this.ctx.fillRect(-size / 2, -size / 2, size, size);
+      this.ctx.strokeStyle = '#1a7d4a';
+      this.ctx.lineWidth = Math.max(1, this.blockSize * 0.08);
+      this.ctx.strokeRect(-size / 2, -size / 2, size, size);
+    } else if (kind === 'head') {
+      this.ctx.fillStyle = '#40e991';
+      this.ctx.beginPath();
+      this.ctx.moveTo(radius * 0.9, 0);
+      this.ctx.lineTo(-radius * 0.8, -radius * 0.7);
+      this.ctx.lineTo(-radius * 0.8, radius * 0.7);
+      this.ctx.closePath();
+      this.ctx.fill();
+      this.ctx.strokeStyle = '#1a7d4a';
+      this.ctx.lineWidth = Math.max(1, this.blockSize * 0.08);
+      this.ctx.stroke();
+    } else {
+      this.ctx.fillStyle = '#2db56c';
+      this.ctx.beginPath();
+      this.ctx.moveTo(radius * 0.8, 0);
+      this.ctx.lineTo(-radius * 0.9, -radius * 0.6);
+      this.ctx.lineTo(-radius * 0.9, radius * 0.6);
+      this.ctx.closePath();
+      this.ctx.fill();
+      this.ctx.strokeStyle = '#1a7d4a';
+      this.ctx.lineWidth = Math.max(1, this.blockSize * 0.08);
+      this.ctx.stroke();
+    }
+
+    this.ctx.restore();
+  }
+
+  private drawSnakeCellSprite(
+    kind: SnakeSpriteKind,
+    x: number,
+    y: number,
+    direction: SnakeDirection | null = null
+  ): void {
+    const rotation = direction ? this.getSnakeDirectionAngle(direction) : 0;
+    const image = getSnakeSprite(kind);
+
+    if (!image || !image.complete || image.naturalWidth <= 0 || image.naturalHeight <= 0) {
+      this.drawSnakeFallbackCell(kind, x, y, rotation);
+      return;
+    }
+
+    const px = x * this.blockSize;
+    const py = y * this.blockSize;
+    const cx = px + this.blockSize / 2;
+    const cy = py + this.blockSize / 2;
+
+    this.ctx.save();
+    this.ctx.translate(cx, cy);
+    this.ctx.rotate(rotation);
+    this.ctx.drawImage(image, -this.blockSize / 2, -this.blockSize / 2, this.blockSize, this.blockSize);
+    this.ctx.restore();
+  }
+
+  private drawSnakeOverlay(board: Board, overlay: SnakeOverlay): void {
+    if (!overlay?.active) return;
+
+    for (const egg of overlay.eggs) {
+      if (egg.x < 0 || egg.x >= board.width || egg.y < 0 || egg.y >= board.height) continue;
+      this.drawSnakeCellSprite('egg', egg.x, egg.y);
+    }
+
+    for (const segment of overlay.body) {
+      if (segment.x < 0 || segment.x >= board.width || segment.y < 0 || segment.y >= board.height) continue;
+      this.drawSnakeCellSprite('body', segment.x, segment.y);
+    }
+
+    if (overlay.tail) {
+      const { x, y, direction } = overlay.tail;
+      if (x >= 0 && x < board.width && y >= 0 && y < board.height) {
+        this.drawSnakeCellSprite('tail', x, y, direction);
+      }
+    }
+
+    if (overlay.head) {
+      const { x, y, direction } = overlay.head;
+      if (x >= 0 && x < board.width && y >= 0 && y < board.height) {
+        this.drawSnakeCellSprite('head', x, y, direction);
       }
     }
   }
@@ -169,9 +342,6 @@ export class TetrisRenderer {
   }
 
   drawPiece(piece: Tetromino, ghost: boolean = false, isBomb: boolean = false): void {
-    const alpha = ghost ? 0.3 : 1.0;
-    this.ctx.globalAlpha = alpha;
-
     for (let y = 0; y < piece.shape.length; y++) {
       for (let x = 0; x < piece.shape[y].length; x++) {
         if (piece.shape[y][x]) {
@@ -180,15 +350,28 @@ export class TetrisRenderer {
 
           if (boardY >= 0) {
             if (ghost) {
-              // Ghost piece - just draw outline
+              // Shadow-style landing preview for hard drop.
+              const px = boardX * this.blockSize;
+              const py = boardY * this.blockSize;
+              this.ctx.globalAlpha = 1;
+              this.ctx.fillStyle = 'rgba(0, 0, 0, 0.28)';
+              this.ctx.fillRect(
+                px + 1,
+                py + 1,
+                this.blockSize - 2,
+                this.blockSize - 2
+              );
+
+              this.ctx.globalAlpha = 0.85;
               this.ctx.strokeStyle = isBomb ? '#ff4444' : this.theme.colors[piece.type];
-              this.ctx.lineWidth = 2;
+              this.ctx.lineWidth = 1.5;
               this.ctx.strokeRect(
-                boardX * this.blockSize + 2,
-                boardY * this.blockSize + 2,
+                px + 2,
+                py + 2,
                 this.blockSize - 4,
                 this.blockSize - 4
               );
+              this.ctx.globalAlpha = 1;
             } else {
               // Draw normal block
               this.theme.renderBlock(
@@ -398,7 +581,14 @@ export class TetrisRenderer {
     ghostPiece: Tetromino | null,
     options: RenderOptions & { isBomb?: boolean; bombType?: 'circle_bomb' | 'cross_firebomb' } = {}
   ): void {
-    const { showGrid = true, showGhost = true, blindSpotRows = 0, isBomb = false, bombType } = options;
+    const {
+      showGrid = true,
+      showGhost = true,
+      blindSpotRows = 0,
+      isBomb = false,
+      bombType,
+      snakeOverlay = null,
+    } = options;
 
     // Clear canvas
     this.clear();
@@ -408,25 +598,29 @@ export class TetrisRenderer {
       this.drawGrid(board);
     }
 
-    // Draw locked blocks
-    this.drawBoard(board);
+    if (snakeOverlay?.active) {
+      this.drawSnakeOverlay(board, snakeOverlay);
+    } else {
+      // Draw locked blocks
+      this.drawBoard(board);
 
-    // Draw animations on top of locked blocks
-    this.drawAnimations();
+      // Draw animations on top of locked blocks
+      this.drawAnimations();
 
-    // Draw bomb blast radius preview (before pieces so it's behind them)
-    if (isBomb && bombType && currentPiece) {
-      this.drawBombBlastRadius(currentPiece, bombType);
-    }
+      // Draw bomb blast radius preview (before pieces so it's behind them)
+      if (isBomb && bombType && currentPiece) {
+        this.drawBombBlastRadius(currentPiece, bombType);
+      }
 
-    // Draw ghost piece (preview of where piece will land)
-    if (showGhost && ghostPiece) {
-      this.drawPiece(ghostPiece, true, isBomb);
-    }
+      // Draw ghost piece (preview of where piece will land)
+      if (showGhost && ghostPiece) {
+        this.drawPiece(ghostPiece, true, isBomb);
+      }
 
-    // Draw current piece
-    if (currentPiece) {
-      this.drawPiece(currentPiece, false, isBomb);
+      // Draw current piece
+      if (currentPiece) {
+        this.drawPiece(currentPiece, false, isBomb);
+      }
     }
 
     // Draw blind spot overlay (after pieces so fog is on top)

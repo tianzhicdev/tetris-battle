@@ -59,12 +59,12 @@ describe('GameRoomServer v2 ability behaviors', () => {
     const results = getMessages(p1Conn, 'ability_activation_result');
     const byReq = new Map(results.map((r) => [r.requestId, r]));
 
-    expect(byReq.get('req_overcharge')?.chargedCost).toBe(50);
-    expect(byReq.get('req_eq_1')?.chargedCost).toBe(24);
-    expect(byReq.get('req_eq_2')?.chargedCost).toBe(24);
-    expect(byReq.get('req_eq_3')?.chargedCost).toBe(24);
-    expect(byReq.get('req_eq_4')?.chargedCost).toBe(40);
-    expect(p1State.gameState.stars).toBe(138);
+    expect(byReq.get('req_overcharge')?.chargedCost).toBe(30);
+    expect(byReq.get('req_eq_1')?.chargedCost).toBe(18);
+    expect(byReq.get('req_eq_2')?.chargedCost).toBe(18);
+    expect(byReq.get('req_eq_3')?.chargedCost).toBe(18);
+    expect(byReq.get('req_eq_4')?.chargedCost).toBe(30);
+    expect(p1State.gameState.stars).toBe(186);
   });
 
   it('clone fails with refund if opponent has no cloneable ability yet', () => {

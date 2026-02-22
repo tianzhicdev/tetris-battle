@@ -144,6 +144,24 @@ describe('ServerGameState', () => {
     expect(state.getActiveEffects()).toContain('speed_up_opponent');
   });
 
+  it('should ramp gravity over time up to 4x by minute', () => {
+    (state as any).matchStartTimeMs = Date.now() - 10_000;
+    state.tick();
+    expect(state.tickRate).toBe(1000);
+
+    (state as any).matchStartTimeMs = Date.now() - 70_000;
+    state.tick();
+    expect(state.tickRate).toBe(500);
+
+    (state as any).matchStartTimeMs = Date.now() - 130_000;
+    state.tick();
+    expect(state.tickRate).toBe(333);
+
+    (state as any).matchStartTimeMs = Date.now() - 250_000;
+    state.tick();
+    expect(state.tickRate).toBe(250);
+  });
+
   it('should return public state with all required fields', () => {
     const publicState = state.getPublicState();
 
@@ -384,6 +402,11 @@ describe('ServerGameState', () => {
         expect(state.getActiveEffects()).toContain('snake_board');
         expect(state.gameState.currentPiece).toBeNull();
         expect((state as any).snakeBody.length).toBe(3);
+
+        const publicState = state.getPublicState();
+        expect(publicState.snakeOverlay?.active).toBe(true);
+        expect(publicState.snakeOverlay?.head).toBeTruthy();
+        expect(publicState.snakeOverlay?.eggs.length).toBeGreaterThanOrEqual(1);
       });
 
       it('should grow snake when consuming fruit during auto movement', () => {
@@ -441,6 +464,15 @@ describe('ServerGameState', () => {
         expect(state.getActiveEffects()).not.toContain('snake_board');
         expect((state as any).snakeBody.length).toBe(0);
         expect(state.gameState.currentPiece).not.toBeNull();
+      });
+
+      it('should keep snake movement speed fixed at 4x regardless of elapsed time and debuffs', () => {
+        (state as any).matchStartTimeMs = Date.now() - 10 * 60_000;
+        state.applyAbility('snake_board');
+        state.applyAbility('speed_up_opponent');
+        state.tick();
+
+        expect(state.tickRate).toBe(250);
       });
     });
 
