@@ -36,6 +36,7 @@ import { OpponentPreview } from './game/OpponentPreview';
 import { AbilityDock } from './game/AbilityDock';
 import { GameTouchControls } from './game/GameTouchControls';
 import { MobileGameLayout } from './game/MobileGameLayout';
+import { CylinderBoardView } from './game/CylinderBoardView';
 import { Icon } from './ui/Icon';
 import { useElementSize } from '../hooks/useElementSize';
 import { computeBoardDisplaySize } from './game/boardDisplaySizing';
@@ -703,6 +704,15 @@ export function ServerAuthMultiplayerGame({
     if (effects.includes('shield')) return 'shield';
     return null;
   }, [opponentState?.activeEffects]);
+
+  const selfCylinderVisionActive = useMemo(
+    () => stateHasEffect(yourState, 'cylinder_vision'),
+    [yourState]
+  );
+  const opponentCylinderVisionActive = useMemo(
+    () => stateHasEffect(opponentState, 'cylinder_vision'),
+    [opponentState]
+  );
 
   const selfBoardTheme = useMemo(
     () => ({
@@ -2299,8 +2309,26 @@ export function ServerAuthMultiplayerGame({
                     border: `1px solid ${selfBoardFx?.borderColor || 'rgba(0, 240, 240, 0.09)'}`,
                     backgroundColor: 'transparent',
                     boxShadow: selfBoardFx?.glow || '0 0 30px rgba(0, 240, 240, 0.03)',
+                    visibility: selfCylinderVisionActive ? 'hidden' : 'visible',
                   }}
                 />
+                {selfCylinderVisionActive && yourState && (
+                  <CylinderBoardView
+                    board={{
+                      grid: yourState.board,
+                      width: yourBoardWidth,
+                      height: yourBoardHeight,
+                    }}
+                    currentPiece={yourState.currentPiece}
+                    ghostPiece={yourState.magnetGhost ?? null}
+                    theme={selfBoardTheme}
+                    width={yourBoardDisplay.pixelWidth}
+                    height={yourBoardDisplay.pixelHeight}
+                    showGrid
+                    showGhost={!!yourState.magnetGhost}
+                    borderRadius="9px"
+                  />
+                )}
                 <div
                   style={{
                     position: 'absolute',
@@ -2723,8 +2751,26 @@ export function ServerAuthMultiplayerGame({
                     border: `1px solid ${selfBoardFx?.borderColor || 'rgba(0, 240, 240, 0.15)'}`,
                     backgroundColor: 'transparent',
                     boxShadow: selfBoardFx?.glow || '0 0 20px rgba(0, 240, 240, 0.08), 0 0 60px rgba(0, 240, 240, 0.03)',
+                    visibility: selfCylinderVisionActive ? 'hidden' : 'visible',
                   }}
                 />
+                {selfCylinderVisionActive && yourState && (
+                  <CylinderBoardView
+                    board={{
+                      grid: yourState.board,
+                      width: yourBoardWidth,
+                      height: yourBoardHeight,
+                    }}
+                    currentPiece={yourState.currentPiece}
+                    ghostPiece={yourState.magnetGhost ?? null}
+                    theme={selfBoardTheme}
+                    width={yourBoardDisplay.pixelWidth}
+                    height={yourBoardDisplay.pixelHeight}
+                    showGrid
+                    showGhost={!!yourState.magnetGhost}
+                    borderRadius="clamp(6px, 1.5vw, 10px)"
+                  />
+                )}
                 <div
                   style={{
                     position: 'absolute',
@@ -2871,8 +2917,26 @@ export function ServerAuthMultiplayerGame({
 	                  height: `${opponentBoardDisplay.pixelHeight}px`,
 	                  borderRadius: 'clamp(4px, 1vw, 6px)',
 	                  boxShadow: opponentBoardFx?.glow || '0 0 8px rgba(255, 255, 255, 0.08)',
+                    visibility: opponentCylinderVisionActive ? 'hidden' : 'visible',
 	                }}
 	              />
+                {opponentCylinderVisionActive && opponentState && (
+                  <CylinderBoardView
+                    board={{
+                      grid: opponentState.board,
+                      width: opponentBoardWidth,
+                      height: opponentBoardHeight,
+                    }}
+                    currentPiece={opponentState.currentPiece}
+                    ghostPiece={opponentState.magnetGhost ?? null}
+                    theme={theme}
+                    width={opponentBoardDisplay.pixelWidth}
+                    height={opponentBoardDisplay.pixelHeight}
+                    showGrid
+                    showGhost={!!opponentState.magnetGhost}
+                    borderRadius="clamp(4px, 1vw, 6px)"
+                  />
+                )}
                 {stateHasEffect(opponentState, 'ink_splash') && !mockMode && (
                   <InkSplashMask idPrefix="opponent" borderRadius="clamp(4px, 1vw, 6px)" />
                 )}

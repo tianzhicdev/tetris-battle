@@ -389,6 +389,7 @@ export default class GameRoomServer implements Party.Server {
       const activeEffects = new Set(currentAIState.getActiveEffects());
       let moveDelay = this.battleAI ? this.battleAI.decideMoveDelay() : 200;
       if (activeEffects.has('blind_spot')) moveDelay *= 1.2;
+      if (activeEffects.has('cylinder_vision')) moveDelay *= 1.25;
       if (activeEffects.has('screen_shake')) moveDelay *= 1.2;
       if (activeEffects.has('shrink_ceiling')) moveDelay *= 1.1;
 

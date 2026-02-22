@@ -299,6 +299,15 @@ describe('ServerGameState', () => {
         expect(publicState.activeEffects).toContain('blind_spot');
       });
 
+      it('should apply cylinder_vision - adds visual effect', () => {
+        state.applyAbility('cylinder_vision');
+
+        expect(state.getActiveEffects()).toContain('cylinder_vision');
+
+        const publicState = state.getPublicState();
+        expect(publicState.activeEffects).toContain('cylinder_vision');
+      });
+
       it('should apply screen_shake - adds visual effect', () => {
         state.applyAbility('screen_shake');
 

@@ -442,6 +442,20 @@
       "balance_notes": "Premium visual debuff targeting the most critical area (where pieces land, where gaps are). Players with good board memory can survive. 5 seconds is short enough that only 5-10 placements are blind. Devastating combo: Earthquake (shuffles rows) then Blind Spot (hides the shuffled result). Counterplay: memorize your board state before the effect hits, or stack conservatively on the visible portion.",
       "implementation": "Render bottom 5 rows of opponent's board as solid black for 5 seconds. Ghost piece preview in hidden zone is also hidden. Piece preview and top portion of board remain visible."
     },
+    "cylinder_vision": {
+      "id": "cylinder_vision",
+      "type": "cylinder_vision",
+      "name": "Cylinder Vision",
+      "shortName": "CYL",
+      "description": "Warp opponent's board into a rotating cylinder for 8 seconds",
+      "cost": 110,
+      "duration": 8000,
+      "category": "debuff_visual",
+      "unlockTier": 4,
+      "unlockCost": 600,
+      "balance_notes": "Severe perception disruption. The target can only see a narrow curved window of their board while the cylinder rotates to keep the active piece facing forward. This keeps piece control readable but destroys peripheral awareness. The board's true left/right boundaries still exist and are marked by a seam guide.",
+      "implementation": "Apply timed visual debuff. On target client, render board on a 3D cylinder and rotate around Y based on active piece X so the active tetrimino stays front-facing. Show seam line for true boundaries."
+    },
     "cross_firebomb": {
       "id": "cross_firebomb",
       "type": "cross_firebomb",
@@ -656,7 +670,7 @@
     }
   },
   "summary": {
-    "total_abilities": 32,
+    "total_abilities": 33,
     "by_tier": {
       "tier_1_free": [
         "earthquake",
@@ -689,6 +703,7 @@
       "tier_4_600coins": [
         "rotation_lock",
         "blind_spot",
+        "cylinder_vision",
         "cross_firebomb",
         "weird_shapes",
         "narrow_escape",
@@ -711,7 +726,8 @@
         "screen_shake(40)",
         "mirage(75)",
         "fog_of_war(90)",
-        "blind_spot(100)"
+        "blind_spot(100)",
+        "cylinder_vision(110)"
       ],
       "debuff_board": [
         "earthquake(40)",

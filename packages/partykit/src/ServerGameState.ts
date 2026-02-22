@@ -537,6 +537,9 @@ export class ServerGameState {
       case 'blind_spot':
         this.setTimedEffect('blind_spot', 5000, now);
         break;
+      case 'cylinder_vision':
+        this.setTimedEffect('cylinder_vision', 8000, now);
+        break;
       case 'weird_shapes':
         this.weirdShapesRemaining = 1;
         this.syncCounterEffect('weird_shapes', this.weirdShapesRemaining);
