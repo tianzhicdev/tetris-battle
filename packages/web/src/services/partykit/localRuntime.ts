@@ -1,4 +1,4 @@
-import GameRoomServer from '@tetris-battle/partykit/src/game';
+import GameRoomRelay from '@tetris-battle/partykit/src/GameRoomRelay';
 import DefenseLineServer from '@tetris-battle/partykit/src/defense-line-server';
 
 type PartyName = 'game' | 'defenseline';
@@ -216,7 +216,7 @@ class LocalRoomRuntime {
 
   private createServer(): LocalPartyServer {
     if (this.party === 'game') {
-      return new GameRoomServer(this.roomApi as any);
+      return new GameRoomRelay(this.roomApi as any);
     }
     return new DefenseLineServer(this.roomApi as any);
   }

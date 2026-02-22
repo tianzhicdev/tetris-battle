@@ -3,10 +3,10 @@ import { motion, AnimatePresence, useAnimationControls } from 'framer-motion';
 import { useAbilityStore } from '../stores/abilityStore';
 import { TetrisRenderer } from '../renderer/TetrisRenderer';
 import {
-  ServerAuthGameClient,
+  ClientAuthGameClient,
   type AbilityActivationResult,
-  type GameStateUpdate,
-} from '../services/partykit/ServerAuthGameClient';
+  type PublicGameState,
+} from '../services/partykit/ClientAuthGameClient';
 import type { ConnectionStats } from '../services/ConnectionMonitor';
 import { NextPiecePanel } from './NextPiecePanel';
 import { FloatingBackground } from './FloatingBackground';
@@ -573,7 +573,7 @@ export function ServerAuthMultiplayerGame({
   const rendererRef = useRef<TetrisRenderer | null>(null);
   const opponentRendererRef = useRef<TetrisRenderer | null>(null);
   const cyberpunkParticlesRef = useRef<CyberpunkParticlesHandle>(null);
-  const gameClientRef = useRef<ServerAuthGameClient | null>(null);
+  const gameClientRef = useRef<ClientAuthGameClient | null>(null);
   const lineClearParticlesRef = useRef<LineClearParticle[]>([]);
   const hardDropParticlesRef = useRef<LineClearParticle[]>([]);
   const hardDropTrailRef = useRef<HardDropTrailEffect | null>(null);
@@ -1425,20 +1425,19 @@ export function ServerAuthMultiplayerGame({
     previousBoardRef.current = cloneBoardGrid(currentGrid);
   }, []);
 
-  // Initialize server-authoritative game client
+  // Initialize client-authoritative game client
   useEffect(() => {
     if (mockMode) return;
 
     const host = normalizePartykitHost(import.meta.env.VITE_PARTYKIT_HOST);
-    const client = new ServerAuthGameClient(roomId, playerId, host, profile.loadout, aiOpponent, debugLogger || undefined);
+    const client = new ClientAuthGameClient(roomId, playerId, host, profile.loadout, aiOpponent, debugLogger || undefined);
     gameClientRef.current = client;
 
     client.connect(
-      // On state update from server
-      (state: GameStateUpdate) => {
+      // On local state update (from client-side game engine - zero latency)
+      (state: PublicGameState) => {
         setLastStateFrameMs(Date.now());
-        setYourState(state.yourState);
-        setOpponentState(state.opponentState);
+        setYourState(state);
       },
       // On opponent disconnected
       () => {
@@ -1452,12 +1451,16 @@ export function ServerAuthMultiplayerGame({
       },
       // On ability received
       (abilityType, fromPlayerId) => {
-        console.log(`[SERVER-AUTH] Received ability: ${abilityType} from ${fromPlayerId}`);
+        console.log(`[CLIENT-AUTH] Received ability: ${abilityType} from ${fromPlayerId}`);
         handleAbilityReceived(abilityType, fromPlayerId);
       },
       // On ability activation result
       (result) => {
         handleAbilityActivationResult(result);
+      },
+      // On opponent state update (from server relay - low frequency)
+      (opponentSummary: PublicGameState) => {
+        setOpponentState(opponentSummary);
       }
     );
 

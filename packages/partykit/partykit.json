@@ -3,7 +3,7 @@
   "main": "src/server.ts",
   "parties": {
     "matchmaking": "src/matchmaking.ts",
-    "game": "src/game.ts",
+    "game": "src/GameRoomRelay.ts",
     "presence": "src/presence.ts",
     "defenseline": "src/defense-line-server.ts"
   }
